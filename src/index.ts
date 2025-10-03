@@ -2,14 +2,16 @@
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'node:path';
 import { prisma } from './prisma';
-// tgRouter — default export; installWebhook(baseUrl?: string)
-import tgRouter, { installWebhook } from './telegram';
+
+// Универсальный импорт telegram-модуля: поддержим и default, и named exports
+// (чтобы не падать на разной форме экспорта в ./telegram.ts)
+import * as tgMod from './telegram';
 
 const app = express();
 
 // ---- Middlewares ----
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // для HTML-форм
+app.use(express.urlencoded({ extended: true }));
 
 // ---- Статика
 app.use(express.static(path.join(process.cwd(), 'public')));
@@ -33,8 +35,7 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 // API для мини-приложения
 // ===============================
 
-// Услуги (read). В БД цена хранится в копейках (priceCents).
-// Для фронта дополнительно отдаём вычисляемое поле priceBYN.
+// GET /api/services — читаем из БД и добавляем вычисляемое поле priceBYN
 app.get('/api/services', async (_req: Request, res: Response) => {
   try {
     const services = await prisma.service.findMany({
@@ -54,7 +55,7 @@ app.get('/api/services', async (_req: Request, res: Response) => {
   }
 });
 
-// Запись на приём (create)
+// POST /api/appointments — создаём запись
 app.post('/api/appointments', async (req: Request, res: Response) => {
   try {
     const { serviceId, staffId, locationId, clientId, client, startAt, endAt } = req.body ?? {};
@@ -90,14 +91,18 @@ app.post('/api/appointments', async (req: Request, res: Response) => {
 });
 
 // ===============================
-// Telegram webhook (роутер из ./telegram)
+// Telegram webhook (поддержка разных форм экспорта)
 // ===============================
+const tgRouter =
+  (tgMod as any).tgRouter || // named export
+  (tgMod as any).default ||  // default export
+  express.Router();          // заглушка
+
 app.use('/tg', tgRouter);
 
 // ===============================
 // Admin: Services CRUD (очень простой HTML)
 // ===============================
-
 app.get('/admin', requireAdmin, (_req, res) => res.redirect('/admin/services'));
 
 app.get('/admin/services', requireAdmin, async (req: Request, res: Response) => {
@@ -230,16 +235,18 @@ app.get('/', (_req: Request, res: Response) => {
 });
 
 // ===============================
-// Запуск + установка Telegram webhook
+// Запуск + установка Telegram webhook (если есть)
 // ===============================
 const port = Number(process.env.PORT || 8080);
 app.listen(port, async () => {
   console.log(`[http] listening on :${port}`);
 
   try {
-    // installWebhook ожидает базовый URL. Берём PUBLIC_BASE_URL или RAILWAY_URL.
     const baseUrl = process.env.PUBLIC_BASE_URL || process.env.RAILWAY_URL || '';
-    await installWebhook(baseUrl);
+    const installWebhookFn = (tgMod as any).installWebhook as undefined | ((baseUrl?: string) => Promise<void>);
+    if (typeof installWebhookFn === 'function') {
+      await installWebhookFn(baseUrl);
+    }
   } catch (err) {
     console.error('[tg] setWebhook failed', err);
   }
