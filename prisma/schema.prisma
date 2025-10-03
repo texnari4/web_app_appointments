@@ -20,6 +20,8 @@ model Client {
   tgUserId     String?
   phone        String?
   email        String?
+  phoneEnc     String?        
+  emailEnc     String?        
   firstName    String?
   lastName     String?
   appointments Appointment[]
