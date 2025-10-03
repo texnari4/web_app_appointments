@@ -1,64 +1,80 @@
-import express from "express";
-import path from "path";
-import { prisma } from "./prisma";
-import { handleTelegramWebhook, installWebhookIfNeeded } from "./telegram";
+import express, { Request, Response } from 'express';
+import path from 'path';
+import { prisma } from './prisma';
+import { installWebhook, telegramRouter } from './telegram';
 
 const app = express();
 app.use(express.json());
 
 // Health
-app.get("/health", (_req, res) => res.json({ ok: true }));
-
-// Simple REST to verify Prisma
-app.get("/api/services", async (_req, res) => {
-  const list = await prisma.service.findMany({ orderBy: { name: "asc" } });
-  res.json(list);
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ ok: true });
 });
 
-app.post("/api/appointments", async (req, res) => {
-  try {
-    const { locationId, serviceId, staffId, client } = req.body || {};
-    const now = new Date();
-    const end = new Date(now.getTime() + 60 * 60 * 1000);
+// Пример API
+app.get('/api/services', async (_req: Request, res: Response) => {
+  const services = await prisma.service.findMany({
+    orderBy: { name: 'asc' }
+  });
+  res.json(services);
+});
 
-    const clientRec = await prisma.client.create({
-      data: {
-        firstName: client?.firstName ?? "Client"
-      }
-    });
+app.post('/api/appointments', async (req: Request, res: Response) => {
+  try {
+    const { client, serviceId, staffId, locationId, startAt, endAt } = req.body as any;
 
     const created = await prisma.appointment.create({
       data: {
-        locationId,
         serviceId,
         staffId,
-        clientId: clientRec.id,
-        startAt: now,
-        endAt: end
-      },
-      include: { service: true, staff: true, location: true, client: true }
+        locationId,
+        client: client?.id
+          ? { connect: { id: client.id } }
+          : {
+              create: {
+                tgUserId: client?.tgUserId ?? null,
+                phoneEnc: client?.phoneEnc ?? null,
+                emailEnc: client?.emailEnc ?? null,
+                firstName: client?.firstName ?? null,
+                lastName: client?.lastName ?? null
+              }
+            },
+        startAt: new Date(startAt),
+        endAt: new Date(endAt),
+        status: 'CREATED'
+      }
     });
 
     res.status(201).json(created);
-  } catch (e: any) {
-    console.error("[api] create appointment error:", e);
-    res.status(400).json({ error: "Bad request" });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: 'invalid_payload' });
   }
 });
 
-// Telegram webhook endpoint
-app.post("/tg/webhook", handleTelegramWebhook);
+// Telegram webhook
+app.post('/tg/webhook', telegramRouter);
 
-// Static miniapp
-const publicDir = path.resolve(__dirname, "..", "public");
-app.use(express.static(publicDir));
-app.get("/", (_req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
+// Статика
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
+app.get('/', (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-const port = process.env.PORT || 3000;
+const port = Number(process.env.PORT ?? 3000);
+const baseUrl = process.env.PUBLIC_BASE_URL ?? process.env.RAILWAY_URL;
 
 app.listen(port, async () => {
-  console.log(`Server listening on :${port}`);
-  await installWebhookIfNeeded();
+  console.log(`[http] listening on :${port}`);
+
+  // автоустановка вебхука (опционально)
+  if (process.env.AUTO_SET_WEBHOOK === 'true' && baseUrl && process.env.TELEGRAM_BOT_TOKEN) {
+    try {
+      await installWebhook(`${baseUrl}/tg/webhook`);
+      console.log(`[tg] setWebhook OK → ${baseUrl}/tg/webhook`);
+    } catch (e) {
+      console.error('[tg] setWebhook failed', e);
+    }
+  }
 });

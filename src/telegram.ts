@@ -1,63 +1,49 @@
-import type { Request, Response } from "express";
+import { Router, Request, Response } from 'express';
 
-function getBaseUrl(): string | null {
-  const fromEnv = process.env.PUBLIC_BASE_URL || process.env.RAILWAY_URL;
-  if (!fromEnv) return null;
-  if (fromEnv.startsWith("http://") || fromEnv.startsWith("https://")) return fromEnv.replace(/\/+$/, "");
-  return `https://${fromEnv.replace(/\/+$/, "")}`;
-}
+const token = process.env.TELEGRAM_BOT_TOKEN ?? '';
 
-async function callTelegram(method: string, params: URLSearchParams | undefined = undefined) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
-  const url =
-    params && params.toString().length > 0
-      ? `https://api.telegram.org/bot${token}/${method}?${params.toString()}`
-      : `https://api.telegram.org/bot${token}/${method}`;
-  const res = await fetch(url, { method: "POST" });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || (data && data.ok === false)) {
-    throw new Error(`Telegram API error for ${method}: ${res.status} ${res.statusText} ${JSON.stringify(data)}`);
-  }
-  return data;
-}
+export const telegramRouter = Router();
 
-export async function installWebhookIfNeeded(): Promise<void> {
-  if (process.env.AUTO_SET_WEBHOOK !== "true") return;
-
-  const base = getBaseUrl();
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !base) return;
-
-  const webhookUrl = `${base}/tg/webhook`;
-  const params = new URLSearchParams({ url: webhookUrl });
-
+telegramRouter.post('/', async (req: Request, res: Response) => {
   try {
-    await callTelegram("setWebhook", params);
-    console.log(`[tg] setWebhook OK → ${webhookUrl}`);
-  } catch (e) {
-    console.error("[tg] setWebhook failed:", e);
-  }
-}
+    const update = req.body as any;
 
-export async function handleTelegramWebhook(req: Request, res: Response) {
-  try {
-    const update = req.body;
-    const msg = update?.message;
-    const text: string | undefined = msg?.text;
-    if (msg?.chat?.id && typeof text === "string") {
-      if (text.startsWith("/start")) {
-        const chatId = String(msg.chat.id);
-        const params = new URLSearchParams({
-          chat_id: chatId,
-          text: "Привет! Мини‑приложение работает. Открой WebApp из бота, чтобы записаться 👇"
-        });
-        await callTelegram("sendMessage", params);
-      }
+    const chatId: number | undefined =
+      update?.message?.chat?.id ??
+      update?.callback_query?.message?.chat?.id;
+
+    if (chatId) {
+      await sendMessage(chatId, '✅ Webhook is alive');
     }
-    res.status(200).json({ ok: true });
+
+    res.sendStatus(200);
   } catch (e) {
-    console.error("[tg] webhook error:", e);
-    res.status(200).json({ ok: true });
+    console.error('[tg] webhook error', e);
+    res.sendStatus(200);
   }
+});
+
+export async function installWebhook(url: string): Promise<void> {
+  if (!token) throw new Error('TELEGRAM_BOT_TOKEN is empty');
+
+  const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+
+  if (!r.ok) {
+    const body = await r.text();
+    throw new Error(`setWebhook ${r.status}: ${body}`);
+  }
+}
+
+async function sendMessage(chatId: number, text: string): Promise<void> {
+  if (!token) return;
+
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text })
+  });
 }

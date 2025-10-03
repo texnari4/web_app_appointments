@@ -2,8 +2,9 @@
   "name": "web-app-appointments",
   "version": "1.0.0",
   "private": true,
-  "type": "commonjs",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "postinstall": "prisma generate",
     "build": "tsc -p tsconfig.json",
@@ -11,11 +12,14 @@
     "start": "npm run prisma:sync && node dist/index.js"
   },
   "dependencies": {
+    "express": "^4.19.2",
     "@prisma/client": "^5.22.0",
-    "express": "^4.19.2"
+    "dotenv": "^16.4.5",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.7.7"
   },
   "devDependencies": {
     "prisma": "^5.22.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.5.4"
   }
 }
