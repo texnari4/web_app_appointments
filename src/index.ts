@@ -2,29 +2,28 @@
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'node:path';
 import { prisma } from './prisma';
-import { installWebhook, tgRouter } from './telegram';
+// tgRouter — default export; installWebhook(baseUrl?: string)
+import tgRouter, { installWebhook } from './telegram';
 
 const app = express();
 
 // ---- Middlewares ----
 app.use(express.json());
-// Нужен для <form method="post"> из админки
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true })); // для HTML-форм
 
-// Статика (микро-страница мини-приложения)
+// ---- Статика
 app.use(express.static(path.join(process.cwd(), 'public')));
 
-// ---- Health ----
+// ---- Health
 app.get('/healthz', (_req, res) => res.status(200).send('ok'));
 
 // ===============================
-// Admin helpers (очень простой доступ по токену)
+// Admin helpers (простой доступ по токену)
 // ===============================
 function isAdmin(req: Request): boolean {
   const token = (req.query.token as string) || (req.headers['x-admin-token'] as string | undefined);
   return !!token && token === process.env.ADMIN_TOKEN;
 }
-
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!isAdmin(req)) return res.status(401).send('Unauthorized');
   next();
@@ -34,48 +33,52 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 // API для мини-приложения
 // ===============================
 
-// Услуги (читаем)
+// Услуги (read). В БД цена хранится в копейках (priceCents).
+// Для фронта дополнительно отдаём вычисляемое поле priceBYN.
 app.get('/api/services', async (_req: Request, res: Response) => {
   try {
     const services = await prisma.service.findMany({
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, priceBYN: true, durationMin: true, description: true },
+      select: { id: true, name: true, durationMin: true, priceCents: true, createdAt: true, updatedAt: true },
     });
-    res.json({ ok: true, services });
+
+    const withByn = services.map((s) => ({
+      ...s,
+      priceBYN: Number((s.priceCents / 100).toFixed(2)),
+    }));
+
+    res.json({ ok: true, services: withByn });
   } catch (e) {
     console.error('[api] /api/services error', e);
     res.status(500).json({ ok: false, error: 'internal_error' });
   }
 });
 
-// Запись на приём (создаём)
+// Запись на приём (create)
 app.post('/api/appointments', async (req: Request, res: Response) => {
   try {
-    const { serviceId, staffId, locationId, clientId, client } = req.body ?? {};
+    const { serviceId, staffId, locationId, clientId, client, startAt, endAt } = req.body ?? {};
 
-    // Prisma требует связанные сущности по relation-полям
-    // Заполняем их через connect либо create
     const data: any = {
-      startAt: new Date(req.body?.startAt),
-      endAt: new Date(req.body?.endAt),
+      startAt: new Date(startAt),
+      endAt: new Date(endAt),
       status: 'CREATED' as const,
-      service: { connect: { id: serviceId } },
-      staff: { connect: { id: staffId } },
-      location: { connect: { id: locationId } },
-      client:
-        clientId
-          ? { connect: { id: clientId } }
-          : client
-          ? {
-              create: {
-                tgUserId: client.tgUserId ?? null,
-                phoneEnc: client.phoneEnc ?? null,
-                emailEnc: client.emailEnc ?? null,
-                firstName: client.firstName ?? null,
-                lastName: client.lastName ?? null,
-              },
-            }
-          : undefined,
+      service: { connect: { id: String(serviceId) } },
+      staff: { connect: { id: String(staffId) } },
+      location: { connect: { id: String(locationId) } },
+      client: clientId
+        ? { connect: { id: String(clientId) } }
+        : client
+        ? {
+            create: {
+              tgUserId: client.tgUserId ?? null,
+              phoneEnc: client.phoneEnc ?? null,
+              emailEnc: client.emailEnc ?? null,
+              firstName: client.firstName ?? null,
+              lastName: client.lastName ?? null,
+            },
+          }
+        : undefined,
     };
 
     const created = await prisma.appointment.create({ data });
@@ -87,12 +90,12 @@ app.post('/api/appointments', async (req: Request, res: Response) => {
 });
 
 // ===============================
-// Telegram webhook
+// Telegram webhook (роутер из ./telegram)
 // ===============================
 app.use('/tg', tgRouter);
 
 // ===============================
-// Admin panel (Services CRUD)
+// Admin: Services CRUD (очень простой HTML)
 // ===============================
 
 app.get('/admin', requireAdmin, (_req, res) => res.redirect('/admin/services'));
@@ -107,18 +110,21 @@ app.get('/admin/services', requireAdmin, async (req: Request, res: Response) => 
       <tr>
         <td>#${s.id}</td>
         <td>
-          <form method="post" action="/admin/services/${s.id}?token=${encodeURIComponent(qToken)}" style="display:flex;gap:6px;flex-wrap:wrap">
+          <form method="post" action="/admin/services/${encodeURIComponent(s.id)}?token=${encodeURIComponent(
+        qToken,
+      )}" style="display:flex;gap:6px;flex-wrap:wrap">
             <input type="text" name="name" value="${escapeHtml(s.name)}" required />
             <input type="number" step="1" min="0" name="durationMin" value="${s.durationMin ?? 0}" placeholder="Минуты" required />
-            <input type="number" step="0.01" min="0" name="priceBYN" value="${s.priceBYN ?? 0}" placeholder="Цена BYN" required />
-            <input type="text" name="description" value="${escapeHtml(s.description ?? '')}" placeholder="Описание" />
+            <input type="number" step="0.01" min="0" name="priceBYN" value="${(s.priceCents / 100).toFixed(
+              2,
+            )}" placeholder="Цена BYN" required />
             <button type="submit">Сохранить</button>
           </form>
         </td>
         <td>
-          <form method="post" action="/admin/services/${s.id}/delete?token=${encodeURIComponent(qToken)}" onsubmit="return confirm('Удалить услугу «${escapeAttr(
-            s.name,
-          )}»?')">
+          <form method="post" action="/admin/services/${encodeURIComponent(
+            s.id,
+          )}/delete?token=${encodeURIComponent(qToken)}" onsubmit="return confirm('Удалить услугу «${escapeAttr(s.name)}»?')">
             <button type="submit" style="background:#c0392b;color:#fff">Удалить</button>
           </form>
         </td>
@@ -133,7 +139,7 @@ app.get('/admin/services', requireAdmin, async (req: Request, res: Response) => 
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Админка — Услуги</title>
 <style>
-  body{font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding:20px; max-width:980px; margin:0 auto;}
+  body{font:14px/1.4 system-ui,-apple-system, Segoe UI, Roboto, Arial, sans-serif; padding:20px; max-width:980px; margin:0 auto;}
   h1{margin:0 0 16px;}
   table{width:100%; border-collapse: collapse;}
   td, th{border:1px solid #ddd; padding:8px; vertical-align:top;}
@@ -153,7 +159,6 @@ app.get('/admin/services', requireAdmin, async (req: Request, res: Response) => 
       <input type="text" name="name" placeholder="Название" required />
       <input type="number" step="1" min="0" name="durationMin" placeholder="Длительность, мин" required />
       <input type="number" step="0.01" min="0" name="priceBYN" placeholder="Цена, BYN" required />
-      <input type="text" name="description" placeholder="Описание (необязательно)" />
       <div>
         <button type="submit">Создать</button>
       </div>
@@ -170,13 +175,14 @@ app.get('/admin/services', requireAdmin, async (req: Request, res: Response) => 
 
 // Создать
 app.post('/admin/services', requireAdmin, async (req: Request, res: Response) => {
-  const { name, durationMin, priceBYN, description } = req.body ?? {};
+  const { name, durationMin, priceBYN } = req.body ?? {};
+  const priceCents = Math.round(Number.parseFloat(priceBYN) * 100);
+
   await prisma.service.create({
     data: {
       name: String(name),
       durationMin: Number.parseInt(durationMin),
-      priceBYN: Number.parseFloat(priceBYN),
-      description: description ? String(description) : null,
+      priceCents,
     },
   });
   res.redirect(`/admin/services?token=${encodeURIComponent(String(req.query.token ?? ''))}`);
@@ -184,15 +190,16 @@ app.post('/admin/services', requireAdmin, async (req: Request, res: Response) =>
 
 // Обновить
 app.post('/admin/services/:id', requireAdmin, async (req: Request, res: Response) => {
-  const id = Number.parseInt(req.params.id);
-  const { name, durationMin, priceBYN, description } = req.body ?? {};
+  const id = String(req.params.id);
+  const { name, durationMin, priceBYN } = req.body ?? {};
+  const priceCents = Math.round(Number.parseFloat(priceBYN) * 100);
+
   await prisma.service.update({
     where: { id },
     data: {
       name: String(name),
       durationMin: Number.parseInt(durationMin),
-      priceBYN: Number.parseFloat(priceBYN),
-      description: description ? String(description) : null,
+      priceCents,
     },
   });
   res.redirect(`/admin/services?token=${encodeURIComponent(String(req.query.token ?? ''))}`);
@@ -200,13 +207,13 @@ app.post('/admin/services/:id', requireAdmin, async (req: Request, res: Response
 
 // Удалить
 app.post('/admin/services/:id/delete', requireAdmin, async (req: Request, res: Response) => {
-  const id = Number.parseInt(req.params.id);
+  const id = String(req.params.id);
   await prisma.service.delete({ where: { id } });
   res.redirect(`/admin/services?token=${encodeURIComponent(String(req.query.token ?? ''))}`);
 });
 
 // ===============================
-// Главная (простая страница-демо)
+// Главная (демо)
 // ===============================
 app.get('/', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8').send(`<!doctype html>
@@ -215,26 +222,24 @@ app.get('/', (_req: Request, res: Response) => {
 <body style="font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:24px">
   <h1>Онлайн-запись</h1>
   <p>Это простая статика мини-приложения (без сборки). Сервер: Express + Prisma.</p>
-  <p>
-    <a href="/app.html">Открыть мини-приложение</a>
-  </p>
-  <p>
-    <a href="/admin/services">Админка (нужен ?token=...)</a>
-  </p>
+  <p><a href="/app.html">Открыть мини-приложение</a></p>
+  <p><a href="/admin/services">Админка (нужен ?token=...)</a></p>
   <hr/>
   <p><a href="/api/services" target="_blank">Показать услуги (GET /api/services)</a></p>
 </body></html>`);
 });
 
 // ===============================
-// Запуск + установка Telegram webhook (асинхронно)
+// Запуск + установка Telegram webhook
 // ===============================
 const port = Number(process.env.PORT || 8080);
-
 app.listen(port, async () => {
   console.log(`[http] listening on :${port}`);
+
   try {
-    await installWebhook(app);
+    // installWebhook ожидает базовый URL. Берём PUBLIC_BASE_URL или RAILWAY_URL.
+    const baseUrl = process.env.PUBLIC_BASE_URL || process.env.RAILWAY_URL || '';
+    await installWebhook(baseUrl);
   } catch (err) {
     console.error('[tg] setWebhook failed', err);
   }
@@ -244,7 +249,7 @@ app.listen(port, async () => {
 // Утилиты для HTML
 // ===============================
 function escapeHtml(s: string): string {
-  return s
+  return String(s)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
