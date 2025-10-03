@@ -6,12 +6,12 @@ import { installWebhook, telegramRouter } from './telegram';
 const app = express();
 app.use(express.json());
 
-// Health
+// Health-check
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// Пример API
+// Получение списка услуг
 app.get('/api/services', async (_req: Request, res: Response) => {
   const services = await prisma.service.findMany({
     orderBy: { name: 'asc' }
@@ -19,56 +19,59 @@ app.get('/api/services', async (_req: Request, res: Response) => {
   res.json(services);
 });
 
+// Создание записи на приём
 app.post('/api/appointments', async (req: Request, res: Response) => {
   try {
-    const { client, serviceId, staffId, locationId, startAt, endAt } = req.body as any;
+    const { locationId, serviceId, staffId, client } = req.body;
 
-    const created = await prisma.appointment.create({
+    const appointment = await prisma.appointment.create({
       data: {
-        serviceId,
-        staffId,
-        locationId,
+        // Указываем связи через relation-объекты
+        location: { connect: { id: locationId } },
+        service:  { connect: { id: serviceId } },
+        staff:    { connect: { id: staffId } },
+        // Клиент: либо connect по id, либо create с разрешёнными полями
         client: client?.id
           ? { connect: { id: client.id } }
           : {
               create: {
-                tgUserId: client?.tgUserId ?? null,
-                phoneEnc: client?.phoneEnc ?? null,
-                emailEnc: client?.emailEnc ?? null,
+                tgUserId:  client?.tgUserId  ?? null,
                 firstName: client?.firstName ?? null,
-                lastName: client?.lastName ?? null
+                lastName:  client?.lastName  ?? null,
+                phone:     client?.phone     ?? null,
+                email:     client?.email     ?? null
               }
             },
-        startAt: new Date(startAt),
-        endAt: new Date(endAt),
-        status: 'CREATED'
+        startAt: new Date(),
+        endAt:   new Date(Date.now() + 60 * 60 * 1000),
+        status:  'CREATED'
       }
     });
 
-    res.status(201).json(created);
+    res.status(201).json(appointment);
   } catch (err) {
     console.error(err);
     res.status(400).json({ error: 'invalid_payload' });
   }
 });
 
-// Telegram webhook
+// Обработчик Telegram webhook
 app.post('/tg/webhook', telegramRouter);
 
-// Статика
+// Отдача статических файлов
 app.use(express.static(path.join(__dirname, '..', 'public')));
-
 app.get('/', (_req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-const port = Number(process.env.PORT ?? 3000);
-const baseUrl = process.env.PUBLIC_BASE_URL ?? process.env.RAILWAY_URL;
+// Запуск сервера
+const port    = Number(process.env.PORT ?? 3000);
+const baseUrl = process.env.PUBLIC_BASE_URL ?? process.env.RAILWAY_URL ?? '';
 
 app.listen(port, async () => {
   console.log(`[http] listening on :${port}`);
 
-  // автоустановка вебхука (опционально)
+  // Автоматическая установка webhook (если включена)
   if (process.env.AUTO_SET_WEBHOOK === 'true' && baseUrl && process.env.TELEGRAM_BOT_TOKEN) {
     try {
       await installWebhook(`${baseUrl}/tg/webhook`);
