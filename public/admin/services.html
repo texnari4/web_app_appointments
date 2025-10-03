@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Админка — Услуги</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #111; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr 120px 140px 120px; gap: 8px; align-items: center; }
+    .row.header { font-weight: 600; opacity: .7; }
+    .row + .row { margin-top: 8px; }
+    input, textarea { width: 100%; padding: 8px; border: 1px solid #e5e5e5; border-radius: 8px; font-size: 14px; }
+    button { padding: 8px 12px; border: 1px solid #ddd; background: #f8f8f8; border-radius: 10px; cursor: pointer; }
+    button.primary { background: #111; color: #fff; border-color: #111; }
+    .muted { font-size: 12px; opacity: .7; }
+    .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:16px; }
+    .list { margin-top: 16px; }
+    .notice { margin: 8px 0 0; font-size: 13px; }
+    .error { color: #c00; }
+    .ok { color: #0a0; }
+  </style>
+</head>
+<body>
+  <h1>Админка → Услуги</h1>
+
+  <div class="toolbar">
+    <button id="btnRefresh">Обновить</button>
+    <button id="btnSetKey">Ввести админ-ключ</button>
+    <span class="muted" id="keyInfo"></span>
+  </div>
+
+  <form id="formCreate" class="row" autocomplete="off">
+    <input name="name" placeholder="Название" required />
+    <input name="description" placeholder="Описание (необязательно)" />
+    <input name="durationMin" type="number" min="1" step="1" placeholder="Минуты" required />
+    <input name="priceCents" type="number" min="0" step="0.01" placeholder="Цена, BYN" required />
+    <button class="primary" type="submit">Сохранить</button>
+  </form>
+  <div id="createMsg" class="notice"></div>
+
+  <div class="list">
+    <div class="row header">
+      <div>Название</div><div>Описание</div><div>Минуты</div><div>Цена (BYN)</div><div>Действия</div>
+    </div>
+    <div id="list"></div>
+  </div>
+
+<script>
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+  const API = {
+    list: "/admin/api/services",
+    create: "/admin/api/services",
+    update: id => `/admin/api/services/${id}`,
+    del: id => `/admin/api/services/${id}`,
+  };
+
+  function getAdminKey() {
+    return localStorage.getItem("adminKey") || "";
+  }
+  function setAdminKey(k) {
+    if (k) localStorage.setItem("adminKey", k);
+    else localStorage.removeItem("adminKey");
+    renderKeyInfo();
+  }
+  function renderKeyInfo() {
+    const has = !!getAdminKey();
+    $("#keyInfo").textContent = has ? "Ключ сохранён в браузере" : "Ключ не задан";
+  }
+  async function apiFetch(url, opts = {}) {
+    const headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+    const key = getAdminKey();
+    if (key) headers["X-Admin-Key"] = key;
+    const res = await fetch(url, { ...opts, headers });
+    const ct = res.headers.get("content-type") || "";
+    const data = ct.includes("application/json") ? await res.json() : await res.text();
+    if (!res.ok || (data && data.ok === false)) {
+      const msg = (data && (data.message || data.error)) || res.statusText || "Request failed";
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  async function loadList() {
+    const box = $("#list");
+    box.innerHTML = "Загрузка…";
+    try {
+      const { data } = await apiFetch(API.list);
+      box.innerHTML = "";
+      for (const s of data) {
+        const row = document.createElement("div");
+        row.className = "row";
+        row.innerHTML = \`
+          <input value="\${escapeHtml(s.name)}" data-k="name" />
+          <input value="\${escapeHtml(s.description ?? "")}" data-k="description" />
+          <input type="number" min="1" step="1" value="\${s.durationMin}" data-k="durationMin" />
+          <input type="number" min="0" step="0.01" value="\${(s.priceCents/100).toFixed(2)}" data-k="priceBYN" />
+          <div>
+            <button data-act="save">Сохранить</button>
+            <button data-act="del">Удалить</button>
+          </div>
+        \`;
+        row.querySelector('[data-act="save"]').addEventListener("click", async () => {
+          try {
+            const payload = collectRow(row);
+            if (payload.priceBYN != null) {
+              payload.priceCents = Math.round(Number(payload.priceBYN) * 100);
+              delete payload.priceBYN;
+            }
+            await apiFetch(API.update(s.id), { method: "PUT", body: JSON.stringify(payload) });
+            row.querySelector('[data-act="save"]').textContent = "Сохранено";
+            setTimeout(() => (row.querySelector('[data-act="save"]').textContent = "Сохранить"), 1200);
+          } catch (e) {
+            alert("Ошибка: " + e.message);
+          }
+        });
+        row.querySelector('[data-act="del"]').addEventListener("click", async () => {
+          if (!confirm("Удалить услугу?")) return;
+          try {
+            await apiFetch(API.del(s.id), { method: "DELETE" });
+            row.remove();
+          } catch (e) {
+            alert("Ошибка: " + e.message);
+          }
+        });
+        box.appendChild(row);
+      }
+    } catch (e) {
+      box.innerHTML = '<span class="error">Ошибка: ' + escapeHtml(e.message) + '</span>';
+    }
+  }
+
+  function collectRow(row) {
+    const out = {};
+    row.querySelectorAll("input").forEach(inp => {
+      const k = inp.getAttribute("data-k");
+      if (!k) return;
+      const v = inp.type === "number" ? Number(inp.value) : inp.value;
+      out[k] = v;
+    });
+    const mapped = {};
+    if ("name" in out) mapped.name = String(out.name);
+    if ("description" in out) mapped.description = out.description ? String(out.description) : null;
+    if ("durationMin" in out) mapped.durationMin = Number(out.durationMin);
+    if ("priceBYN" in out) mapped.priceBYN = Number(out.priceBYN);
+    return mapped;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c] || c));
+  }
+
+  document.getElementById("formCreate").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const fd = new FormData(form);
+    const name = String(fd.get("name") || "").trim();
+    const description = String(fd.get("description") || "").trim();
+    const durationMin = Number(fd.get("durationMin"));
+    const priceBYN = Number(fd.get("priceCents"));
+    const msg = document.getElementById("createMsg");
+    msg.className = "notice";
+    msg.textContent = "Сохранение…";
+    try {
+      const payload = {
+        name,
+        description: description || null,
+        durationMin,
+        priceCents: Math.round(priceBYN * 100),
+      };
+      await apiFetch(API.create, { method: "POST", body: JSON.stringify(payload) });
+      form.reset();
+      msg.classList.add("ok");
+      msg.textContent = "Сохранено";
+      await loadList();
+    } catch (err) {
+      msg.classList.add("error");
+      msg.textContent = "Ошибка: " + (err && err.message ? err.message : String(err));
+    }
+  });
+
+  document.getElementById("btnRefresh").addEventListener("click", loadList);
+  document.getElementById("btnSetKey").addEventListener("click", () => {
+    const cur = getAdminKey();
+    const next = prompt("Введите ADMIN_KEY (оставьте пустым, чтобы удалить):", cur || "");
+    if (next === null) return;
+    setAdminKey((next || "").trim());
+  });
+
+  renderKeyInfo();
+  loadList();
+</script>
+</body>
+</html>
