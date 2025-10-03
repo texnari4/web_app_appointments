@@ -1,267 +1,237 @@
-// src/index.ts
-import express, { Request, Response, NextFunction } from 'express';
-import path from 'node:path';
-import { prisma } from './prisma';
-
-// Универсальный импорт telegram-модуля: поддержим и default, и named exports
-// (чтобы не падать на разной форме экспорта в ./telegram.ts)
-import * as tgMod from './telegram';
+import express, { Request, Response } from 'express';
+import path from 'path';
+import { prisma, ensureDb } from './prisma';
+import { tgRouter, installWebhook } from './telegram';
 
 const app = express();
-
-// ---- Middlewares ----
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---- Статика
-app.use(express.static(path.join(process.cwd(), 'public')));
+// serve static
+const publicDir = path.join(process.cwd(), 'public');
+app.use(express.static(publicDir));
 
-// ---- Health
-app.get('/healthz', (_req, res) => res.status(200).send('ok'));
+// Health
+app.get('/health', (_req: Request, res: Response) => res.json({ ok: true }));
 
-// ===============================
-// Admin helpers (простой доступ по токену)
-// ===============================
-function isAdmin(req: Request): boolean {
-  const token = (req.query.token as string) || (req.headers['x-admin-token'] as string | undefined);
-  return !!token && token === process.env.ADMIN_TOKEN;
-}
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!isAdmin(req)) return res.status(401).send('Unauthorized');
-  next();
-}
-
-// ===============================
-// API для мини-приложения
-// ===============================
-
-// GET /api/services — читаем из БД и добавляем вычисляемое поле priceBYN
+// ---- Services CRUD ----
 app.get('/api/services', async (_req: Request, res: Response) => {
   try {
-    const services = await prisma.service.findMany({
+    const items = await prisma.service.findMany({
+      select: { id: true, name: true, description: true, durationMin: true, priceCents: true, createdAt: true, updatedAt: true },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, durationMin: true, priceCents: true, createdAt: true, updatedAt: true },
+    });
+    res.json(items.map(s => ({
+      ...s,
+      priceBYN: (s.priceCents / 100).toFixed(2),
+    })));
+  } catch (e: any) {
+    console.error(e);
+    res.status(500).json({ error: 'failed_list_services', detail: String(e?.message || e) });
+  }
+});
+
+app.post('/api/services', async (req: Request, res: Response) => {
+  try {
+    const { name, description, durationMin, priceCents } = req.body;
+    const created = await prisma.service.create({
+      data: {
+        name: String(name),
+        description: description ? String(description) : null,
+        durationMin: Number(durationMin),
+        priceCents: Number(priceCents),
+      },
+    });
+    res.status(201).json(created);
+  } catch (e: any) {
+    console.error(e);
+    res.status(400).json({ error: 'failed_create_service', detail: String(e?.message || e) });
+  }
+});
+
+app.put('/api/services/:id', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const { name, description, durationMin, priceCents } = req.body;
+    const updated = await prisma.service.update({
+      where: { id },
+      data: {
+        name: name !== undefined ? String(name) : undefined,
+        description: description !== undefined ? (description ? String(description) : null) : undefined,
+        durationMin: durationMin !== undefined ? Number(durationMin) : undefined,
+        priceCents: priceCents !== undefined ? Number(priceCents) : undefined,
+      },
+    });
+    res.json(updated);
+  } catch (e: any) {
+    console.error(e);
+    res.status(400).json({ error: 'failed_update_service', detail: String(e?.message || e) });
+  }
+});
+
+app.delete('/api/services/:id', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    await prisma.service.delete({ where: { id } });
+    res.status(204).send();
+  } catch (e: any) {
+    console.error(e);
+    res.status(400).json({ error: 'failed_delete_service', detail: String(e?.message || e) });
+  }
+});
+
+// ---- Slots ----
+// GET /api/slots?serviceId=&staffId=&date=YYYY-MM-DD
+app.get('/api/slots', async (req: Request, res: Response) => {
+  try {
+    const serviceId = String(req.query.serviceId || '');
+    const staffId = String(req.query.staffId || '');
+    const dateStr = String(req.query.date || '');
+    if (!serviceId || !staffId || !dateStr) {
+      return res.status(400).json({ error: 'bad_request', detail: 'serviceId, staffId, date are required' });
+    }
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service) return res.status(404).json({ error: 'service_not_found' });
+    const duration = service.durationMin;
+
+    // work window 10:00 - 20:00 local
+    const day = new Date(dateStr + 'T00:00:00.000Z');
+    const start = new Date(day); start.setUTCHours(7, 0, 0, 0)  // assume local GMT+3 -> 10:00 local ~ 07:00Z
+    const end   = new Date(day); end.setUTCHours(17, 0, 0, 0)  // 20:00 local ~ 17:00Z
+
+    // existing appointments for staff that day
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        staffId,
+        startAt: { gte: start, lt: end },
+      },
+      select: { startAt: true, endAt: true },
     });
 
-    const withByn = services.map((s) => ({
-      ...s,
-      priceBYN: Number((s.priceCents / 100).toFixed(2)),
-    }));
-
-    res.json({ ok: true, services: withByn });
-  } catch (e) {
-    console.error('[api] /api/services error', e);
-    res.status(500).json({ ok: false, error: 'internal_error' });
+    const slots: string[] = [];
+    function addMinutes(d: Date, m: number) {
+      return new Date(d.getTime() + m * 60000);
+    }
+    for (let t = new Date(start); addMinutes(t, duration) <= end; t = addMinutes(t, 30)) {
+      const slotStart = new Date(t);
+      const slotEnd = addMinutes(slotStart, duration);
+      const overlap = appointments.some(a => !(slotEnd <= a.startAt || slotStart >= a.endAt));
+      if (!overlap) slots.push(slotStart.toISOString());
+    }
+    res.json({ slots, durationMin: duration });
+  } catch (e: any) {
+    console.error(e);
+    res.status(500).json({ error: 'failed_slots', detail: String(e?.message || e) });
   }
 });
 
-// POST /api/appointments — создаём запись
+// ---- Appointments ----
+// POST /api/appointments { serviceId, staffId, startAtISO, client: { tgUserId?, phoneEnc?, emailEnc?, firstName?, lastName? } }
 app.post('/api/appointments', async (req: Request, res: Response) => {
   try {
-    const { serviceId, staffId, locationId, clientId, client, startAt, endAt } = req.body ?? {};
+    const { serviceId, staffId, startAtISO, client } = req.body || {};
+    if (!serviceId || !staffId || !startAtISO || !client) {
+      return res.status(400).json({ error: 'bad_request', detail: 'serviceId, staffId, startAtISO, client required' });
+    }
+    const service = await prisma.service.findUnique({ where: { id: String(serviceId) } });
+    if (!service) return res.status(404).json({ error: 'service_not_found' });
+    const startAt = new Date(String(startAtISO));
+    const endAt = new Date(startAt.getTime() + service.durationMin * 60000);
 
-    const data: any = {
-      startAt: new Date(startAt),
-      endAt: new Date(endAt),
-      status: 'CREATED' as const,
-      service: { connect: { id: String(serviceId) } },
-      staff: { connect: { id: String(staffId) } },
-      location: { connect: { id: String(locationId) } },
-      client: clientId
-        ? { connect: { id: String(clientId) } }
-        : client
-        ? {
-            create: {
-              tgUserId: client.tgUserId ?? null,
-              phoneEnc: client.phoneEnc ?? null,
-              emailEnc: client.emailEnc ?? null,
-              firstName: client.firstName ?? null,
-              lastName: client.lastName ?? null,
-            },
-          }
-        : undefined,
-    };
+    // ensure client (upsert by tgUserId if provided)
+    let clientId: string | undefined;
+    if (client.tgUserId) {
+      const c = await prisma.client.upsert({
+        where: { tgUserId: String(client.tgUserId) },
+        update: {
+          phoneEnc: client.phoneEnc ?? undefined,
+          emailEnc: client.emailEnc ?? undefined,
+          firstName: client.firstName ?? undefined,
+          lastName: client.lastName ?? undefined,
+        },
+        create: {
+          tgUserId: String(client.tgUserId),
+          phoneEnc: client.phoneEnc ?? null,
+          emailEnc: client.emailEnc ?? null,
+          firstName: client.firstName ?? null,
+          lastName: client.lastName ?? null,
+        },
+      });
+      clientId = c.id;
+    } else {
+      const c = await prisma.client.create({
+        data: {
+          phoneEnc: client.phoneEnc ?? null,
+          emailEnc: client.emailEnc ?? null,
+          firstName: client.firstName ?? null,
+          lastName: client.lastName ?? null,
+        },
+      });
+      clientId = c.id;
+    }
 
-    const created = await prisma.appointment.create({ data });
-    res.json({ ok: true, appointment: created });
-  } catch (e) {
-    console.error('[api] /api/appointments error', e);
-    res.status(400).json({ ok: false, error: 'bad_request' });
+    // collision check
+    const exists = await prisma.appointment.findFirst({
+      where: {
+        staffId: String(staffId),
+        OR: [
+          { AND: [{ startAt: { lt: endAt } }, { endAt: { gt: startAt } }] },
+        ],
+      },
+    });
+    if (exists) return res.status(409).json({ error: 'slot_taken' });
+
+    const created = await prisma.appointment.create({
+      data: {
+        serviceId: String(serviceId),
+        staffId: String(staffId),
+        clientId: clientId!,
+        startAt,
+        endAt,
+        status: 'CREATED',
+      },
+    });
+
+    console.log('[appt] created', created.id);
+    res.status(201).json(created);
+  } catch (e: any) {
+    console.error(e);
+    res.status(400).json({ error: 'failed_create_appointment', detail: String(e?.message || e) });
   }
 });
 
-// ===============================
-// Telegram webhook (поддержка разных форм экспорта)
-// ===============================
-const tgRouter =
-  (tgMod as any).tgRouter || // named export
-  (tgMod as any).default ||  // default export
-  express.Router();          // заглушка
+// ---- Admin (static page) ----
+app.get('/admin/services', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'admin-services.html'));
+});
 
+// Telegram routes
 app.use('/tg', tgRouter);
 
-// ===============================
-// Admin: Services CRUD (очень простой HTML)
-// ===============================
-app.get('/admin', requireAdmin, (_req, res) => res.redirect('/admin/services'));
-
-app.get('/admin/services', requireAdmin, async (req: Request, res: Response) => {
-  const qToken = (req.query.token as string) ?? '';
-  const services = await prisma.service.findMany({ orderBy: { name: 'asc' } });
-
-  const rows = services
-    .map(
-      (s) => `
-      <tr>
-        <td>#${s.id}</td>
-        <td>
-          <form method="post" action="/admin/services/${encodeURIComponent(s.id)}?token=${encodeURIComponent(
-        qToken,
-      )}" style="display:flex;gap:6px;flex-wrap:wrap">
-            <input type="text" name="name" value="${escapeHtml(s.name)}" required />
-            <input type="number" step="1" min="0" name="durationMin" value="${s.durationMin ?? 0}" placeholder="Минуты" required />
-            <input type="number" step="0.01" min="0" name="priceBYN" value="${(s.priceCents / 100).toFixed(
-              2,
-            )}" placeholder="Цена BYN" required />
-            <button type="submit">Сохранить</button>
-          </form>
-        </td>
-        <td>
-          <form method="post" action="/admin/services/${encodeURIComponent(
-            s.id,
-          )}/delete?token=${encodeURIComponent(qToken)}" onsubmit="return confirm('Удалить услугу «${escapeAttr(s.name)}»?')">
-            <button type="submit" style="background:#c0392b;color:#fff">Удалить</button>
-          </form>
-        </td>
-      </tr>`,
-    )
-    .join('');
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8').send(`<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Админка — Услуги</title>
-<style>
-  body{font:14px/1.4 system-ui,-apple-system, Segoe UI, Roboto, Arial, sans-serif; padding:20px; max-width:980px; margin:0 auto;}
-  h1{margin:0 0 16px;}
-  table{width:100%; border-collapse: collapse;}
-  td, th{border:1px solid #ddd; padding:8px; vertical-align:top;}
-  form input{padding:6px 8px}
-  form button{padding:6px 10px; cursor:pointer}
-  .card{border:1px solid #eee; padding:12px; margin:16px 0; border-radius:8px; background:#fafafa}
-  .grid{display:grid; grid-template-columns: 1fr; gap:8px}
-  @media (min-width:720px){ .grid{grid-template-columns: repeat(4, 1fr);} }
-</style>
-</head>
-<body>
-  <h1>Админка — Услуги</h1>
-
-  <div class="card">
-    <h3>Добавить услугу</h3>
-    <form method="post" action="/admin/services?token=${encodeURIComponent(qToken)}" class="grid">
-      <input type="text" name="name" placeholder="Название" required />
-      <input type="number" step="1" min="0" name="durationMin" placeholder="Длительность, мин" required />
-      <input type="number" step="0.01" min="0" name="priceBYN" placeholder="Цена, BYN" required />
-      <div>
-        <button type="submit">Создать</button>
-      </div>
-    </form>
-  </div>
-
-  <table>
-    <thead><tr><th>ID</th><th>Услуга</th><th>Действия</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="3">Пока пусто</td></tr>'}</tbody>
-  </table>
-</body>
-</html>`);
-});
-
-// Создать
-app.post('/admin/services', requireAdmin, async (req: Request, res: Response) => {
-  const { name, durationMin, priceBYN } = req.body ?? {};
-  const priceCents = Math.round(Number.parseFloat(priceBYN) * 100);
-
-  await prisma.service.create({
-    data: {
-      name: String(name),
-      durationMin: Number.parseInt(durationMin),
-      priceCents,
-    },
-  });
-  res.redirect(`/admin/services?token=${encodeURIComponent(String(req.query.token ?? ''))}`);
-});
-
-// Обновить
-app.post('/admin/services/:id', requireAdmin, async (req: Request, res: Response) => {
-  const id = String(req.params.id);
-  const { name, durationMin, priceBYN } = req.body ?? {};
-  const priceCents = Math.round(Number.parseFloat(priceBYN) * 100);
-
-  await prisma.service.update({
-    where: { id },
-    data: {
-      name: String(name),
-      durationMin: Number.parseInt(durationMin),
-      priceCents,
-    },
-  });
-  res.redirect(`/admin/services?token=${encodeURIComponent(String(req.query.token ?? ''))}`);
-});
-
-// Удалить
-app.post('/admin/services/:id/delete', requireAdmin, async (req: Request, res: Response) => {
-  const id = String(req.params.id);
-  await prisma.service.delete({ where: { id } });
-  res.redirect(`/admin/services?token=${encodeURIComponent(String(req.query.token ?? ''))}`);
-});
-
-// ===============================
-// Главная (демо)
-// ===============================
+// Root page
 app.get('/', (_req: Request, res: Response) => {
-  res.setHeader('Content-Type', 'text/html; charset=utf-8').send(`<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Онлайн-запись</title></head>
-<body style="font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:24px">
-  <h1>Онлайн-запись</h1>
-  <p>Это простая статика мини-приложения (без сборки). Сервер: Express + Prisma.</p>
-  <p><a href="/app.html">Открыть мини-приложение</a></p>
-  <p><a href="/admin/services">Админка (нужен ?token=...)</a></p>
-  <hr/>
-  <p><a href="/api/services" target="_blank">Показать услуги (GET /api/services)</a></p>
-</body></html>`);
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
-// ===============================
-// Запуск + установка Telegram webhook (если есть)
-// ===============================
-const port = Number(process.env.PORT || 8080);
-app.listen(port, async () => {
-  console.log(`[http] listening on :${port}`);
+const PORT = Number(process.env.PORT || 8080);
 
+async function main() {
   try {
-    const baseUrl = process.env.PUBLIC_BASE_URL || process.env.RAILWAY_URL || '';
-    const installWebhookFn = (tgMod as any).installWebhook as undefined | ((baseUrl?: string) => Promise<void>);
-    if (typeof installWebhookFn === 'function') {
-      await installWebhookFn(baseUrl);
-    }
-  } catch (err) {
-    console.error('[tg] setWebhook failed', err);
+    await ensureDb();
+  } catch (e) {
+    console.error('[db] ping failed', e);
   }
-});
+  app.listen(PORT, async () => {
+    console.log(`[http] listening on :${PORT}`);
+    const baseUrl = process.env.RAILWAY_URL || '';
+    const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+    if (baseUrl && botToken) {
+      await installWebhook(baseUrl, botToken);
+    }
+  });
+}
 
-// ===============================
-// Утилиты для HTML
-// ===============================
-function escapeHtml(s: string): string {
-  return String(s)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-function escapeAttr(s: string): string {
-  return escapeHtml(s).replaceAll("'", '&#39;');
-}
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 
 export const prisma = new PrismaClient();
 
-process.on('SIGINT', async () => {
-  await prisma.$disconnect();
-  process.exit(0);
-});
+export async function ensureDb() {
+  // simple ping
+  await prisma.$queryRaw`SELECT 1`;
+}

@@ -1,49 +1,37 @@
 import { Router, Request, Response } from 'express';
 
-const token = process.env.TELEGRAM_BOT_TOKEN ?? '';
+export const tgRouter = Router();
 
-export const telegramRouter = Router();
-
-telegramRouter.post('/', async (req: Request, res: Response) => {
+// Simple webhook endpoint (Telegram will POST updates here)
+tgRouter.post('/webhook', async (req: Request, res: Response) => {
+  // For sprint-1 we just acknowledge updates and log minimal info
   try {
-    const update = req.body as any;
-
-    const chatId: number | undefined =
-      update?.message?.chat?.id ??
-      update?.callback_query?.message?.chat?.id;
-
-    if (chatId) {
-      await sendMessage(chatId, '✅ Webhook is alive');
-    }
-
-    res.sendStatus(200);
+    const update = req.body;
+    console.log('[tg:update]', JSON.stringify(update));
   } catch (e) {
     console.error('[tg] webhook error', e);
-    res.sendStatus(200);
   }
+  res.sendStatus(200);
 });
 
-export async function installWebhook(url: string): Promise<void> {
-  if (!token) throw new Error('TELEGRAM_BOT_TOKEN is empty');
-
-  const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ url })
-  });
-
-  if (!r.ok) {
-    const body = await r.text();
-    throw new Error(`setWebhook ${r.status}: ${body}`);
+// Helper to set webhook on startup
+export async function installWebhook(baseUrl: string, botToken?: string) {
+  if (!botToken) return;
+  if (!baseUrl) return;
+  const url = `${baseUrl.replace(/\/$/, '')}/tg/webhook`;
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      console.log('[tg] setWebhook OK →', url);
+    } else {
+      console.error('[tg] setWebhook failed', data);
+    }
+  } catch (e) {
+    console.error('[tg] setWebhook exception', e);
   }
-}
-
-async function sendMessage(chatId: number, text: string): Promise<void> {
-  if (!token) return;
-
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text })
-  });
 }

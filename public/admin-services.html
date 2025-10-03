@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Админка — Услуги</title>
+    <style>
+      body { font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; margin: 24px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+      input, button { font-size: 14px; padding: 8px; }
+      .row { display: grid; grid-template-columns: 1fr 2fr 1fr 1fr auto; gap: 8px; margin-top: 8px; }
+      .muted { color: #666; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Услуги</h1>
+
+    <section>
+      <h3>Создать услугу</h3>
+      <div class="row">
+        <input id="name" placeholder="Название">
+        <input id="description" placeholder="Описание (опционально)">
+        <input id="durationMin" type="number" placeholder="Длительность, мин">
+        <input id="priceCents" type="number" placeholder="Цена, копейки BYN">
+        <button onclick="createService()">Создать</button>
+      </div>
+      <p class="muted">Пример: 35 BYN → 3500 копеек</p>
+    </section>
+
+    <section>
+      <h3>Список</h3>
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>Название</th>
+            <th>Описание</th>
+            <th>Длительность</th>
+            <th>Цена</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <script>
+      async function load() {
+        const res = await fetch('/api/services');
+        const data = await res.json();
+        const tbody = document.querySelector('#tbl tbody');
+        tbody.innerHTML = '';
+        for (const s of data) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = \`
+            <td><input value="\${s.name}" data-id="\${s.id}" data-field="name"></td>
+            <td><input value="\${s.description ?? ''}" data-id="\${s.id}" data-field="description"></td>
+            <td><input type="number" value="\${s.durationMin}" data-id="\${s.id}" data-field="durationMin"></td>
+            <td><input type="number" value="\${s.priceCents}" data-id="\${s.id}" data-field="priceCents"></td>
+            <td>
+              <button onclick="save('\${s.id}')">💾</button>
+              <button onclick="del('\${s.id}')">🗑️</button>
+            </td>
+          \`;
+          tbody.appendChild(tr);
+        }
+      }
+
+      async function createService() {
+        const payload = {
+          name: document.getElementById('name').value,
+          description: document.getElementById('description').value || null,
+          durationMin: Number(document.getElementById('durationMin').value),
+          priceCents: Number(document.getElementById('priceCents').value),
+        };
+        await fetch('/api/services', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        await load();
+      }
+
+      async function save(id) {
+        const inputs = document.querySelectorAll('input[data-id="' + id + '"]');
+        const payload = {};
+        inputs.forEach(i => payload[i.getAttribute('data-field')] = i.type === 'number' ? Number(i.value) : i.value);
+        await fetch('/api/services/' + id, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        await load();
+      }
+
+      async function del(id) {
+        await fetch('/api/services/' + id, { method: 'DELETE' });
+        await load();
+      }
+
+      load();
+    </script>
+  </body>
+</html>
