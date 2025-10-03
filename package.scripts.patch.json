@@ -1,0 +1,11 @@
+{
+  "name": "web-app-appointments",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prisma:sync": "prisma migrate deploy || prisma db push",
+    "postinstall": "prisma generate",
+    "start": "npm run prisma:sync && node dist/index.js"
+  }
+}

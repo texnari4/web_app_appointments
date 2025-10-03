@@ -7,6 +7,14 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum AppointmentStatus {
+  CREATED
+  CONFIRMED
+  CANCELLED
+  NOSHOW
+  DONE
+}
+
 model Service {
   id          String   @id @default(cuid())
   name        String
@@ -21,9 +29,13 @@ model Service {
 
 model Staff {
   id          String   @id @default(cuid())
-  name        String
-  specialties String[]
+  firstName   String
+  lastName    String?
+  phone       String?
+  bio         String?
   avatarUrl   String?
+  specialties String[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -32,34 +44,36 @@ model Staff {
 
 model Client {
   id         String   @id @default(cuid())
-  tgUserId   String?  @unique
-  phoneEnc   String?
-  emailEnc   String?
+  tgUserId   String?          // intentionally NOT unique to avoid data loss push
   firstName  String?
   lastName   String?
+  phoneEnc   String?
+  emailEnc   String?
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   appointments Appointment[]
+
+  @@index([tgUserId])
 }
 
 model Appointment {
-  id         String   @id @default(cuid())
-  service    Service  @relation(fields: [serviceId], references: [id])
+  id         String            @id @default(cuid())
   serviceId  String
-  staff      Staff    @relation(fields: [staffId], references: [id])
   staffId    String
-  client     Client   @relation(fields: [clientId], references: [id])
-  clientId   String
+  clientId   String?
   startAt    DateTime
   endAt      DateTime
   status     AppointmentStatus @default(CREATED)
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-}
 
-enum AppointmentStatus {
-  CREATED
-  CONFIRMED
-  CANCELED
+  service    Service @relation(fields: [serviceId], references: [id])
+  staff      Staff   @relation(fields: [staffId], references: [id])
+  client     Client? @relation(fields: [clientId], references: [id])
+
+  @@index([staffId, startAt])
+  @@index([serviceId])
 }
