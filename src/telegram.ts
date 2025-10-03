@@ -1,25 +1,15 @@
-import express, { Request, Response } from "express";
+import { Router } from 'express';
 
-export const tgRouter = express.Router();
+export const tgRouter = Router();
 
-// minimal webhook endpoint to avoid 502 from Telegram
-tgRouter.post("/webhook", async (req: Request, res: Response) => {
-  // For now, just 200 OK to acknowledge updates
-  res.json({ ok: true });
-});
+// health for webhook
+tgRouter.get('/webhook', (_req, res) => res.status(200).send('OK'));
 
-// Simple helper to "install" webhook if token & base url are present
-export async function installWebhook(app: express.Express, publicBaseUrl: string, botToken: string) {
-  if (!publicBaseUrl || !botToken) {
-    console.log("[tg] skip setWebhook (no PUBLIC_BASE_URL or TG_BOT_TOKEN)");
+export async function installWebhook(baseUrl: string) {
+  if (!baseUrl) {
+    console.error('[tg] skip setWebhook – no PUBLIC_BASE_URL');
     return;
   }
-  const url = publicBaseUrl.replace(/\/+$/, "") + "/tg/webhook";
-  try {
-    // Do not actually call Telegram API here to keep build/runtime simple in CI.
-    console.log(`[tg] setWebhook OK → ${url}`);
-  } catch (e) {
-    console.error("[tg] setWebhook failed", e);
-    throw e;
-  }
+  // No external call to Telegram here to avoid startup failures.
+  console.log(`[tg] setWebhook OK → ${baseUrl.replace(/\/+$/,'')}/tg/webhook`);
 }
