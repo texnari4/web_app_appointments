@@ -1,17 +1,21 @@
 {
-  "name": "beauty-miniapp-monorepo",
+  "name": "web-app-appointments",
+  "version": "1.0.0",
   "private": true,
+  "type": "commonjs",
   "engines": { "node": ">=22" },
   "scripts": {
-    "postinstall": "npm --prefix api install && npm --prefix miniapp install && prisma generate --schema=api/prisma/schema.prisma",
-    "prebuild": "prisma format --schema=api/prisma/schema.prisma && prisma validate --schema=api/prisma/schema.prisma",
-    "build": "npm --prefix api run build && npm --prefix miniapp run build && rm -rf api/public && mkdir -p api/public && cp -R miniapp/dist/* api/public/",
-    "start": "npm --prefix api run start:prod"
-  },
-  "devDependencies": {
-    "prisma": "5.22.0"
+    "postinstall": "prisma generate",
+    "build": "tsc -p tsconfig.json",
+    "prisma:sync": "prisma migrate deploy || prisma db push",
+    "start": "npm run prisma:sync && node dist/index.js"
   },
   "dependencies": {
-    "@prisma/client": "5.22.0"
+    "@prisma/client": "^5.22.0",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "typescript": "^5.6.3"
   }
 }

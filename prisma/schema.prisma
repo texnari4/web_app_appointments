@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  relationMode = "foreignKeys"
+}
+
+enum AppointmentStatus {
+  CREATED
+  CONFIRMED
+  CANCELED
+  DONE
+}
+
+model Client {
+  id           String        @id @default(cuid())
+  tgUserId     String?
+  phone        String?
+  email        String?
+  firstName    String?
+  lastName     String?
+  appointments Appointment[]
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Location {
+  id           String        @id @default(cuid())
+  name         String
+  address      String?
+  services     Service[]
+  staff        Staff[]
+  appointments Appointment[]
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Staff {
+  id           String        @id @default(cuid())
+  name         String
+  role         String?
+  active       Boolean       @default(true)
+
+  locationId   String?
+  location     Location?     @relation(fields: [locationId], references: [id])
+
+  services     Service[]
+  appointments Appointment[]
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Service {
+  id           String        @id @default(cuid())
+  name         String
+  durationMin  Int
+  priceCents   Int
+
+  locations    Location[]
+  staff        Staff[]
+
+  appointments Appointment[]
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Appointment {
+  id         String            @id @default(cuid())
+
+  locationId String
+  serviceId  String
+  staffId    String
+  clientId   String
+
+  startAt    DateTime
+  endAt      DateTime
+  status     AppointmentStatus @default(CREATED)
+
+  location   Location          @relation(fields: [locationId], references: [id])
+  service    Service           @relation(fields: [serviceId], references: [id])
+  staff      Staff             @relation(fields: [staffId], references: [id])
+  client     Client            @relation(fields: [clientId], references: [id])
+
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@index([locationId])
+  @@index([serviceId])
+  @@index([staffId])
+  @@index([clientId, startAt])
+}
