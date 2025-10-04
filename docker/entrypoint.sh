@@ -1,8 +1,5 @@
 #!/bin/sh
 set -e
-
-# Migrate (no-op if none), generate client (safe), then start
-npx prisma migrate deploy || true
-npx prisma generate || true
-
+# If you want migrations on start, uncomment the next line (requires prisma CLI present in node_modules)
+# npx prisma migrate deploy
 exec node dist/index.js

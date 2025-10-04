@@ -1,38 +1,28 @@
-# ---------- Builder ----------
+# --- Builder ---
 FROM node:22-alpine AS builder
 WORKDIR /app
-
-# System deps for Prisma binary
-RUN apk add --no-cache openssl1.1-compat libc6-compat
-
+# System deps for Prisma on Alpine
+RUN apk add --no-cache openssl libc6-compat
 COPY package.json ./
 RUN npm install
-
 COPY prisma ./prisma
-RUN npx prisma generate
-
+# generate client so tsc can typecheck @prisma/client
+RUN npx prisma generate || true
 COPY tsconfig.json ./tsconfig.json
 COPY src ./src
 RUN npm run build
 
-# ---------- Runner ----------
+# --- Runtime ---
 FROM node:22-alpine AS runner
 WORKDIR /app
-
-RUN apk add --no-cache openssl1.1-compat libc6-compat
-
-ENV NODE_ENV=production
-ENV PORT=8080
-
-# copy node_modules with prisma client
+RUN apk add --no-cache openssl libc6-compat
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/dist ./dist
 COPY public ./public
 COPY docker/entrypoint.sh ./entrypoint.sh
-
-# fix LF just in case
-RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
-
+# normalize line endings & make executable
+RUN sed -i 's/\r$//' ./entrypoint.sh && chmod +x ./entrypoint.sh
 EXPOSE 8080
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENV NODE_ENV=production
+CMD ["./entrypoint.sh"]
