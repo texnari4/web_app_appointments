@@ -1,177 +1,129 @@
-
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
+import pino from 'pino';
 import pinoHttp from 'pino-http';
 import { prisma } from './prisma';
-import {
-  metaCreateSchema,
-  masterCreateSchema,
-  serviceCreateSchema,
-  appointmentCreateSchema,
-  linkServiceSchema,
-} from './validators';
+import { createMasterSchema, createServiceSchema, createAppointmentSchema } from './validators';
 
+const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 const app = express();
-const port = Number(process.env.PORT || 8080);
-
 app.use(cors());
 app.use(express.json());
-app.use(pinoHttp());
+app.use(pinoHttp({ logger }));
 
-app.get('/health', (_req, res) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-// ---- Meta ----
-app.get('/meta/:key', async (req, res) => {
-  const item = await prisma.appMeta.findUnique({ where: { key: req.params.key } });
-  if (!item) return res.status(404).json({ error: 'Not found' });
-  res.json(item);
-});
-
-app.post('/meta', async (req, res) => {
-  const parsed = metaCreateSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const { key, value } = parsed.data;
-  const saved = await prisma.appMeta.upsert({
-    where: { key },
-    create: { key, value },
-    update: { value },
-  });
-  res.status(201).json(saved);
-});
-
-// ---- Masters ----
+// Masters
 app.get('/masters', async (_req, res) => {
-  const items = await prisma.master.findMany({ include: { services: true } });
-  res.json(items);
+  const data = await prisma.master.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(data);
 });
 
 app.post('/masters', async (req, res) => {
-  const parsed = masterCreateSchema.safeParse(req.body);
+  const parsed = createMasterSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const created = await prisma.master.create({ data: parsed.data });
-  res.status(201).json(created);
+  const master = await prisma.master.create({ data: parsed.data });
+  res.status(201).json(master);
 });
 
 app.get('/masters/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  const item = await prisma.master.findUnique({ where: { id }, include: { services: true } });
-  if (!item) return res.status(404).json({ error: 'Not found' });
-  res.json(item);
+  const master = await prisma.master.findUnique({ where: { id: req.params.id }, include: { services: true } });
+  if (!master) return res.status(404).json({ error: 'Not found' });
+  res.json(master);
 });
 
 app.put('/masters/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  const parsed = masterCreateSchema.partial().safeParse(req.body);
+  const parsed = createMasterSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const updated = await prisma.master.update({ where: { id }, data: parsed.data });
-  res.json(updated);
+  const master = await prisma.master.update({ where: { id: req.params.id }, data: parsed.data });
+  res.json(master);
 });
 
 app.delete('/masters/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  await prisma.master.delete({ where: { id } }).catch(() => null);
-  res.status(204).end();
+  await prisma.master.delete({ where: { id: req.params.id } });
+  res.status(204).send();
 });
 
-// Link service to master
 app.post('/masters/:id/services', async (req, res) => {
-  const id = Number(req.params.id);
-  const parsed = linkServiceSchema.safeParse(req.body);
+  const parsed = createServiceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const { serviceId } = parsed.data;
-  const updated = await prisma.master.update({
-    where: { id },
-    data: { services: { connect: { id: serviceId } } },
-    include: { services: true },
-  });
-  res.json(updated);
+  const service = await prisma.service.create({ data: { ...parsed.data, masterId: req.params.id } });
+  res.status(201).json(service);
 });
 
-// ---- Services ----
+// Services
 app.get('/services', async (_req, res) => {
-  const items = await prisma.service.findMany();
-  res.json(items);
+  const data = await prisma.service.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(data);
 });
 
 app.post('/services', async (req, res) => {
-  const parsed = serviceCreateSchema.safeParse(req.body);
+  const parsed = createServiceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const created = await prisma.service.create({ data: parsed.data });
-  res.status(201).json(created);
+  const service = await prisma.service.create({ data: parsed.data });
+  res.status(201).json(service);
 });
 
 app.get('/services/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  const item = await prisma.service.findUnique({ where: { id } });
-  if (!item) return res.status(404).json({ error: 'Not found' });
-  res.json(item);
+  const service = await prisma.service.findUnique({ where: { id: req.params.id } });
+  if (!service) return res.status(404).json({ error: 'Not found' });
+  res.json(service);
 });
 
 app.put('/services/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  const parsed = serviceCreateSchema.partial().safeParse(req.body);
+  const parsed = createServiceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const updated = await prisma.service.update({ where: { id }, data: parsed.data });
-  res.json(updated);
+  const service = await prisma.service.update({ where: { id: req.params.id }, data: parsed.data });
+  res.json(service);
 });
 
 app.delete('/services/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  await prisma.service.delete({ where: { id } }).catch(() => null);
-  res.status(204).end();
+  await prisma.service.delete({ where: { id: req.params.id } });
+  res.status(204).send();
 });
 
-// ---- Appointments ----
+// Appointments
 app.get('/appointments', async (req, res) => {
-  const masterId = req.query.masterId ? Number(req.query.masterId) : undefined;
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
-
+  const { masterId, from, to } = req.query as { masterId?: string; from?: string; to?: string };
   const where: any = {};
   if (masterId) where.masterId = masterId;
-  if (from || to) where.startsAt = { gte: from, lte: to };
-
-  const items = await prisma.appointment.findMany({
-    where,
-    orderBy: { startsAt: 'asc' },
-    include: { master: true, service: true },
-  });
-  res.json(items);
+  if (from || to) {
+    where.startsAt = {};
+    if (from) where.startsAt.gte = new Date(from);
+    if (to) where.startsAt.lte = new Date(to);
+  }
+  const data = await prisma.appointment.findMany({ where, orderBy: { startsAt: 'asc' } });
+  res.json(data);
 });
 
 app.post('/appointments', async (req, res) => {
-  const parsed = appointmentCreateSchema.safeParse(req.body);
+  const parsed = createAppointmentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-
-  const data = parsed.data;
-  // Ensure master and service exist
-  const [m, s] = await Promise.all([
-    prisma.master.findUnique({ where: { id: data.masterId } }),
-    prisma.service.findUnique({ where: { id: data.serviceId } }),
-  ]);
-  if (!m) return res.status(400).json({ error: 'Master not found' });
-  if (!s) return res.status(400).json({ error: 'Service not found' });
-
-  const created = await prisma.appointment.create({ data });
-  res.status(201).json(created);
+  const a = parsed.data;
+  const appt = await prisma.appointment.create({ data: {
+    masterId: a.masterId,
+    serviceId: a.serviceId,
+    startsAt: new Date(a.startsAt),
+    endsAt: new Date(a.endsAt),
+    customerName: a.customerName,
+    customerPhone: a.customerPhone
+  }});
+  res.status(201).json(appt);
 });
 
 app.put('/appointments/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  const parsed = appointmentCreateSchema.partial().safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const updated = await prisma.appointment.update({ where: { id }, data: parsed.data });
-  res.json(updated);
+  const appt = await prisma.appointment.update({ where: { id: req.params.id }, data: req.body });
+  res.json(appt);
 });
 
 app.delete('/appointments/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  await prisma.appointment.delete({ where: { id } }).catch(() => null);
-  res.status(204).end();
+  await prisma.appointment.delete({ where: { id: req.params.id } });
+  res.status(204).send();
 });
 
+const port = Number(process.env.PORT || 8080);
 app.listen(port, () => {
-  console.log(`Server started on :${port}`);
+  logger.info({ port }, 'Server started');
 });

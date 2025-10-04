@@ -1,63 +1,56 @@
-
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model AppMeta {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique
-  value     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Master {
-  id           Int            @id @default(autoincrement())
-  name         String
-  phone        String?
-  isActive     Boolean        @default(true)
-  services     Service[]
-  appointments Appointment[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-}
-
-model Service {
-  id           Int            @id @default(autoincrement())
-  name         String
-  price        Int
-  durationMins Int
-  isActive     Boolean        @default(true)
-  masters      Master[]
-  appointments Appointment[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+generator client {
+  provider = "prisma-client-js"
 }
 
 enum AppointmentStatus {
-  SCHEDULED
-  DONE
-  CANCELED
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+model AppMeta {
+  key   String @id
+  value String
+}
+
+model Master {
+  id         String       @id @default(cuid())
+  name       String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  services   Service[]
+  appointments Appointment[]
+}
+
+model Service {
+  id         String    @id @default(cuid())
+  title      String
+  priceCents Int
+  durationMin Int
+  masterId   String?
+  master     Master?   @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  appointments Appointment[]
 }
 
 model Appointment {
-  id           Int                @id @default(autoincrement())
-  masterId     Int
-  serviceId    Int
+  id         String    @id @default(cuid())
+  masterId   String
+  serviceId  String
+  startsAt   DateTime
+  endsAt     DateTime
+  status     AppointmentStatus @default(PENDING)
   customerName String
-  customerPhone String?
-  startsAt     DateTime
-  status       AppointmentStatus  @default(SCHEDULED)
-  master       Master             @relation(fields: [masterId], references: [id])
-  service      Service            @relation(fields: [serviceId], references: [id])
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  customerPhone String
+
+  master   Master   @relation(fields: [masterId], references: [id], onDelete: Cascade)
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
 
   @@index([masterId, startsAt])
-  @@index([serviceId, startsAt])
 }

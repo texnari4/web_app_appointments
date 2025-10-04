@@ -1,28 +1,9 @@
+# web-app-appointments (Dockerized)
 
-# Appointments API (Express + Prisma + Zod + Pino) — Sprint 1
+## Env
+- `DATABASE_URL` (PostgreSQL)
 
-## Endpoints
-- `GET /health`
-- **Masters**
-  - `GET /masters`
-  - `POST /masters`
-  - `GET /masters/:id`
-  - `PUT /masters/:id`
-  - `DELETE /masters/:id`
-  - `POST /masters/:id/services` — link service to master `{ serviceId }`
-- **Services**
-  - `GET /services`
-  - `POST /services`
-  - `GET /services/:id`
-  - `PUT /services/:id`
-  - `DELETE /services/:id`
-- **Appointments**
-  - `GET /appointments?masterId=&from=&to=`
-  - `POST /appointments`
-  - `PUT /appointments/:id`
-  - `DELETE /appointments/:id`
-
-## Local Development
+## Local
 ```bash
 npm install
 npx prisma generate
@@ -32,9 +13,15 @@ npm start
 ```
 
 ## Docker
-Environment var: `DATABASE_URL` (Postgres). Port: `8080`.
-Railway auto-detects Dockerfile.
+```bash
+docker build -t appointments .
+docker run --rm -p 8080:8080 -e DATABASE_URL="postgresql://user:pass@host:5432/db?schema=public" appointments
+```
 
-## Notes
-- Node 22 compatible, CommonJS modules, `esModuleInterop: true`.
-- Prisma CLI runs inside the container via `entrypoint.sh`, avoiding "prisma: not found".
+## Railway
+- Set `Dockerfile` build.
+- Set `DATABASE_URL`.
+- Port 8080.
+- Done.
+```
+

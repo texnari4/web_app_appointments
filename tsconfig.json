@@ -4,7 +4,7 @@
     "lib": [
       "ES2020"
     ],
-    "module": "commonjs",
+    "module": "CommonJS",
     "moduleResolution": "node",
     "rootDir": "src",
     "outDir": "dist",
@@ -15,6 +15,7 @@
     "resolveJsonModule": true
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "scripts/**/*"
   ]
 }
