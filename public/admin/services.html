@@ -1,83 +1,144 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Услуги — Админка</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Админка — Услуги</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 24px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
-    th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
-    th { background: #f3f4f6; }
-    input { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; }
-    button { padding: 8px 12px; border-radius: 8px; border: none; background: #0ea5e9; color: white; }
-    button.danger { background: #ef4444; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif; margin:24px; color:#111;}
+    h1{font-size:20px;margin:0 0 16px}
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px}
+    label{display:block;font-size:12px;color:#374151;margin:8px 0 4px}
+    input{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:10px;font-size:14px}
+    button{padding:10px 14px;border-radius:10px;border:1px solid #111;background:#111;color:#fff;cursor:pointer}
+    button.secondary{background:#fff;color:#111;border-color:#d1d5db}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+    th,td{border-bottom:1px solid #e5e7eb;padding:10px;text-align:left}
+    .row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end}
+    .error{color:#b91c1c;margin-top:8px}
+    .ok{color:#065f46;margin-top:8px}
   </style>
 </head>
 <body>
   <h1>Услуги</h1>
 
-  <div class="row">
-    <input id="name" placeholder="Название" />
-    <input id="duration" placeholder="Длительность (мин)" type="number" />
-    <input id="price" placeholder="Цена (в копейках)" type="number" />
-    <button id="save">Сохранить</button>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Название</label>
+        <input id="name" placeholder="Маникюр классический"/>
+      </div>
+      <div>
+        <label>Длительность (мин)</label>
+        <input id="durationMin" type="number" min="1" step="1" placeholder="60"/>
+      </div>
+      <div>
+        <label>Цена (копейки BYN)</label>
+        <input id="priceCents" type="number" min="0" step="1" placeholder="450000"/>
+      </div>
+      <div>
+        <button id="saveBtn" type="button">Сохранить</button>
+      </div>
+    </div>
+    <div id="msg"></div>
   </div>
 
-  <table>
-    <thead>
-      <tr><th>Название</th><th>Длительность</th><th>Цена (коп.)</th><th></th></tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Название</th><th>Длительность</th><th>Цена, BYN</th><th></th></tr>
+      </thead>
+      <tbody id="list"></tbody>
+    </table>
+  </div>
 
 <script>
-const API = '/admin/api/services';
-const adminKey = localStorage.ADMIN_KEY || '';
-
-async function load() {
-  const r = await fetch(API, { headers: adminKey ? { 'X-Admin-Key': adminKey } : {} });
-  const data = await r.json();
-  const body = document.getElementById('tbody');
-  body.innerHTML = '';
-  data.forEach(s => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = \`
-      <td>\${s.name}</td>
-      <td>\${s.durationMin}</td>
-      <td>\${s.priceCents}</td>
-      <td><button class="danger" data-id="\${s.id}">Удалить</button></td>\`;
-    body.appendChild(tr);
-  });
-  body.querySelectorAll('button.danger').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.getAttribute('data-id');
-      if (!confirm('Удалить услугу?')) return;
-      await fetch(\`\${API}/\${id}\`, { method: 'DELETE', headers: adminKey ? { 'X-Admin-Key': adminKey } : {} });
-      await load();
+const $ = sel => document.querySelector(sel);
+const api = {
+  async list(){ const r = await fetch('/admin/api/services'); if(!r.ok) throw new Error('list failed'); return r.json(); },
+  async create(payload){
+    const r = await fetch('/admin/api/services', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
     });
-  });
+    if(!r.ok){
+      const t = await r.text().catch(()=>'');
+      throw new Error('save failed: ' + t);
+    }
+    return r.json();
+  },
+  async remove(id){
+    const r = await fetch('/admin/api/services/'+encodeURIComponent(id), { method:'DELETE' });
+    if(!r.ok) throw new Error('delete failed');
+  }
+};
+
+function byn(priceCents){ return (priceCents/100).toFixed(2); }
+
+async function render(){
+  const tbody = $('#list');
+  tbody.innerHTML = '<tr><td colspan="4">Загрузка…</td></tr>';
+  try{
+    const rows = await api.list();
+    if(!Array.isArray(rows) || rows.length === 0){
+      tbody.innerHTML = '<tr><td colspan="4">Пока пусто</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(s=>`
+      <tr data-id="${s.id}">
+        <td>${s.name}</td>
+        <td>${s.durationMin} мин</td>
+        <td>${byn(s.priceCents)}</td>
+        <td><button class="secondary" data-del="${s.id}">Удалить</button></td>
+      </tr>
+    `).join('');
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="4">Ошибка загрузки</td></tr>';
+    msg('Не удалось получить список услуг', true);
+  }
 }
 
-document.getElementById('save').addEventListener('click', async () => {
-  const name = document.getElementById('name').value.trim();
-  const durationMin = Number(document.getElementById('duration').value);
-  const priceCents = Number(document.getElementById('price').value);
-  if (!name || !durationMin || !priceCents) { alert('Заполните все поля'); return; }
-  const r = await fetch(API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(adminKey ? { 'X-Admin-Key': adminKey } : {}) },
-    body: JSON.stringify({ name, durationMin, priceCents })
-  });
-  if (!r.ok) { alert('Ошибка сохранения'); return; }
-  document.getElementById('name').value='';
-  document.getElementById('duration').value='';
-  document.getElementById('price').value='';
-  await load();
+function msg(text, isErr=false){
+  const el = $('#msg');
+  el.className = isErr ? 'error' : 'ok';
+  el.textContent = text;
+  setTimeout(()=>{ el.textContent=''; el.className=''; }, 2500);
+}
+
+$('#saveBtn').addEventListener('click', async () => {
+  const name = $('#name').value.trim();
+  const durationMin = Number($('#durationMin').value);
+  const priceCents = Number($('#priceCents').value);
+  if(!name || !Number.isFinite(durationMin) || !Number.isFinite(priceCents)){
+    msg('Заполните все поля корректно', true);
+    return;
+  }
+  try{
+    await api.create({ name, durationMin, priceCents });
+    $('#name').value=''; $('#durationMin').value=''; $('#priceCents').value='';
+    msg('Сохранено');
+    render();
+  }catch(e){
+    console.error(e);
+    msg('Ошибка сохранения', true);
+  }
 });
 
-load();
+document.addEventListener('click', async (e) => {
+  const btn = e.target;
+  if(btn && btn.dataset && btn.dataset.del){
+    try{
+      await api.remove(btn.dataset.del);
+      msg('Удалено');
+      render();
+    }catch(_){
+      msg('Ошибка удаления', true);
+    }
+  }
+});
+
+render();
 </script>
 </body>
 </html>
