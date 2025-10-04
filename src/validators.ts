@@ -1,23 +1,15 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const MasterCreateSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1, "name is required").max(120),
+  phone: z.string().min(5).max(32).optional(),
+  bio: z.string().max(2000).optional(),
 });
 export type MasterCreateInput = z.infer<typeof MasterCreateSchema>;
 
-export const ServiceCreateSchema = z.object({
-  title: z.string().min(1),
-  priceCents: z.number().int().nonnegative(),
-  durationMin: z.number().int().positive(),
-});
-export type ServiceCreateInput = z.infer<typeof ServiceCreateSchema>;
+export const MasterUpdateSchema = MasterCreateSchema.partial();
+export type MasterUpdateInput = z.infer<typeof MasterUpdateSchema>;
 
-export const AppointmentCreateSchema = z.object({
-  masterId: z.string().min(1),
-  serviceId: z.string().min(1),
-  startsAt: z.string().datetime(),
-  endsAt: z.string().datetime(),
-  customerName: z.string().min(1),
-  customerPhone: z.string().min(5),
+export const IdParamSchema = z.object({
+  id: z.string().min(1),
 });
-export type AppointmentCreateInput = z.infer<typeof AppointmentCreateSchema>;

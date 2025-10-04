@@ -1,20 +1,36 @@
-# web-app-appointments (v2.2.0)
+# Web App Appointments — v2.3.0
 
-Minimal Express + Prisma + Zod + Pino template for Node 22 with Dockerfile (Railway-ready).
+Каркас с CRUD Masters (Express + Prisma + Zod + Pino).
 
-## Routes
-- `GET /` — static index
-- `GET /admin` — simple admin page
-- `GET /health` — liveness
-- `GET /api/masters` — placeholder (returns empty list)
-- alias: `GET /public/api/masters`
+## Запуск локально
 
-## Build & Run (Docker)
 ```bash
-docker build -t web-app-appointments:2.2.0 .
-docker run -p 8080:8080 -e PORT=8080 -e DATABASE_URL="postgresql://..." web-app-appointments:2.2.0
+npm install
+npx prisma generate
+# c PostgreSQL в переменной DATABASE_URL
+npx prisma migrate dev --name init
+npm run build
+npm start
 ```
 
-## Railway
-Railway will auto-detect the Dockerfile.
-Ensure you set `DATABASE_URL` in the environment.
+## Docker
+
+```bash
+docker build -t web-app-appointments:2.3.0 .
+docker run -p 8080:8080 -e PORT=8080 -e DATABASE_URL="postgresql://..." web-app-appointments:2.3.0
+```
+
+## Роуты
+
+- `GET /health`
+- `GET /` (стартовая), `GET /admin`
+- `GET /api/masters`, `POST /api/masters`
+- `GET /api/masters/:id`, `PUT /api/masters/:id`, `DELETE /api/masters/:id`
+
+## Миграции
+Миграции не запускаются автоматически на старте контейнера.
+На Railway используй:
+```
+railway run npx prisma migrate deploy
+```
+Либо запустить локально `migrate dev` и закоммитить `prisma/migrations/`.

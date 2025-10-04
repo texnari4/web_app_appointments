@@ -1,20 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <title>Appointments</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Appointments App</title>
   </head>
   <body>
-    <h1>Appointments API</h1>
-    <p>Health: <code id="health">...</code></p>
-    <p><a href="/admin">Go to Admin</a></p>
-    <script>
-      fetch('/health').then(r=>r.json()).then(j=>{
-        document.getElementById('health').textContent = JSON.stringify(j);
-      }).catch(e=>{
-        document.getElementById('health').textContent = 'ERROR ' + e;
-      });
-    </script>
+    <h1>Appointments App</h1>
+    <p><a href="/health" target="_blank">/health</a></p>
+    <p><a href="/admin" target="_blank">/admin</a></p>
   </body>
 </html>
