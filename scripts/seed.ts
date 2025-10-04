@@ -1,41 +1,52 @@
-import 'dotenv/config';
-import { prisma } from '../src/prisma.js';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { PrismaClient } from '@prisma/client';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const prisma = new PrismaClient();
+
+async function ensureService(name: string, price: number, durationMinutes: number, description?: string) {
+  // name не уникален — ищем первый, иначе создаём
+  const existed = await prisma.service.findFirst({ where: { name } });
+  if (existed) return existed;
+  return prisma.service.create({ data: { name, price, durationMinutes, description } });
+}
+
+async function ensureMaster(name: string, specialty?: string) {
+  const existed = await prisma.master.findFirst({ where: { name } });
+  if (existed) return existed;
+  return prisma.master.create({ data: { name, specialty } });
+}
+
+async function ensureClient(name: string, phone?: string) {
+  const existed = await prisma.client.findFirst({ where: { name, phone } });
+  if (existed) return existed;
+  return prisma.client.create({ data: { name, phone } });
+}
 
 async function main() {
-  const file = path.join(__dirname, '../data/test-data.json');
-  const raw = await fs.readFile(file, 'utf-8');
-  const data = JSON.parse(raw) as {
-    services: Array<{name: string; description?: string; priceCents?: number; durationMin: number; isActive?: boolean}>,
-    masters?: Array<{name: string; specialties?: string[]; phone?: string}>
-  };
+  const haircut = await ensureService('Стрижка', 1500, 60, 'Классическая стрижка');
+  const manicure = await ensureService('Маникюр', 1200, 60, 'Маникюр с покрытием');
+  const coloring = await ensureService('Окрашивание', 3500, 120, 'Окрашивание волос');
 
-  for (const s of data.services) {
-    await prisma.service.upsert({
-      where: { name: s.name },
-      update: s,
-      create: s,
+  const anna = await ensureMaster('Анна', 'Парикмахер');
+  const olga = await ensureMaster('Ольга', 'Мастер маникюра');
+
+  // Привязка услуг мастеров (через MasterService) — создаём если нет
+  const pairs: Array<[string, string]> = [
+    [anna.id, haircut.id],
+    [anna.id, coloring.id],
+    [olga.id, manicure.id]
+  ];
+  for (const [masterId, serviceId] of pairs) {
+    await prisma.masterService.upsert({
+      where: { masterId_serviceId: { masterId, serviceId } },
+      update: {},
+      create: { masterId, serviceId }
     });
   }
 
-  if (data.masters) {
-    for (const m of data.masters) {
-      await prisma.master.upsert({
-        where: { name: m.name },
-        update: m,
-        create: { name: m.name, specialties: m.specialties ?? [], phone: m.phone },
-      });
-    }
-  }
-  console.log('Seed done');
+  // Тестовый клиент
+  const ivan = await ensureClient('Иван Петров', '+79990000000');
+
+  console.log('Seed completed:', { services: [haircut.name, manicure.name, coloring.name], masters: [anna.name, olga.name], client: ivan.name });
 }
 
-main().then(() => process.exit(0)).catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main().finally(async () => { await prisma.$disconnect(); });

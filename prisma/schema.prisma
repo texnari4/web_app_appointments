@@ -1,17 +1,17 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model Client {
   id           String        @id @default(cuid())
-  tgUserId     String?       @unique
-  name         String?
+  name         String
   phone        String?
+  tgUserId     String?       @unique
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   appointments Appointment[]
@@ -20,48 +20,65 @@ model Client {
 model Master {
   id           String        @id @default(cuid())
   name         String
-  specialties  String[]
+  specialty    String?
   phone        String?
-  isActive     Boolean       @default(true)
+  tgUserId     String?       @unique
+  description  String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   appointments Appointment[]
+  services     MasterService[]
 }
 
 model Service {
-  id           String        @id @default(cuid())
-  name         String        @unique
-  description  String?
-  priceCents   Int           @default(0)
-  durationMin  Int
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  appointments Appointment[]
+  id              String           @id @default(cuid())
+  name            String
+  description     String?
+  price           Int              @default(0)
+  durationMinutes Int              @default(30)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  masters         MasterService[]
+  appointments    Appointment[]
 }
 
 model Appointment {
-  id          String   @id @default(cuid())
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  clientId    String
-  service     Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  serviceId   String
-  master      Master?  @relation(fields: [masterId], references: [id])
-  masterId    String?
-  startAt     DateTime
-  endAt       DateTime
-  note        String?
-  status      AppointmentStatus @default(PENDING)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  clientId   String
+  masterId   String
+  serviceId  String
+  startsAt   DateTime
+  endsAt     DateTime
+  status     AppointmentStatus @default(SCHEDULED)
+  note       String?
 
-  @@index([startAt, endAt])
-  @@index([masterId, startAt])
-  @@index([clientId, startAt])
+  client     Client   @relation(fields: [clientId], references: [id])
+  master     Master   @relation(fields: [masterId], references: [id])
+  service    Service  @relation(fields: [serviceId], references: [id])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([masterId, startsAt])
+  @@index([clientId, startsAt])
+}
+
+model MasterService {
+  id         String  @id @default(cuid())
+  masterId   String
+  serviceId  String
+  // кастомная длительность/цена на уровне мастера (опционально)
+  priceOverride           Int?
+  durationMinutesOverride Int?
+
+  master    Master  @relation(fields: [masterId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([masterId, serviceId])
 }
 
 enum AppointmentStatus {
-  PENDING
+  SCHEDULED
   CONFIRMED
   CANCELLED
 }
