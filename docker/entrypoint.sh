@@ -1,6 +1,4 @@
 #!/bin/sh
 set -e
-echo "Starting web-app-appointments…"
-echo "Node: $(node -v)"
-echo "PWD:  $(pwd)"
+echo "[entrypoint] starting server on :${PORT:-8080}"
 exec node dist/index.js

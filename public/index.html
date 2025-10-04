@@ -1,21 +1,20 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Appointments — Public</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; }
-      a { color: #5b21b6; text-decoration: none; } a:hover { text-decoration: underline; }
-      code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; }
-    </style>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Appointments</title>
   </head>
   <body>
-    <h1>It works 🎉</h1>
-    <ul>
-      <li>Health: <a href="/health" target="_blank">/health</a></li>
-      <li>Админка: <a href="/admin" target="_blank">/admin</a></li>
-      <li>Проверка БД: <a href="/api/ping-db" target="_blank">/api/ping-db</a></li>
-    </ul>
+    <h1>Appointments API</h1>
+    <p>Health: <code id="health">...</code></p>
+    <p><a href="/admin">Go to Admin</a></p>
+    <script>
+      fetch('/health').then(r=>r.json()).then(j=>{
+        document.getElementById('health').textContent = JSON.stringify(j);
+      }).catch(e=>{
+        document.getElementById('health').textContent = 'ERROR ' + e;
+      });
+    </script>
   </body>
 </html>

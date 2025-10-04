@@ -1,52 +1,46 @@
-import express from "express";
-import cors from "cors";
-import path from "path";
-import pinoHttp from "pino-http";
-import { PrismaClient } from "@prisma/client";
+// Minimal Express + Prisma + Zod + Pino (Node 22, CJS)
+import express from 'express';
+import cors from 'cors';
+import pino from 'pino';
+import pinoHttp from 'pino-http';
 
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 const app = express();
-const prisma = new PrismaClient();
 
-app.use(
-  pinoHttp({
-    autoLogging: true,
-    redact: ["req.headers.authorization"],
-  })
-);
+const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+app.use(pinoHttp({ logger }));
 
 app.use(cors());
 app.use(express.json());
 
-const publicDir = path.join(__dirname, "..", "public");
-app.use(express.static(publicDir));
-
-app.get("/", (_req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
-});
-
-app.get("/admin", (_req, res) => {
-  res.sendFile(path.join(publicDir, "admin", "index.html"));
-});
-
-app.get("/health", (_req, res) => {
+// Health
+app.get('/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-app.get("/api/ping-db", async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true });
-  } catch (e:any) {
-    console.error(e);
-    res.status(500).json({ ok: false, error: "db-failed" });
-  }
+// Static
+app.use(express.static('public'));
+app.get('/', (_req, res) => {
+  res.sendFile('index.html', { root: 'public' });
+});
+app.get('/admin', (_req, res) => {
+  res.sendFile('admin/index.html', { root: 'public' });
 });
 
-app.use("/api", (_req, res) => {
-  res.status(404).json({ error: "Not found" });
+// --- API ---
+const mastersRouter = express.Router();
+mastersRouter.get('/masters', async (_req, res) => {
+  res.json({ ok: true, data: [] });
 });
+app.use('/api', mastersRouter);
+app.use('/public/api', mastersRouter);
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
+// 404 for API
+app.use('/api', (_req, res) => res.status(404).json({ ok: false, error: 'Not found' }));
+
+// Global 404
+app.use((_req, res) => res.status(404).send('Not Found'));
+
 app.listen(PORT, () => {
-  console.log(`Server started on :${PORT}`);
+  logger.info(`Server started on :${PORT}`);
 });

@@ -1,48 +1,42 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Admin — Appointments</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Admin</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
-      .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; }
-      .muted { color: #6b7280; }
-      button { cursor: pointer; }
-      pre { background: #111827; color: #e5e7eb; padding: 0.75rem; border-radius: 8px; overflow: auto; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 16px; }
+      pre { background: #111; color: #0f0; padding: 12px; overflow:auto; }
+      button { margin-right: 8px; }
     </style>
   </head>
   <body>
-    <h1>Admin панель (минимум)</h1>
-    <p class="muted">Заглушка для проверки API.</p>
-
-    <div class="grid">
-      <div class="card">
-        <h3>Проверка /health</h3>
-        <button onclick="hit('/health')">GET /health</button>
-      </div>
-      <div class="card">
-        <h3>Проверка БД</h3>
-        <button onclick="hit('/api/ping-db')">GET /api/ping-db</button>
-      </div>
+    <h1>Admin</h1>
+    <div>
+      <button id="btnHealth">Check Health</button>
+      <button id="btnMasters">List Masters</button>
     </div>
-
-    <h3>Ответ</h3>
-    <pre id="out">—</pre>
-
+    <pre id="out">Ready.</pre>
     <script>
-      async function hit(url, init) {
-        const out = document.getElementById("out");
-        out.textContent = "loading…";
+      const out = document.getElementById('out');
+      document.getElementById('btnHealth').onclick = async () => {
+        out.textContent = 'Loading /health...';
         try {
-          const res = await fetch(url, init);
-          const text = await res.text();
-          out.textContent = `Status: ${res.status}\n\n${text}`;
+          const r = await fetch('/health');
+          out.textContent = JSON.stringify(await r.json(), null, 2);
         } catch (e) {
-          out.textContent = "Ошибка: " + (e?.message || e);
+          out.textContent = 'ERROR ' + e;
         }
-      }
+      };
+      document.getElementById('btnMasters').onclick = async () => {
+        out.textContent = 'Loading /api/masters...';
+        try {
+          const r = await fetch('/api/masters');
+          out.textContent = JSON.stringify(await r.json(), null, 2);
+        } catch (e) {
+          out.textContent = 'ERROR ' + e;
+        }
+      };
     </script>
   </body>
 </html>
