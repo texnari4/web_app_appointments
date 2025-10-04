@@ -1,28 +1,25 @@
-# Beauty Mini App Appointments — Variant A (Railway Ready)
+# beauty_mini_app_appointments (backend)
 
-## Install
-```bash
-npm install
-```
+Готовый минимальный backend для Railway:
+- TypeScript (NodeNext)
+- Express + pino-http
+- Prisma (PostgreSQL)
+- Zod валидаторы (готово к расширению)
 
-## Local dev (needs DATABASE_URL set)
-```bash
-npm run prisma:sync
-npm run dev
-```
+## Скрипты
 
-## Seed (optional)
-```bash
-npm run seed
-```
+- `npm run build` — компиляция TypeScript в `dist/`
+- `npm run start` — применяет миграции/генерацию клиента и запускает сервер
+- `npm run prisma:sync` — `prisma migrate deploy && prisma db push && prisma generate`
+- `node scripts/seed.mjs` — базовое наполнение справочников
 
-## Build & Start
-```bash
-npm run build
-npm start
-```
+## Переменные окружения
 
-### Notes
-- Prisma CLI is in production deps so Railway can run `prisma` during start.
-- TypeScript `rootDir` is `"."` and `include` captures `scripts/**/*.ts`.
-- Zod is added to dependencies and `src/validators.ts` imports it.
+- `DATABASE_URL` — строка подключения к PostgreSQL
+- `PORT` — порт (по умолчанию 8080)
+- Другие переменные можно добавлять по мере необходимости.
+
+## Заметки по Railway
+
+Railway по умолчанию устанавливает зависимости в режиме production (omit dev).
+Поэтому все пакеты, нужные для сборки и типов, перенесены в `dependencies`.

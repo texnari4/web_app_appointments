@@ -7,66 +7,53 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum AppointmentStatus {
-  PENDING
-  CONFIRMED
-  CANCELLED
-}
-
 model Client {
-  id           String        @id @default(cuid())
-  phone        String
-  name         String
-  tgUserId     String?       @unique
+  id           String        @id @default(uuid())
   createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  name         String
+  phone        String?
   appointments Appointment[]
 }
 
 model Master {
-  id           String        @id @default(cuid())
+  id           String        @id @default(uuid())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   name         String
   phone        String?
-  description  String?
-  createdAt    DateTime      @default(now())
+  specialties  String[]      @default([])
   appointments Appointment[]
-  services     MasterService[]
 }
 
 model Service {
-  id           String        @id @default(cuid())
-  name         String
-  description  String?
-  price        Int
-  durationMin  Int           // 30, 60, ...
+  id           String        @id @default(uuid())
   createdAt    DateTime      @default(now())
-  masters      MasterService[]
+  updatedAt    DateTime      @updatedAt
+  name         String        @unique
+  description  String?
+  price        Decimal       @db.Numeric(10,2)
+  durationMin  Int
   appointments Appointment[]
 }
 
-model MasterService {
-  id        String  @id @default(cuid())
-  master    Master  @relation(fields: [masterId], references: [id], onDelete: Cascade)
+model Appointment {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  startsAt   DateTime
+  durationMin Int
+  notes      String?
+
+  client    Client   @relation(fields: [clientId], references: [id])
+  clientId  String
+
+  master    Master   @relation(fields: [masterId], references: [id])
   masterId  String
-  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  service   Service  @relation(fields: [serviceId], references: [id])
   serviceId String
 
-  @@unique([masterId, serviceId], name: "masterId_serviceId_unique")
-}
-
-model Appointment {
-  id         String            @id @default(cuid())
-  client     Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  clientId   String
-  master     Master            @relation(fields: [masterId], references: [id], onDelete: Cascade)
-  masterId   String
-  service    Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  serviceId  String
-  startsAt   DateTime
-  endsAt     DateTime
-  status     AppointmentStatus @default(PENDING)
-  note       String?
-  createdAt  DateTime          @default(now())
-
+  @@index([startsAt])
   @@index([masterId, startsAt])
-  @@index([clientId, startsAt])
 }
