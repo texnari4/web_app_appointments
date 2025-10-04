@@ -1,93 +1,54 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Admin • Beauty App</title>
+  <title>Admin · Masters</title>
   <style>
-    :root{
-      --bg:#0b0b0f;--card:#131318;--muted:#8b8b95;--text:#e9e9ef;--accent:#0a84ff;
-      --radius:16px;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;background:var(--bg);color:var(--text);font:14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      -webkit-font-smoothing:antialiased; padding:24px;
-    }
-    .wrap{max-width:960px;margin:0 auto;display:grid;gap:24px}
-    .card{background:var(--card);border-radius:var(--radius);padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
-    h1{margin:0 0 8px 0;font-size:24px}
-    .muted{color:var(--muted)}
-    .row{display:flex;gap:12px;flex-wrap:wrap}
-    input[type="text"]{
-      flex:1;min-width:220px;border:1px solid #2a2a33;background:#0f0f14;color:var(--text);
-      border-radius:12px;padding:10px 12px;outline:none;
-    }
-    button{
-      border:0;background:var(--accent);color:white;padding:10px 14px;border-radius:12px;
-      font-weight:600;cursor:pointer;transition:.2s transform;
-    }
-    button:active{transform:scale(.98)}
-    ul{list-style:none;margin:12px 0 0 0;padding:0;display:grid;gap:8px}
-    li{display:flex;align-items:center;justify-content:space-between;background:#0f0f14;padding:10px 12px;border-radius:10px}
-    .badge{background:#1b1b25;color:#bdbdd2;border-radius:8px;padding:4px 8px;font-size:12px}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      color:#0b0b0f;background:#f5f7fb;margin:0;padding:24px;}
+    .card{background:#fff;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,.06);padding:20px;max-width:760px;margin:auto;}
+    h1{font-size:20px;margin:0 0 16px}
+    .row{display:flex;gap:8px;margin:12px 0}
+    input,button{font-size:14px;padding:10px 12px;border-radius:10px;border:1px solid #e6e6ea}
+    button{cursor:pointer;border:0;background:#007aff;color:#fff}
+    ul{list-style:none;padding:0;margin:0}
+    li{padding:10px 0;border-bottom:1px solid #f0f0f3}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="card">
-      <h1>Админка</h1>
-      <div class="muted">Мастера • быстрый CRUD</div>
-    </header>
-
-    <section class="card">
-      <div class="row">
-        <input id="name" type="text" placeholder="Имя мастера (например, Анна)"/>
-        <button id="create">Создать</button>
-      </div>
-      <ul id="list"></ul>
-    </section>
+<div class="card">
+  <h1>Мастера</h1>
+  <div class="row">
+    <input id="name" placeholder="Имя мастера" />
+    <button id="create">Создать</button>
   </div>
-
-  <script type="module">
-    const API = '/api/masters';
-    const list = document.getElementById('list');
-    const nameEl = document.getElementById('name');
-    const btn = document.getElementById('create');
-
-    async function load() {
-      list.innerHTML = '<li class="muted">Загрузка...</li>';
-      const res = await fetch(API);
-      const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) {
-        list.innerHTML = '<li class="muted">Пока пусто</li>';
-        return;
-        }
-      list.innerHTML = data.map(m => (
-        `<li><span>${m.name}</span><span class="badge">${new Date(m.createdAt).toLocaleString()}</span></li>`
-      )).join('');
-    }
-
-    async function create() {
-      const name = nameEl.value.trim();
-      if (name.length < 2) { alert('Введите имя (минимум 2 символа)'); return; }
-      const res = await fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
-      if (res.ok) {
-        nameEl.value = '';
-        await load(); // 🔄 перезагружаем список
-      } else {
-        const err = await res.json().catch(()=>({}));
-        alert('Ошибка: ' + (err.error || res.status));
-      }
-    }
-
-    btn.addEventListener('click', create);
-    nameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') create(); });
-    load();
-  </script>
+  <ul id="list"></ul>
+</div>
+<script>
+async function load() {
+  const r = await fetch('/api/masters');
+  const j = await r.json();
+  const ul = document.getElementById('list');
+  ul.innerHTML = '';
+  if (j.ok) {
+     for (const m of j.data) {
+        const li = document.createElement('li');
+        li.textContent = m.name + (m.isActive ? '' : ' (inactive)');
+        ul.appendChild(li);
+     }
+  } else {
+     ul.innerHTML = '<li>Ошибка загрузки</li>';
+  }
+}
+document.getElementById('create').addEventListener('click', async () => {
+  const name = document.getElementById('name').value.trim();
+  if (!name) return;
+  const r = await fetch('/api/masters', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name })});
+  if (r.ok) { document.getElementById('name').value=''; await load(); }
+  else { alert('Не удалось создать мастера'); }
+});
+load();
+</script>
 </body>
 </html>
