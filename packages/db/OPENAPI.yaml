@@ -1,0 +1,65 @@
+openapi: 3.0.3
+info: { title: Beauty Booking API, version: 1.0.0 }
+servers: [ { url: https://your-railway-app.up.railway.app } ]
+paths:
+  /api/services:
+    get: { summary: List active services, responses: { '200': { description: OK } } }
+  /api/masters:
+    get:
+      summary: List masters
+      parameters: [ { in: query, name: service_id, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /api/availability:
+    get:
+      summary: Get monthly availability by master
+      parameters:
+        - { in: query, name: master_id, required: true, schema: { type: string } }
+        - { in: query, name: month, schema: { type: string }, description: 'YYYY-MM' }
+      responses: { '200': { description: OK } }
+  /api/slots:
+    get:
+      summary: Get free slots for a given day
+      parameters:
+        - { in: query, name: master_id, required: true, schema: { type: string } }
+        - { in: query, name: service_id, required: true, schema: { type: string } }
+        - { in: query, name: date, required: true, schema: { type: string, format: date } }
+      responses: { '200': { description: OK } }
+  /api/appointments:
+    post:
+      summary: Create appointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, master_id, service_id, start_at]
+              properties:
+                client_id: { type: string }
+                master_id: { type: string }
+                service_id: { type: string }
+                start_at: { type: string, format: date-time }
+                comment: { type: string }
+      responses: { '201': { description: Created } }
+  /api/client/appointments:
+    get: { summary: List appointments for current Telegram user, responses: { '200': { description: OK } } }
+  /api/master/day-schedule:
+    get:
+      summary: Day tape view for master
+      parameters: [ { in: query, name: date, schema: { type: string, format: date } } ]
+      responses: { '200': { description: OK } }
+  /api/admin/services:
+    post: { summary: Create service, responses: { '201': { description: Created } } }
+    put: { summary: Update service (id in path), responses: { '200': { description: OK } } }
+    delete: { summary: Delete service, responses: { '204': { description: No Content } } }
+  /api/admin/masters:
+    post: { summary: Create master, responses: { '201': { description: Created } } }
+    put: { summary: Update master, responses: { '200': { description: OK } } }
+    delete: { summary: Delete master, responses: { '204': { description: No Content } } }
+  /api/admin/appointments:
+    get: { summary: Filter all appointments, responses: { '200': { description: OK } } }
+    put: { summary: Change status/move appointment, responses: { '200': { description: OK } } }
+  /api/admin/clients:
+    get: { summary: List/search clients, responses: { '200': { description: OK } } }
+  /api/admin/reports:
+    get: { summary: KPI/Revenue/Popular services, responses: { '200': { description: OK } } }
