@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  engineType = "library"
+  engineType = "binary"
 }
 
 datasource db {
@@ -12,17 +12,19 @@ model Master {
   id        Int       @id @default(autoincrement())
   name      String
   phone     String?
-  about     String?
-  active    Boolean   @default(true)
+  bio       String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  services  Service[]
 }
 
 model Service {
-  id        Int       @id @default(autoincrement())
-  title     String
+  id        Int      @id @default(autoincrement())
+  name      String
   price     Int
-  durationM Int       @default(60)
+  duration  Int       // minutes
+  masterId  Int?
+  master    Master?   @relation(fields: [masterId], references: [id])
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
