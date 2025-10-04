@@ -1,8 +1,8 @@
 {
   "name": "web-app-appointments",
-  "version": "2.3.0",
-  "type": "commonjs",
+  "version": "2.3.1",
   "private": true,
+  "type": "module",
   "engines": {
     "node": ">=22"
   },
@@ -10,25 +10,21 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate:dev": "prisma migrate dev --name init",
-    "prisma:migrate:deploy": "prisma migrate deploy",
-    "seed": "ts-node scripts/seed.ts"
+    "prisma:generate": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
-    "cors": "^2.8.5",
     "express": "^5.1.0",
-    "pino": "^9.5.0",
+    "cors": "^2.8.5",
     "pino-http": "^10.3.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@prisma/client": "^5.22.0"
   },
   "devDependencies": {
-    "prisma": "^5.22.0",
-    "ts-node": "^10.9.2",
     "typescript": "^5.6.3",
-    "@types/express": "^4.17.21",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.12.12",
+    "@types/express": "^5.0.1",
     "@types/cors": "^2.8.17",
-    "@types/node": "^20.12.12"
+    "prisma": "^5.22.0"
   }
 }

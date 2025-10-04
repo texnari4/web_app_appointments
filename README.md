@@ -1,36 +1,12 @@
-# Web App Appointments — v2.3.0
+# Web App Appointments — v2.3.1 (Hotfix)
 
-Каркас с CRUD Masters (Express + Prisma + Zod + Pino).
+Hotfix: исправлен `POST /api/masters` (парсинг JSON, валидация Zod, корректный ответ/обновление списка на админке).
 
-## Запуск локально
+## Скрипты
+- `npm run build` — компиляция TypeScript
+- `npm start` — запуск скомпилированного кода
+- `npm run prisma:generate` — генерация Prisma Client
 
-```bash
-npm install
-npx prisma generate
-# c PostgreSQL в переменной DATABASE_URL
-npx prisma migrate dev --name init
-npm run build
-npm start
-```
-
-## Docker
-
-```bash
-docker build -t web-app-appointments:2.3.0 .
-docker run -p 8080:8080 -e PORT=8080 -e DATABASE_URL="postgresql://..." web-app-appointments:2.3.0
-```
-
-## Роуты
-
-- `GET /health`
-- `GET /` (стартовая), `GET /admin`
-- `GET /api/masters`, `POST /api/masters`
-- `GET /api/masters/:id`, `PUT /api/masters/:id`, `DELETE /api/masters/:id`
-
-## Миграции
-Миграции не запускаются автоматически на старте контейнера.
-На Railway используй:
-```
-railway run npx prisma migrate deploy
-```
-Либо запустить локально `migrate dev` и закоммитить `prisma/migrations/`.
+## Переменные
+- `PORT` (необяз.) — по умолчанию `8080`
+- `DATABASE_URL` — строка подключения PostgreSQL

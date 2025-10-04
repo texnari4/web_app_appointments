@@ -1,82 +1,73 @@
-import express from "express";
-import cors from "cors";
-import pino from "pino";
-import pinoHttp from "pino-http";
-import path from "path";
-import { prisma, healthCheckDb } from "./prisma";
-import { MasterCreateSchema, MasterUpdateSchema, IdParamSchema } from "./validators";
+import express from 'express';
+import cors from 'cors';
+import pinoHttp from 'pino-http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import prisma from './prisma.js';
+import { MasterCreateSchema } from './validators.js';
 
-const PORT = parseInt(process.env.PORT || "8080", 10);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
-const logger = pino({ level: process.env.LOG_LEVEL || "info" });
+const port = Number(process.env.PORT ?? 8080);
 
-app.use(pinoHttp({ logger }));
+app.use(pinoHttp());
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // ✅ важно для POST JSON
 app.use(express.urlencoded({ extended: true }));
 
-// Static
-app.use("/", express.static(path.join(process.cwd(), "public")));
-app.use("/admin", express.static(path.join(process.cwd(), "public", "admin")));
+// Статика (включая админку)
+app.use('/public', express.static(path.join(__dirname, '..', 'public')));
 
 // Health
-app.get("/health", async (req, res) => {
-  const dbOk = await healthCheckDb();
-  res.json({ ok: true, ts: new Date().toISOString(), db: dbOk });
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-// Masters API
-app.get("/api/masters", async (_req, res) => {
-  const items = await prisma.master.findMany({ orderBy: { createdAt: "desc" } });
-  res.json({ ok: true, data: items });
-});
-app.get("/public/api/masters", async (req, res) => app._router.handle(req, res)); // alias via same router
-
-app.post("/api/masters", async (req, res) => {
-  const parsed = MasterCreateSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.flatten() });
-  const created = await prisma.master.create({ data: parsed.data });
-  res.status(201).json({ ok: true, data: created });
+// Админка (роут чтобы было красиво /admin)
+app.get('/admin', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'admin', 'index.html'));
 });
 
-app.get("/api/masters/:id", async (req, res) => {
-  const p = IdParamSchema.safeParse(req.params);
-  if (!p.success) return res.status(400).json({ ok: false, error: p.error.flatten() });
-  const item = await prisma.master.findUnique({ where: { id: p.data.id } });
-  if (!item) return res.status(404).json({ ok: false, error: "not found" });
-  res.json({ ok: true, data: item });
-});
-
-app.put("/api/masters/:id", async (req, res) => {
-  const p = IdParamSchema.safeParse(req.params);
-  if (!p.success) return res.status(400).json({ ok: false, error: p.error.flatten() });
-  const body = MasterUpdateSchema.safeParse(req.body);
-  if (!body.success) return res.status(400).json({ ok: false, error: body.error.flatten() });
+// --- Masters API ---
+app.get('/api/masters', async (_req, res, next) => {
   try {
-    const updated = await prisma.master.update({ where: { id: p.data.id }, data: body.data });
-    res.json({ ok: true, data: updated });
-  } catch (e) {
-    res.status(404).json({ ok: false, error: "not found" });
+    const list = await prisma.master.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json(list);
+  } catch (e) { next(e); }
+});
+
+app.post('/api/masters', async (req, res, next) => {
+  try {
+    const parsed = MasterCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', details: parsed.error.flatten() });
+    }
+    const created = await prisma.master.create({
+      data: { name: parsed.data.name }
+    });
+    res.status(201).json(created);
+  } catch (e:any) {
+    if (e?.code === 'P2002') {
+      return res.status(409).json({ error: 'DUPLICATE', field: 'name' });
+    }
+    next(e);
   }
 });
 
-app.delete("/api/masters/:id", async (req, res) => {
-  const p = IdParamSchema.safeParse(req.params);
-  if (!p.success) return res.status(400).json({ ok: false, error: p.error.flatten() });
-  try {
-    const deleted = await prisma.master.delete({ where: { id: p.data.id } });
-    res.json({ ok: true, data: deleted });
-  } catch (e) {
-    res.status(404).json({ ok: false, error: "not found" });
-  }
+// Корень - редирект на /admin
+app.get('/', (_req, res) => {
+  res.redirect('/admin');
 });
 
-// Fallback 404 JSON for API, and index.html for others
-app.use((req, res, next) => {
-  if (req.path.startsWith("/api/")) return res.status(404).json({ ok: false, error: "not found" });
-  next();
+// Ошибки
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  req.log?.error({ err }, 'Unhandled error');
+  res.status(500).json({ error: 'INTERNAL_ERROR' });
 });
 
-app.listen(PORT, () => {
-  logger.info(`Server started on :${PORT}`);
+app.listen(port, () => {
+  console.log(`Server started on :${port}`);
 });

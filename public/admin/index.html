@@ -1,95 +1,93 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Admin — Masters</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 20px; }
-      form, table { margin: 12px 0; }
-      table { border-collapse: collapse; width: 100%; }
-      th, td { border: 1px solid #ddd; padding: 8px; }
-      th { background: #f6f6f6; text-align: left; }
-      input, textarea { width: 100%; padding: 8px; }
-      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-      .muted { color: #666; }
-      button { padding: 8px 12px; }
-    </style>
-  </head>
-  <body>
-    <h1>Admin — Masters</h1>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin • Beauty App</title>
+  <style>
+    :root{
+      --bg:#0b0b0f;--card:#131318;--muted:#8b8b95;--text:#e9e9ef;--accent:#0a84ff;
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;background:var(--bg);color:var(--text);font:14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing:antialiased; padding:24px;
+    }
+    .wrap{max-width:960px;margin:0 auto;display:grid;gap:24px}
+    .card{background:var(--card);border-radius:var(--radius);padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    h1{margin:0 0 8px 0;font-size:24px}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    input[type="text"]{
+      flex:1;min-width:220px;border:1px solid #2a2a33;background:#0f0f14;color:var(--text);
+      border-radius:12px;padding:10px 12px;outline:none;
+    }
+    button{
+      border:0;background:var(--accent);color:white;padding:10px 14px;border-radius:12px;
+      font-weight:600;cursor:pointer;transition:.2s transform;
+    }
+    button:active{transform:scale(.98)}
+    ul{list-style:none;margin:12px 0 0 0;padding:0;display:grid;gap:8px}
+    li{display:flex;align-items:center;justify-content:space-between;background:#0f0f14;padding:10px 12px;border-radius:10px}
+    .badge{background:#1b1b25;color:#bdbdd2;border-radius:8px;padding:4px 8px;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="card">
+      <h1>Админка</h1>
+      <div class="muted">Мастера • быстрый CRUD</div>
+    </header>
 
-    <section>
-      <h2>Create Master</h2>
-      <form id="createForm">
-        <div class="row">
-          <label>Имя <input name="name" required /></label>
-          <label>Телефон <input name="phone" /></label>
-        </div>
-        <label>Bio <textarea name="bio" rows="3"></textarea></label>
-        <button type="submit">Создать</button>
-        <span id="createStatus" class="muted"></span>
-      </form>
+    <section class="card">
+      <div class="row">
+        <input id="name" type="text" placeholder="Имя мастера (например, Анна)"/>
+        <button id="create">Создать</button>
+      </div>
+      <ul id="list"></ul>
     </section>
+  </div>
 
-    <section>
-      <h2>Masters</h2>
-      <table>
-        <thead><tr><th>id</th><th>name</th><th>phone</th><th>created</th><th>actions</th></tr></thead>
-        <tbody id="listBody"></tbody>
-      </table>
-    </section>
+  <script type="module">
+    const API = '/api/masters';
+    const list = document.getElementById('list');
+    const nameEl = document.getElementById('name');
+    const btn = document.getElementById('create');
 
-    <script>
-      const $ = (s)=>document.querySelector(s);
-
-      async function load() {
-        const r = await fetch('/api/masters');
-        const j = await r.json();
-        const tbody = $('#listBody');
-        tbody.innerHTML = '';
-        (j.data||[]).forEach(m => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = \`
-            <td>\${m.id}</td>
-            <td><input value="\${m.name}" data-id="\${m.id}" data-field="name"/></td>
-            <td><input value="\${m.phone||''}" data-id="\${m.id}" data-field="phone"/></td>
-            <td>\${new Date(m.createdAt).toLocaleString()}</td>
-            <td>
-              <button data-id="\${m.id}" data-action="save">Save</button>
-              <button data-id="\${m.id}" data-action="del">Del</button>
-            </td>\`;
-          tbody.appendChild(tr);
-        });
-      }
-
-      $('#createForm').addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        const fd = new FormData(e.currentTarget);
-        const body = Object.fromEntries(fd.entries());
-        const r = await fetch('/api/masters', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-        const j = await r.json();
-        $('#createStatus').textContent = j.ok ? '✔ создано' : '✖ ошибка';
-        await load();
-      });
-
-      document.body.addEventListener('click', async (e)=>{
-        const btn = e.target.closest('button');
-        if (!btn) return;
-        const id = btn.dataset.id;
-        const action = btn.dataset.action;
-        if (action === 'del') {
-          await fetch('/api/masters/'+id, { method:'DELETE' });
-          await load();
-        } else if (action === 'save') {
-          const rowInputs = [...document.querySelectorAll('input[data-id="'+id+'"]')];
-          const payload = Object.fromEntries(rowInputs.map(i=>[i.dataset.field, i.value]));
-          await fetch('/api/masters/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-          await load();
+    async function load() {
+      list.innerHTML = '<li class="muted">Загрузка...</li>';
+      const res = await fetch(API);
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        list.innerHTML = '<li class="muted">Пока пусто</li>';
+        return;
         }
-      });
+      list.innerHTML = data.map(m => (
+        `<li><span>${m.name}</span><span class="badge">${new Date(m.createdAt).toLocaleString()}</span></li>`
+      )).join('');
+    }
 
-      load();
-    </script>
-  </body>
+    async function create() {
+      const name = nameEl.value.trim();
+      if (name.length < 2) { alert('Введите имя (минимум 2 символа)'); return; }
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (res.ok) {
+        nameEl.value = '';
+        await load(); // 🔄 перезагружаем список
+      } else {
+        const err = await res.json().catch(()=>({}));
+        alert('Ошибка: ' + (err.error || res.status));
+      }
+    }
+
+    btn.addEventListener('click', create);
+    nameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') create(); });
+    load();
+  </script>
+</body>
 </html>

@@ -1,12 +1,19 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from '@prisma/client';
 
-export const prisma = new PrismaClient();
+let prisma: PrismaClient;
 
-export async function healthCheckDb() {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    return true;
-  } catch {
-    return false;
-  }
+declare global {
+  // eslint-disable-next-line no-var
+  var __prisma__: PrismaClient | undefined;
 }
+
+if (process.env.NODE_ENV === 'production') {
+  prisma = new PrismaClient();
+} else {
+  if (!global.__prisma__) {
+    global.__prisma__ = new PrismaClient();
+  }
+  prisma = global.__prisma__;
+}
+
+export default prisma;

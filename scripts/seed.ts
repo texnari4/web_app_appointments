@@ -1,17 +1,11 @@
-import { prisma } from "../src/prisma";
-
-async function main() {
-  const count = await prisma.master.count();
-  if (count > 0) {
-    console.log("Masters already seeded:", count);
-    return;
+// Example seed (run with ts-node or compile first)
+import prisma from '../src/prisma.js';
+async function main(){
+  const names = ['Анна','Мария','Елена'];
+  for (const name of names){
+    await prisma.master.upsert({ where: { name }, update: {}, create: { name } });
   }
-  await prisma.master.createMany({
-    data: [
-      { name: "Анна", phone: "+7 900 000-00-01", bio: "Брови / ресницы" },
-      { name: "Мария", phone: "+7 900 000-00-02", bio: "Маникюр / педикюр" },
-    ]
-  });
-  console.log("Seed complete");
+  console.log('Seed done');
+  await prisma.$disconnect();
 }
-main().finally(()=>process.exit(0));
+main().catch(async e=>{ console.error(e); await prisma.$disconnect(); process.exit(1); });
