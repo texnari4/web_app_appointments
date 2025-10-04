@@ -7,53 +7,55 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Client {
-  id           String        @id @default(uuid())
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  name         String
-  phone        String?
+model Service {
+  id          String   @id @default(uuid())
+  name        String
+  description String? 
+  priceCents  Int
+  durationMin Int
   appointments Appointment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Client {
+  id          String   @id @default(uuid())
+  phone       String   @unique
+  name        String
+  appointments Appointment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Master {
-  id           String        @id @default(uuid())
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  name         String
-  phone        String?
-  specialties  String[]      @default([])
+  id          String   @id @default(uuid())
+  name        String
+  specialties String[]
   appointments Appointment[]
-}
-
-model Service {
-  id           String        @id @default(uuid())
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  name         String        @unique
-  description  String?
-  price        Decimal       @db.Numeric(10,2)
-  durationMin  Int
-  appointments Appointment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Appointment {
   id         String   @id @default(uuid())
+  client     Client   @relation(fields: [clientId], references: [id])
+  clientId   String
+  master     Master   @relation(fields: [masterId], references: [id])
+  masterId   String
+  service    Service  @relation(fields: [serviceId], references: [id])
+  serviceId  String
+  startAt    DateTime
+  durationMin Int
+  status     AppointmentStatus @default(PENDING)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  startsAt   DateTime
-  durationMin Int
-  notes      String?
 
-  client    Client   @relation(fields: [clientId], references: [id])
-  clientId  String
+  @@index([masterId, startAt])
+  @@index([clientId, startAt])
+}
 
-  master    Master   @relation(fields: [masterId], references: [id])
-  masterId  String
-
-  service   Service  @relation(fields: [serviceId], references: [id])
-  serviceId String
-
-  @@index([startsAt])
-  @@index([masterId, startsAt])
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
 }
