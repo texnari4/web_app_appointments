@@ -1,69 +1,48 @@
 <!doctype html>
-<html>
+<html lang="ru">
   <head>
     <meta charset="utf-8" />
-    <title>Admin – Appointments</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Admin — Appointments</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 20px; max-width: 900px; margin: 0 auto; }
-      section { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-      h2 { margin-top: 0; }
-      label { display: block; margin: 6px 0; }
-      input, button { padding: 8px; }
-      pre { background: #fafafa; padding: 12px; border-radius: 6px; overflow: auto; }
-      .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+      .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; }
+      .muted { color: #6b7280; }
+      button { cursor: pointer; }
+      pre { background: #111827; color: #e5e7eb; padding: 0.75rem; border-radius: 8px; overflow: auto; }
     </style>
   </head>
   <body>
-    <h1>Admin</h1>
-    <p>Проверка API: создавай мастеров/услуги/записи — списки ниже обновятся.</p>
-
-    <section>
-      <h2>Health</h2>
-      <button onclick="ping()">GET /health</button>
-      <pre id="health"></pre>
-    </section>
+    <h1>Admin панель (минимум)</h1>
+    <p class="muted">Заглушка для проверки API.</p>
 
     <div class="grid">
-      <section>
-        <h2>Masters</h2>
-        <label>name <input id="m_name" /></label>
-        <button onclick="createMaster()">POST /api/masters</button>
-        <button onclick="loadMasters()">GET /api/masters</button>
-        <pre id="masters"></pre>
-      </section>
-      <section>
-        <h2>Services</h2>
-        <label>title <input id="s_title" /></label>
-        <label>priceCents <input id="s_price" type="number" /></label>
-        <label>durationMin <input id="s_dur" type="number" /></label>
-        <button onclick="createService()">POST /api/services</button>
-        <button onclick="loadServices()">GET /api/services</button>
-        <pre id="services"></pre>
-      </section>
+      <div class="card">
+        <h3>Проверка /health</h3>
+        <button onclick="hit('/health')">GET /health</button>
+      </div>
+      <div class="card">
+        <h3>Проверка БД</h3>
+        <button onclick="hit('/api/ping-db')">GET /api/ping-db</button>
+      </div>
     </div>
 
-    <section>
-      <h2>Appointments</h2>
-      <label>masterId <input id="a_mid" /></label>
-      <label>serviceId <input id="a_sid" /></label>
-      <label>startsAt (ISO) <input id="a_start" /></label>
-      <label>endsAt (ISO) <input id="a_end" /></label>
-      <label>customerName <input id="a_name" /></label>
-      <label>customerPhone <input id="a_phone" /></label>
-      <button onclick="createAppt()">POST /api/appointments</button>
-      <button onclick="loadAppts()">GET /api/appointments</button>
-      <pre id="appts"></pre>
-    </section>
+    <h3>Ответ</h3>
+    <pre id="out">—</pre>
 
     <script>
-      async function ping(){ const r=await fetch('/health'); document.getElementById('health').textContent=await r.text(); }
-      async function createMaster(){ const r=await fetch('/api/masters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('m_name').value})}); await loadMasters(); }
-      async function loadMasters(){ const r=await fetch('/api/masters'); document.getElementById('masters').textContent=await r.text(); }
-      async function createService(){ const r=await fetch('/api/services',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:document.getElementById('s_title').value,priceCents:Number(document.getElementById('s_price').value),durationMin:Number(document.getElementById('s_dur').value)})}); await loadServices(); }
-      async function loadServices(){ const r=await fetch('/api/services'); document.getElementById('services').textContent=await r.text(); }
-      async function createAppt(){ const body={masterId:document.getElementById('a_mid').value,serviceId:document.getElementById('a_sid').value,startsAt:document.getElementById('a_start').value,endsAt:document.getElementById('a_end').value,customerName:document.getElementById('a_name').value,customerPhone:document.getElementById('a_phone').value}; const r=await fetch('/api/appointments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); await loadAppts(); }
-      async function loadAppts(){ const r=await fetch('/api/appointments'); document.getElementById('appts').textContent=await r.text(); }
+      async function hit(url, init) {
+        const out = document.getElementById("out");
+        out.textContent = "loading…";
+        try {
+          const res = await fetch(url, init);
+          const text = await res.text();
+          out.textContent = `Status: ${res.status}\n\n${text}`;
+        } catch (e) {
+          out.textContent = "Ошибка: " + (e?.message || e);
+        }
+      }
     </script>
   </body>
 </html>

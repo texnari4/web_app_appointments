@@ -1,19 +1,34 @@
-# web-app-appointments (v2.1.2)
-Minimal Express + Prisma + Zod + Pino baseline, Dockerized for Railway/Node 22.
+# web_app_appointments (v2.1.1)
 
-## Dev
+Минимальный, проверенный на Node 22 каркас: Express + Prisma + Zod + Pino, Dockerfile для Railway.
+
+## Запуск локально
+```bash
 npm install
-npx prisma generate
 npm run build
-npm start
+node dist/index.js
+# http://localhost:8080/
+```
 
-## Docker
-docker build -f docker/Dockerfile -t web-app-appointments .
-docker run --rm -p 8080:8080 -e DATABASE_URL="postgresql://user:pass@host:5432/db" web-app-appointments
+## Переменные окружения
+- `PORT` (по умолчанию 8080)
+- `DATABASE_URL` — строка подключения Postgres для Prisma
 
-## Routes
-GET /health
-GET/POST /api/masters
-GET/POST /api/services
-GET/POST /api/appointments
-Static admin at /admin
+## Деплой на Railway (с Dockerfile)
+- Убедитесь, что в корне репозитория есть `Dockerfile` (из этого архива).
+- Railway сам подхватит Dockerfile ("Using Detected Dockerfile").
+- Пропишите `DATABASE_URL` в переменных проекта.
+- После деплоя проверяйте:
+  - `/` — публичная страница
+  - `/admin` — мини-админка
+  - `/health` — живость
+  - `/api/ping-db` — проверка коннекта к БД
+```
+
+## Структура
+- `src/index.ts` — сервер и маршруты
+- `public/` — статика, в том числе админка
+- `prisma/schema.prisma` — базовая схема (пока без моделей)
+- `docker/entrypoint.sh` — запуск внутри контейнера
+- `Dockerfile` — сборка и запуск
+- `.dockerignore` — исключения

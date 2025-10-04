@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
-# If you want migrations on start, uncomment the next line (requires prisma CLI present in node_modules)
-# npx prisma migrate deploy
+echo "Starting web-app-appointments…"
+echo "Node: $(node -v)"
+echo "PWD:  $(pwd)"
 exec node dist/index.js
