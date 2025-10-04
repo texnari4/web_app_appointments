@@ -1,1 +1,134 @@
-<!doctype html><html><body><h1>Admin</h1></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin • Appointments</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; margin: 20px; }
+    h1 { margin-bottom: 0.5rem; }
+    .row { display: flex; gap: 20px; margin-bottom: 24px; flex-wrap: wrap; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; min-width: 300px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    label { display: block; margin: 6px 0 4px; }
+    input { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+    button { padding: 8px 12px; border-radius: 8px; border: 1px solid #111827; background: #111827; color: white; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    .muted { color: #6b7280; }
+  </style>
+</head>
+<body>
+  <h1>Admin</h1>
+  <p class="muted">Простая панель для проверки API. Данные не защищены (пока).</p>
+
+  <div class="row">
+    <div class="card">
+      <h3>Добавить мастера</h3>
+      <label>Имя</label>
+      <input id="mName" placeholder="Ирина">
+      <button onclick="addMaster()">Создать</button>
+      <pre id="mOut"></pre>
+    </div>
+
+    <div class="card">
+      <h3>Добавить услугу</h3>
+      <label>Название</label>
+      <input id="sTitle" placeholder="Маникюр">
+      <label>Цена (в копейках/центах)</label>
+      <input id="sPrice" type="number" value="3000">
+      <label>Длительность (мин)</label>
+      <input id="sDur" type="number" value="60">
+      <button onclick="addService()">Создать</button>
+      <pre id="sOut"></pre>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h3>Запись</h3>
+      <label>Master ID</label>
+      <input id="aMaster">
+      <label>Service ID</label>
+      <input id="aService">
+      <label>Начало (ISO)</label>
+      <input id="aStart" value="2025-10-05T10:00:00.000Z">
+      <label>Конец (ISO)</label>
+      <input id="aEnd" value="2025-10-05T11:00:00.000Z">
+      <label>Имя клиента</label>
+      <input id="aName" value="Анна">
+      <label>Телефон</label>
+      <input id="aPhone" value="+375291234567">
+      <button onclick="addAppointment()">Создать</button>
+      <pre id="aOut"></pre>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex: 1">
+      <h3>Списки</h3>
+      <button onclick="loadAll()">Обновить</button>
+      <h4>Masters</h4>
+      <pre id="listMasters"></pre>
+      <h4>Services</h4>
+      <pre id="listServices"></pre>
+      <h4>Appointments</h4>
+      <pre id="listAppointments"></pre>
+    </div>
+  </div>
+
+<script>
+const base = '';
+
+async function addMaster() {
+  const name = document.getElementById('mName').value;
+  const res = await fetch(base + '/api/masters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  document.getElementById('mOut').textContent = JSON.stringify(await res.json(), null, 2);
+}
+
+async function addService() {
+  const title = document.getElementById('sTitle').value;
+  const priceCents = Number(document.getElementById('sPrice').value);
+  const durationMin = Number(document.getElementById('sDur').value);
+  const res = await fetch(base + '/api/services', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, priceCents, durationMin })
+  });
+  document.getElementById('sOut').textContent = JSON.stringify(await res.json(), null, 2);
+}
+
+async function addAppointment() {
+  const res = await fetch(base + '/api/appointments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      masterId: document.getElementById('aMaster').value,
+      serviceId: document.getElementById('aService').value,
+      startsAt: document.getElementById('aStart').value,
+      endsAt: document.getElementById('aEnd').value,
+      customerName: document.getElementById('aName').value,
+      customerPhone: document.getElementById('aPhone').value,
+    })
+  });
+  document.getElementById('aOut').textContent = JSON.stringify(await res.json(), null, 2);
+}
+
+async function loadAll() {
+  const [m,s,a] = await Promise.all([
+    fetch(base + '/api/masters').then(r => r.json()),
+    fetch(base + '/api/services').then(r => r.json()),
+    fetch(base + '/api/appointments').then(r => r.json()),
+  ]);
+  document.getElementById('listMasters').textContent = JSON.stringify(m, null, 2);
+  document.getElementById('listServices').textContent = JSON.stringify(s, null, 2);
+  document.getElementById('listAppointments').textContent = JSON.stringify(a, null, 2);
+}
+
+loadAll();
+</script>
+</body>
+</html>

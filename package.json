@@ -1,32 +1,31 @@
 {
   "name": "web-app-appointments",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "type": "module",
-  "private": true,
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "dev": "ts-node src/index.ts",
+    "dev": "ts-node --esm src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "prisma:sync": "npx prisma migrate deploy || npx prisma db push; npx prisma generate",
-    "seed": "ts-node scripts/seed.ts"
+    "prisma:sync": "prisma migrate deploy && prisma generate",
+    "seed": "node --loader ts-node/esm scripts/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "5.22.0",
-    "cors": "^2.8.5",
-    "express": "^5.1.0",
-    "pino": "^9.2.0",
-    "pino-http": "^10.3.0",
-    "zod": "^3.23.8",
-    "prisma": "5.22.0"
+    "cors": "2.8.5",
+    "express": "5.1.0",
+    "pino": "9.5.0",
+    "pino-http": "10.3.0",
+    "zod": "3.23.8"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.2",
-    "@types/node": "^22.7.5",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.6.3"
+    "prisma": "5.22.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.5.4",
+    "@types/node": "22.7.4",
+    "@types/express": "4.17.21",
+    "@types/cors": "2.8.17"
   }
 }

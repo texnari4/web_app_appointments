@@ -1,1 +1,14 @@
-{"ok": true}
+{
+  "services": [
+    {
+      "title": "Маникюр",
+      "priceCents": 3000,
+      "durationMin": 60
+    }
+  ],
+  "masters": [
+    {
+      "name": "Ирина"
+    }
+  ]
+}

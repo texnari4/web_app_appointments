@@ -2,128 +2,104 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
-import { prisma } from './prisma';
-import { createMasterSchema, createServiceSchema, createAppointmentSchema } from './validators';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+import { prisma, ensureDbConnection } from './prisma';
+import { MasterCreateSchema, ServiceCreateSchema, AppointmentCreateSchema } from './validators';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+const httpLogger = pinoHttp({ logger });
+
 const app = express();
-app.use(cors());
 app.use(express.json());
-app.use(pinoHttp({ logger }));
+app.use(cors());
+app.use(httpLogger);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const PORT = parseInt(process.env.PORT || '8080', 10);
 
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-// Masters
-app.get('/masters', async (_req, res) => {
-  const data = await prisma.master.findMany({ orderBy: { createdAt: 'desc' } });
-  res.json(data);
+// Serve admin static UI
+app.use('/admin', express.static(path.resolve(__dirname, '..', 'public', 'admin')));
+
+// Root endpoint
+app.get('/', (_req, res) => {
+  res.status(200).send('Web App Appointments API');
 });
 
-app.post('/masters', async (req, res) => {
-  const parsed = createMasterSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const master = await prisma.master.create({ data: parsed.data });
+// Masters
+app.get('/api/masters', async (_req, res) => {
+  const masters = await prisma.master.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(masters);
+});
+
+app.post('/api/masters', async (req, res) => {
+  const parse = MasterCreateSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
+  const master = await prisma.master.create({ data: parse.data });
   res.status(201).json(master);
 });
 
-app.get('/masters/:id', async (req, res) => {
-  const master = await prisma.master.findUnique({ where: { id: req.params.id }, include: { services: true } });
-  if (!master) return res.status(404).json({ error: 'Not found' });
-  res.json(master);
-});
-
-app.put('/masters/:id', async (req, res) => {
-  const parsed = createMasterSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const master = await prisma.master.update({ where: { id: req.params.id }, data: parsed.data });
-  res.json(master);
-});
-
-app.delete('/masters/:id', async (req, res) => {
-  await prisma.master.delete({ where: { id: req.params.id } });
-  res.status(204).send();
-});
-
-app.post('/masters/:id/services', async (req, res) => {
-  const parsed = createServiceSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const service = await prisma.service.create({ data: { ...parsed.data, masterId: req.params.id } });
-  res.status(201).json(service);
-});
-
 // Services
-app.get('/services', async (_req, res) => {
-  const data = await prisma.service.findMany({ orderBy: { createdAt: 'desc' } });
-  res.json(data);
+app.get('/api/services', async (_req, res) => {
+  const services = await prisma.service.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(services);
 });
 
-app.post('/services', async (req, res) => {
-  const parsed = createServiceSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const service = await prisma.service.create({ data: parsed.data });
+app.post('/api/services', async (req, res) => {
+  const parse = ServiceCreateSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
+  const service = await prisma.service.create({ data: parse.data });
   res.status(201).json(service);
-});
-
-app.get('/services/:id', async (req, res) => {
-  const service = await prisma.service.findUnique({ where: { id: req.params.id } });
-  if (!service) return res.status(404).json({ error: 'Not found' });
-  res.json(service);
-});
-
-app.put('/services/:id', async (req, res) => {
-  const parsed = createServiceSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const service = await prisma.service.update({ where: { id: req.params.id }, data: parsed.data });
-  res.json(service);
-});
-
-app.delete('/services/:id', async (req, res) => {
-  await prisma.service.delete({ where: { id: req.params.id } });
-  res.status(204).send();
 });
 
 // Appointments
-app.get('/appointments', async (req, res) => {
-  const { masterId, from, to } = req.query as { masterId?: string; from?: string; to?: string };
-  const where: any = {};
-  if (masterId) where.masterId = masterId;
-  if (from || to) {
-    where.startsAt = {};
-    if (from) where.startsAt.gte = new Date(from);
-    if (to) where.startsAt.lte = new Date(to);
-  }
-  const data = await prisma.appointment.findMany({ where, orderBy: { startsAt: 'asc' } });
-  res.json(data);
+app.get('/api/appointments', async (_req, res) => {
+  const items = await prisma.appointment.findMany({
+    orderBy: { startsAt: 'desc' },
+    include: { master: true, service: true },
+  });
+  res.json(items);
 });
 
-app.post('/appointments', async (req, res) => {
-  const parsed = createAppointmentSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const a = parsed.data;
-  const appt = await prisma.appointment.create({ data: {
-    masterId: a.masterId,
-    serviceId: a.serviceId,
-    startsAt: new Date(a.startsAt),
-    endsAt: new Date(a.endsAt),
-    customerName: a.customerName,
-    customerPhone: a.customerPhone
-  }});
+app.post('/api/appointments', async (req, res) => {
+  const parse = AppointmentCreateSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
+
+  // simple overlap check for the same master
+  const overlap = await prisma.appointment.findFirst({
+    where: {
+      masterId: parse.data.masterId,
+      OR: [
+        { startsAt: { lt: parse.data.endsAt }, endsAt: { gt: parse.data.startsAt } },
+      ],
+    },
+  });
+  if (overlap) return res.status(409).json({ error: 'Time slot overlaps with existing appointment' });
+
+  const appt = await prisma.appointment.create({ data: parse.data });
   res.status(201).json(appt);
 });
 
-app.put('/appointments/:id', async (req, res) => {
-  const appt = await prisma.appointment.update({ where: { id: req.params.id }, data: req.body });
-  res.json(appt);
+// Not found
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
-app.delete('/appointments/:id', async (req, res) => {
-  await prisma.appointment.delete({ where: { id: req.params.id } });
-  res.status(204).send();
-});
+async function main() {
+  try {
+    await ensureDbConnection();
+    app.listen(PORT, () => logger.info({ port: PORT }, 'Server started'));
+  } catch (e) {
+    logger.error(e, 'Fatal during startup');
+    process.exit(1);
+  }
+}
 
-const port = Number(process.env.PORT || 8080);
-app.listen(port, () => {
-  logger.info({ port }, 'Server started');
-});
+main();
