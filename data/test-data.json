@@ -1,0 +1,42 @@
+{
+  "services": [
+    {
+      "name": "Стрижка",
+      "description": "Классическая стрижка",
+      "priceCents": 150000,
+      "durationMin": 60,
+      "isActive": true
+    },
+    {
+      "name": "Маникюр",
+      "description": "Аппаратный",
+      "priceCents": 200000,
+      "durationMin": 90,
+      "isActive": true
+    },
+    {
+      "name": "Педикюр",
+      "description": "Классический",
+      "priceCents": 220000,
+      "durationMin": 90,
+      "isActive": true
+    }
+  ],
+  "masters": [
+    {
+      "name": "Анна",
+      "specialties": [
+        "Маникюр",
+        "Педикюр"
+      ],
+      "phone": "+79990000001"
+    },
+    {
+      "name": "Иван",
+      "specialties": [
+        "Стрижка"
+      ],
+      "phone": "+79990000002"
+    }
+  ]
+}

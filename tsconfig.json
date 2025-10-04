@@ -6,19 +6,20 @@
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
-    "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
     "resolveJsonModule": true,
     "types": [
-      "node",
-      "express"
+      "node"
     ]
   },
   "include": [
-    "src/**/*.ts"
+    "src",
+    "scripts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dist"
   ]
 }

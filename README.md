@@ -1,44 +1,44 @@
+# Beauty Mini App Appointments — MVP
 
-# Variant A — Fix Pack (Express + Prisma)
-
-Дата: 2025-10-04T09:46:14.400910Z
-
-## Что исправлено
-1. **Зависимости/типы** — все типы и `typescript` перенесены в `dependencies`, чтобы компиляция проходила в Railway (где devDeps игнорируются).
-2. **tsconfig** — NodeNext, strict + skipLibCheck, корректные `rootDir/outDir`.
-3. **Prisma схема** — поля и связи приведены к используемым эндпоинтам:
-   - `Client.tgUserId` помечен `@unique`.
-   - Убраны несуществующие поля вроде `location`.
-4. **Сервер** — типизированный Express с маршрутами:
-   - `GET /api/services`
-   - `POST /api/appointments` (upsert клиента по `tgUserId`)
-   - `GET/POST/PUT/DELETE /admin/api/services`
+Сервер на Express + Prisma для записи клиентов. Мини-админка для CRUD услуг.
 
 ## Быстрый старт локально
+
 ```bash
-npm i
+cp .env.example .env
+# заполни DATABASE_URL
+npm install
 npx prisma generate
 npm run build
-npm start
+npm run start
 ```
+
+Открой `http://localhost:8080/admin` — форма добавления услуг и список.
 
 ## Railway
-Твоё `start` уже запускает `prisma migrate deploy && prisma db push`.
+
+- Переменные окружения: `DATABASE_URL`, `PORT` (8080), `SLOT_STEP_MIN` (30) и др.
+- Railpack выполняет `npm install` → `npm run build` → `npm run start`.
+- В `start` мы запускаем `prisma:sync`, а `prisma` и `typescript` находятся в **dependencies**, чтобы CLI и компилятор были доступны в рантайме.
+
+## Сид тестовых данных
+
 ```bash
-railway run npm i
-railway run npm run build
-railway logs
+npm run seed
 ```
 
-## Интеграция в твой репозиторий
-Скопируй из этого архива **четыре** файла/папки и замени свои:
-- `package.json`
-- `tsconfig.json`
-- `prisma/schema.prisma`
-- `src/index.ts` (или адаптируй пути, если у тебя `src/main.ts`/Nest)
+Импортирует `data/test-data.json` (услуги, мастера).
 
-Если у тебя остаётся Nest-проект в `services/api`, реши одну из стратегий:
-- **A.** Использовать корневой Express (из этого пакета) — тогда убери старые скрипты/конфликты.
-- **B.** Оставить Nest: поменяй `scripts.build` на `tsc -p services/api/tsconfig.json`, `start` на `node services/api/dist/main.js` и перенеси зависимости туда же.
-```
+## API (минимум)
 
+- `GET /api/services`
+- `POST /api/services` — `{ name, description?, priceCents?, durationMin, isActive? }`
+- `PUT /api/services/:id`
+- `DELETE /api/services/:id`
+- `GET /api/appointments`
+- `POST /api/appointments` — `{ clientId? | client?: {name?, phone?, tgUserId?}, serviceId, masterId?, startAt }`
+
+## Соглашения по схеме
+
+- `Client.tgUserId` — **уникальный**. Код использует `findUnique({ where: { tgUserId } })`.
+- Поля дат: `startAt`, `endAt`. Продолжительность берётся из `Service.durationMin`.

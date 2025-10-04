@@ -1,47 +1,67 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model Service {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  price       Int?
-  duration    Int?     // minutes
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  appointments Appointment[]
+generator client {
+  provider = "prisma-client-js"
 }
 
 model Client {
-  id        String   @id @default(cuid())
-  tgUserId  String?  @unique
-  name      String?
-  phone     String?
-
+  id           String        @id @default(cuid())
+  tgUserId     String?       @unique
+  name         String?
+  phone        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   appointments Appointment[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+}
+
+model Master {
+  id           String        @id @default(cuid())
+  name         String
+  specialties  String[]
+  phone        String?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  appointments Appointment[]
+}
+
+model Service {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  description  String?
+  priceCents   Int           @default(0)
+  durationMin  Int
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  appointments Appointment[]
 }
 
 model Appointment {
-  id        String   @id @default(cuid())
-  serviceId String
-  clientId  String?
-  time      DateTime
-  status    String?  // e.g. 'booked' | 'cancelled'
+  id          String   @id @default(cuid())
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId    String
+  service     Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  serviceId   String
+  master      Master?  @relation(fields: [masterId], references: [id])
+  masterId    String?
+  startAt     DateTime
+  endAt       DateTime
+  note        String?
+  status      AppointmentStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  service   Service  @relation(fields: [serviceId], references: [id])
-  client    Client?  @relation(fields: [clientId], references: [id])
+  @@index([startAt, endAt])
+  @@index([masterId, startAt])
+  @@index([clientId, startAt])
+}
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([serviceId, time])
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
 }

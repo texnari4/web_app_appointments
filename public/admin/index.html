@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Админка — Услуги</title>
+    <style>
+      :root { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; color-scheme: light dark;}
+      body { margin: 0; padding: 24px; max-width: 860px; margin-inline: auto; }
+      h1 { font-weight: 700; font-size: 28px; letter-spacing: -.02em; }
+      form, .card { background: rgba(0,0,0,.04); padding: 16px; border-radius: 16px; margin: 12px 0; }
+      label { display:block; margin: 8px 0 4px;}
+      input, textarea { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(0,0,0,.15); }
+      button { border: 0; padding: 10px 16px; border-radius: 999px; cursor: pointer; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      ul { list-style: none; padding: 0; }
+      li { margin: 6px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Услуги</h1>
+    <form id="service-form">
+      <label>Название</label>
+      <input name="name" required />
+      <div class="row">
+        <div>
+          <label>Цена (в копейках)</label>
+          <input name="priceCents" type="number" min="0" value="0" />
+        </div>
+        <div>
+          <label>Длительность (мин)</label>
+          <input name="durationMin" type="number" min="5" value="30" required />
+        </div>
+      </div>
+      <label>Описание</label>
+      <textarea name="description"></textarea>
+      <button type="submit">Сохранить</button>
+    </form>
+
+    <div class="card">
+      <strong>Список услуг</strong>
+      <ul id="services"></ul>
+    </div>
+
+    <script>
+    const API = '/api/services';
+    const list = document.getElementById('services');
+    const form = document.getElementById('service-form');
+
+    async function load() {
+      const res = await fetch(API);
+      const items = await res.json();
+      list.innerHTML = items.map(s => \`
+        <li>
+          <strong>\${s.name}</strong> — \${(s.priceCents/100).toFixed(2)} ₽, \${s.durationMin} мин
+          <button onclick="del('\${s.id}')">Удалить</button>
+        </li>\`
+      ).join('');
+    }
+
+    async function del(id) {
+      await fetch(API + '/' + id, { method: 'DELETE' });
+      load();
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const body = {
+        name: fd.get('name'),
+        description: fd.get('description') || undefined,
+        priceCents: Number(fd.get('priceCents') || 0),
+        durationMin: Number(fd.get('durationMin')),
+        isActive: true
+      };
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert('Ошибка: ' + JSON.stringify(err));
+      } else {
+        form.reset();
+        load();
+      }
+    });
+
+    load();
+    </script>
+  </body>
+</html>
