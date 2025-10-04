@@ -1,50 +1,40 @@
-# Web App Appointments – Next Version
+# web-app-appointments (Dockerized skeleton)
 
-This version builds upon the minimal skeleton by introducing a **Master** entity and corresponding REST API endpoints.
+Минимальный каркас (Express + Prisma + Zod + Pino) для Node 22, с Dockerfile и корректным стартом миграций внутри контейнера.
 
-## Features Added
-
-- **Master model** (`Master`): Allows adding service providers (e.g. stylists or manicurists) with `name`, `phone`, and optional `email` fields. A master can have many services.
-- **Service model update**: Each `Service` can optionally belong to a master via `masterId`. The API includes the associated `Master` when fetching services.
-- **Endpoints**
-  - `GET /masters` – lists all masters with their services.
-  - `POST /masters` – creates a new master with validation using Zod.
-  - `GET /services` – lists services with related masters.
-  - `POST /services` – creates a new service. Accepts an optional `masterId` to associate the service with a master.
-- **Data seeding**: A simple seed script (`scripts/seed.ts`) populates the database with one master (Ирина) and two services (Маникюр and Педикюр).
-- **Validation**: Requests are validated with **Zod** before reaching the database.
-- **Logging**: `pino` and `pino-http` provide structured logging.
-
-## Usage
-
-Install dependencies and generate the Prisma client:
+## Локальный запуск
 
 ```bash
 npm install
-npx prisma generate
+npm run build
+# нужен DATABASE_URL
+DATABASE_URL="postgresql://user:pass@host:5432/dbname?schema=public" npm start
 ```
 
-Apply migrations and seed the database (optional):
+## Docker
 
 ```bash
-npm run prisma:sync
+docker build -t web-app-appointments:latest .
+docker run --rm -p 8080:8080       -e DATABASE_URL="postgresql://user:pass@host:5432/dbname?schema=public"       web-app-appointments:latest
+```
+
+Эндпоинты:
+- `GET /health` — быстрая проверка.
+- `POST /validate` — пример валидации через Zod: `{ "ping": "pong" }`
+
+## Prisma
+
+В контейнере при старте выполняется:
+- `prisma generate`,
+- `prisma migrate deploy` (если нет миграций — fallback на `prisma db push`).
+
+Локально:
+```bash
+npx prisma generate
+npx prisma migrate dev
 npm run seed
 ```
 
-Start the development server:
+## Дальше
 
-```bash
-npm run build
-npm start
-```
-
-The server listens on `PORT` (default 8080) and exposes the routes documented above.
-
-## Next Steps
-
-Future iterations could introduce:
-
-- Appointment scheduling linking clients, services, and masters.
-- Authentication and role-based access control.
-- Admin dashboard improvements.
-- Additional validation and business logic.
+Дальше добавляем модели (мастера/услуги/записи) в `prisma/schema.prisma`, генерируем клиент, наращиваем `src/`.

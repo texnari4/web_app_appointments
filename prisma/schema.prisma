@@ -1,49 +1,10 @@
-// Prisma schema for web-app-appointments
+generator client {
+  provider = "prisma-client-js"
+}
 
-// Datasource points to the PostgreSQL database managed by Railway.
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// Generator for the Prisma client.
-generator client {
-  provider = "prisma-client-js"
-}
-
-/// A service represents an appointment type offered by the salon.
-model Service {
-  /// Unique identifier for the service.
-  id          String   @id @default(cuid())
-  /// Name of the service (e.g. Manicure, Pedicure).
-  name        String
-  /// Cost in minor currency units (e.g. cents or kopecks).
-  price       Int
-  /// Duration of the service in minutes.
-  durationMin Int
-  /// Master providing the service (optional).
-  master      Master?  @relation(fields: [masterId], references: [id])
-  masterId    String?
-  /// Timestamp when this record was created.
-  createdAt   DateTime @default(now())
-  /// Timestamp when this record was last updated.
-  updatedAt   DateTime @updatedAt
-}
-
-/// Represents a service provider (e.g. stylist, manicurist).
-model Master {
-  /// Unique identifier for the master.
-  id        String    @id @default(cuid())
-  /// Full name of the master.
-  name      String
-  /// Phone number of the master.
-  phone     String
-  /// Optional email address for the master.
-  email     String?
-  /// Services that this master can perform.
-  services  Service[]
-  /// Timestamp when this record was created.
-  createdAt DateTime  @default(now())
-  /// Timestamp when this record was last updated.
-  updatedAt DateTime  @updatedAt
-}
+// Minimal skeleton, no models yet.
