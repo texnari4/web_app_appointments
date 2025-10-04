@@ -1,25 +1,59 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
-import env from './env.js';
-import { logger, httpLogger } from './logger.js';
-import { router as api } from './routes/index.js';
+import pino from 'pino';
+import pinoHttp from 'pino-http';
+import { PrismaClient } from '@prisma/client';
 
+import { serviceSchema, masterSchema } from './validators';
+
+const prisma = new PrismaClient();
+const logger = pino();
 const app = express();
 
-// Middlewares
-app.use(express.json());
 app.use(cors());
-app.use(httpLogger);
+app.use(express.json());
+app.use(pinoHttp({ logger }));
 
-// Health
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, env: env.NODE_ENV });
+// Health endpoint
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok' });
 });
 
-// API
-app.use('/api', api);
+// Services endpoints
+app.get('/services', async (_req: Request, res: Response) => {
+  const services = await prisma.service.findMany({ include: { master: true } });
+  res.json(services);
+});
 
-const port = env.PORT;
-app.listen(port, () => {
-  logger.info({ port }, 'Server started');
+app.post('/services', async (req: Request, res: Response) => {
+  const parsed = serviceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors });
+    return;
+  }
+  const { name, price, durationMin, masterId } = parsed.data;
+  const service = await prisma.service.create({ data: { name, price, durationMin, masterId } });
+  res.status(201).json(service);
+});
+
+// Masters endpoints
+app.get('/masters', async (_req: Request, res: Response) => {
+  const masters = await prisma.master.findMany({ include: { services: true } });
+  res.json(masters);
+});
+
+app.post('/masters', async (req: Request, res: Response) => {
+  const parsed = masterSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors });
+    return;
+  }
+  const { name, phone, email } = parsed.data;
+  const master = await prisma.master.create({ data: { name, phone, email } });
+  res.status(201).json(master);
+});
+
+const port = process.env.PORT ?? 8080;
+app.listen(Number(port), () => {
+  logger.info({ msg: `Server started on :${port}` });
 });

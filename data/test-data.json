@@ -1,0 +1,23 @@
+{
+  "masters": [
+    {
+      "name": "Ирина",
+      "phone": "+375291234567",
+      "email": "irina@example.com"
+    }
+  ],
+  "services": [
+    {
+      "name": "Маникюр",
+      "price": 3000,
+      "durationMin": 60,
+      "master": "Ирина"
+    },
+    {
+      "name": "Педикюр",
+      "price": 4000,
+      "durationMin": 90,
+      "master": null
+    }
+  ]
+}

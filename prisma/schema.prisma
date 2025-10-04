@@ -1,61 +1,49 @@
-generator client {
-  provider = "prisma-client-js"
-}
+// Prisma schema for web-app-appointments
 
+// Datasource points to the PostgreSQL database managed by Railway.
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+// Generator for the Prisma client.
+generator client {
+  provider = "prisma-client-js"
+}
+
+/// A service represents an appointment type offered by the salon.
 model Service {
-  id          String   @id @default(uuid())
+  /// Unique identifier for the service.
+  id          String   @id @default(cuid())
+  /// Name of the service (e.g. Manicure, Pedicure).
   name        String
-  description String? 
-  priceCents  Int
+  /// Cost in minor currency units (e.g. cents or kopecks).
+  price       Int
+  /// Duration of the service in minutes.
   durationMin Int
-  appointments Appointment[]
+  /// Master providing the service (optional).
+  master      Master?  @relation(fields: [masterId], references: [id])
+  masterId    String?
+  /// Timestamp when this record was created.
   createdAt   DateTime @default(now())
+  /// Timestamp when this record was last updated.
   updatedAt   DateTime @updatedAt
 }
 
-model Client {
-  id          String   @id @default(uuid())
-  phone       String   @unique
-  name        String
-  appointments Appointment[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
+/// Represents a service provider (e.g. stylist, manicurist).
 model Master {
-  id          String   @id @default(uuid())
-  name        String
-  specialties String[]
-  appointments Appointment[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model Appointment {
-  id         String   @id @default(uuid())
-  client     Client   @relation(fields: [clientId], references: [id])
-  clientId   String
-  master     Master   @relation(fields: [masterId], references: [id])
-  masterId   String
-  service    Service  @relation(fields: [serviceId], references: [id])
-  serviceId  String
-  startAt    DateTime
-  durationMin Int
-  status     AppointmentStatus @default(PENDING)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([masterId, startAt])
-  @@index([clientId, startAt])
-}
-
-enum AppointmentStatus {
-  PENDING
-  CONFIRMED
-  CANCELLED
+  /// Unique identifier for the master.
+  id        String    @id @default(cuid())
+  /// Full name of the master.
+  name      String
+  /// Phone number of the master.
+  phone     String
+  /// Optional email address for the master.
+  email     String?
+  /// Services that this master can perform.
+  services  Service[]
+  /// Timestamp when this record was created.
+  createdAt DateTime  @default(now())
+  /// Timestamp when this record was last updated.
+  updatedAt DateTime  @updatedAt
 }
