@@ -1,53 +1,58 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const prisma = new PrismaClient();
 
+// Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, '../public')));
 
+// Static
+const staticDir = path.join(__dirname, '..', 'public');
+app.use(express.static(staticDir));
+
+// Root page
 app.get('/', (_req, res) => {
-  res.type('text/plain').send(
-`Онлайн‑запись
-Сервер: Express + Prisma
-
-GET  /api/services
+  res.send(`
+    <main style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial; padding:24px;">
+      <h1 style="font-weight:600; letter-spacing:-.02em">Онлайн‑запись</h1>
+      <p>Сервер: Express + Prisma</p>
+      <pre style="background:#f5f5f7; padding:12px; border-radius:12px">
+GET /api/services
 POST /api/appointments
-GET  /admin/api/services
+GET /admin/services (UI)
+GET /admin/api/services
 POST /admin/api/services
-PUT  /admin/api/services/:id
+PUT /admin/api/services/:id
 DELETE /admin/api/services/:id
-
-Админка: /admin/services
-`);
+      </pre>
+      <p><a href="/admin/services">Открыть админку услуг →</a></p>
+    </main>
+  `);
 });
 
-// PUBLIC API
+/* ---------- Public API ---------- */
+
+// Список услуг
 app.get('/api/services', async (_req, res) => {
-  const items = await prisma.service.findMany({ orderBy: { name: 'asc' } });
-  res.json(items);
+  const list = await prisma.service.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(list);
 });
 
+// Создание записи
 app.post('/api/appointments', async (req, res) => {
   try {
-    const { tgUserId, serviceId, startAt } = req.body ?? {};
-    if (!serviceId || !startAt) return res.status(400).json({ error: 'serviceId и startAt обязательны' });
-
+    const { tgUserId, serviceId, startAt } = req.body || {};
+    if (!serviceId || !startAt) {
+      return res.status(400).json({ error: 'serviceId и startAt обязательны' });
+    }
     const service = await prisma.service.findUnique({ where: { id: serviceId } });
     if (!service) return res.status(404).json({ error: 'Услуга не найдена' });
 
-    const start = new Date(startAt);
-    if (isNaN(start.getTime())) return res.status(400).json({ error: 'Некорректный startAt' });
-    const end = new Date(start.getTime() + service.durationMin * 60_000);
-
-    let clientId: string | null = null;
+    // клиент по tgUserId (если пришёл)
+    let clientId: string | undefined = undefined;
     if (tgUserId) {
       const existing = await prisma.client.findFirst({ where: { tgUserId: String(tgUserId) } });
       if (existing) clientId = existing.id;
@@ -57,85 +62,97 @@ app.post('/api/appointments', async (req, res) => {
       }
     }
 
-    const appt = await prisma.appointment.create({
+    const start = new Date(startAt);
+    const end = new Date(start.getTime() + service.durationMin * 60 * 1000);
+
+    const createdAppt = await prisma.appointment.create({
       data: {
         startAt: start,
         endAt: end,
         status: 'CREATED',
+        service: { connect: { id: service.id } },
         ...(clientId ? { client: { connect: { id: clientId } } } : {}),
-        service: { connect: { id: serviceId } },
       },
       include: { service: true, client: true },
     });
 
-    res.status(201).json(appt);
+    res.json(createdAppt);
   } catch (e: any) {
-    console.error(e);
-    res.status(500).json({ error: 'Ошибка создания записи', detail: e?.message });
+    console.error('POST /api/appointments error', e);
+    res.status(500).json({ error: 'internal_error' });
   }
 });
 
-// ADMIN PAGES
+/* ---------- Admin API ---------- */
+
+// UI
 app.get('/admin/services', (_req, res) => {
-  res.sendFile(path.join(__dirname, '../public/admin/services.html'));
+  res.sendFile(path.join(staticDir, 'admin', 'services.html'));
 });
 
+// List
 app.get('/admin/api/services', async (_req, res) => {
-  const items = await prisma.service.findMany({ orderBy: { createdAt: 'desc' } });
-  res.json(items);
+  const list = await prisma.service.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(list);
 });
 
+// Create
 app.post('/admin/api/services', async (req, res) => {
   try {
-    const { name, durationMin, priceCents } = req.body ?? {};
-    if (!name || durationMin == null || priceCents == null) {
-      return res.status(400).json({ error: 'name, durationMin, priceCents обязательны' });
-    }
+    const { name, durationMin, priceCents } = req.body || {};
+    if (!name) return res.status(400).json({ error: 'name_required' });
+    const duration = parseInt(durationMin, 10);
+    const price = parseInt(priceCents, 10);
+    if (Number.isNaN(duration) || duration <= 0) return res.status(400).json({ error: 'bad_duration' });
+    if (Number.isNaN(price) || price < 0) return res.status(400).json({ error: 'bad_price' });
+
     const created = await prisma.service.create({
-      data: {
-        name: String(name).trim(),
-        durationMin: Number(durationMin),
-        priceCents: Number(priceCents),
-      }
+      data: { name: String(name), durationMin: duration, priceCents: price }
     });
-    res.status(201).json(created);
+    res.json(created);
   } catch (e: any) {
-    console.error(e);
-    res.status(500).json({ error: 'Не удалось создать услугу', detail: e?.message });
+    console.error('POST /admin/api/services', e);
+    res.status(500).json({ error: 'internal_error' });
   }
 });
 
+// Update
 app.put('/admin/api/services/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, durationMin, priceCents } = req.body ?? {};
-    const updated = await prisma.service.update({
-      where: { id },
-      data: {
-        ...(name != null ? { name: String(name).trim() } : {}),
-        ...(durationMin != null ? { durationMin: Number(durationMin) } : {}),
-        ...(priceCents != null ? { priceCents: Number(priceCents) } : {}),
-      }
-    });
+    const { name, durationMin, priceCents } = req.body || {};
+    const payload: any = {};
+    if (name !== undefined) payload.name = String(name);
+    if (durationMin !== undefined) payload.durationMin = parseInt(durationMin, 10);
+    if (priceCents !== undefined) payload.priceCents = parseInt(priceCents, 10);
+
+    const updated = await prisma.service.update({ where: { id }, data: payload });
     res.json(updated);
   } catch (e: any) {
-    console.error(e);
-    res.status(500).json({ error: 'Не удалось обновить услугу', detail: e?.message });
+    console.error('PUT /admin/api/services/:id', e);
+    res.status(500).json({ error: 'internal_error' });
   }
 });
 
+// Delete
 app.delete('/admin/api/services/:id', async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.service.delete({ where: { id } });
+    res.json({ ok: true });
   } catch (e: any) {
-    console.error(e);
-    return res.status(500).json({ error: 'Не удалось удалить услугу', detail: e?.message });
+    console.error('DELETE /admin/api/services/:id', e);
+    res.status(500).json({ error: 'internal_error' });
   }
-  res.status(204).send();
 });
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
+// 404 for admin static
+app.use('/admin', (_req, res) => {
+  res.status(404).send('Admin page not found');
+});
+
+// Start
+const PORT = Number(process.env.PORT || 3000);
 app.listen(PORT, () => {
-  console.log(`Server listening on :${PORT}`);
+  console.log(`Server listening on http://0.0.0.0:${PORT}`);
 });

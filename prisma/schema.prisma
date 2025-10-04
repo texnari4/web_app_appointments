@@ -1,56 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 enum AppointmentStatus {
   CREATED
-  CONFIRMED
-  CANCELED
-  DONE
+  CANCELLED
 }
 
 model Service {
-  id           String   @id @default(cuid())
-  name         String
-  durationMin  Int
-  priceCents   Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(uuid())
+  name        String
+  durationMin Int
+  priceCents  Int
+  createdAt   DateTime @default(now())
   appointments Appointment[]
 }
 
 model Client {
-  id           String   @id @default(cuid())
-  tgUserId     String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  appointments Appointment[]
-}
-
-model Staff {
-  id           String   @id @default(cuid())
-  name         String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String   @id @default(uuid())
+  tgUserId  String?
+  createdAt DateTime @default(now())
   appointments Appointment[]
 }
 
 model Appointment {
-  id         String            @id @default(cuid())
-  startAt    DateTime
-  endAt      DateTime
-  status     AppointmentStatus @default(CREATED)
-  service    Service           @relation(fields: [serviceId], references: [id])
-  serviceId  String
-  client     Client?           @relation(fields: [clientId], references: [id])
-  clientId   String?
-  staff      Staff?            @relation(fields: [staffId], references: [id])
-  staffId    String?
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
+  id        String   @id @default(uuid())
+  startAt   DateTime
+  endAt     DateTime
+  status    AppointmentStatus @default(CREATED)
+  service   Service  @relation(fields: [serviceId], references: [id])
+  serviceId String
+  client    Client?  @relation(fields: [clientId], references: [id])
+  clientId  String?
+  createdAt DateTime @default(now())
 }

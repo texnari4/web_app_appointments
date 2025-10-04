@@ -1,118 +1,126 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Админка — Услуги</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 24px; color: #111; }
-    h1 { font-size: 20px; margin-bottom: 12px; }
-    form, table { width: 100%; max-width: 720px; }
-    label { display:block; font-size: 12px; color:#666; margin-top:12px;}
-    input { width: 100%; padding: 10px 12px; border:1px solid #d0d0d0; border-radius:12px; font-size:14px; outline: none; }
-    input:focus { border-color:#007aff; box-shadow: 0 0 0 3px rgba(0,122,255,0.15); }
-    button { margin-top:16px; padding:10px 16px; border:0; border-radius:14px; background:#007aff; color:#fff; font-weight:600; cursor:pointer; }
-    button.secondary { background:#efefef; color:#222; }
-    table { border-collapse: collapse; margin-top: 24px; }
-    th, td { text-align:left; padding:10px 8px; border-bottom:1px solid #eee; font-size: 14px; }
-    .row-actions button { margin-right: 8px; }
-    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; padding: 10px 14px; border-radius: 10px; display: none; }
+    :root { --bg:#fff; --fg:#111; --muted:#6e6e73; --card:#f5f5f7; --accent:#007aff; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial; background:var(--bg); color:var(--fg); }
+    header { padding:20px 24px; border-bottom:1px solid #e5e5ea; position:sticky; top:0; background:#fff; }
+    h1 { margin:0; font-size:22px; font-weight:700; letter-spacing:-.02em; }
+    main { max-width:920px; margin:0 auto; padding:24px; }
+    .row { display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:12px; align-items:end; }
+    label { font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
+    input { width:100%; padding:10px 12px; border:1px solid #e5e5ea; border-radius:12px; font-size:14px; }
+    button { padding:10px 14px; border-radius:12px; border:0; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+    button[disabled]{ opacity:.6; cursor:default; }
+    table { width:100%; border-collapse:collapse; margin-top:20px; background:#fff; border:1px solid #e5e5ea; border-radius:14px; overflow:hidden; }
+    th, td { text-align:left; padding:12px 14px; border-bottom:1px solid #f0f0f0; font-size:14px; }
+    tr:last-child td { border-bottom:0; }
+    .muted{ color:var(--muted); }
+    .actions button{ background:#1c1c1e; margin-right:8px; }
+    .toast{ position:fixed; right:16px; bottom:16px; background:#1c1c1e; color:#fff; padding:10px 14px; border-radius:12px; opacity:0; transform:translateY(8px); transition:.2s; }
+    .toast.show{ opacity:1; transform:translateY(0); }
   </style>
 </head>
 <body>
-  <h1>Услуги</h1>
+  <header><h1>Услуги</h1></header>
+  <main>
+    <section class="card" style="background:var(--card); padding:16px; border-radius:16px;">
+      <div class="row">
+        <div>
+          <label>Название</label>
+          <input id="name" placeholder="Стрижка" />
+        </div>
+        <div>
+          <label>Длительность (мин)</label>
+          <input id="durationMin" type="number" min="1" step="1" placeholder="60" />
+        </div>
+        <div>
+          <label>Цена (в копейках)</label>
+          <input id="priceCents" type="number" min="0" step="1" placeholder="150000" />
+        </div>
+        <div>
+          <button id="saveBtn">Сохранить</button>
+        </div>
+      </div>
+    </section>
 
-  <form id="svcForm">
-    <label>Название</label>
-    <input id="name" required placeholder="Стрижка мужская">
+    <table id="tbl">
+      <thead>
+        <tr><th>Название</th><th>Минут</th><th>Цена, ₽</th><th class="muted">ID</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
 
-    <label>Длительность (мин)</label>
-    <input id="durationMin" type="number" min="1" required placeholder="30">
-
-    <label>Цена (в копейках)</label>
-    <input id="priceCents" type="number" min="0" required placeholder="250000">
-
-    <button type="submit">Сохранить</button>
-  </form>
-
-  <table id="list">
-    <thead><tr><th>Название</th><th>Длительность</th><th>Цена</th><th></th></tr></thead>
-    <tbody></tbody>
-  </table>
-
-  <div id="toast"></div>
+  <div id="toast" class="toast"></div>
 
   <script>
-    const toast = (msg) => {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.style.display = 'block';
-      setTimeout(()=> el.style.display = 'none', 2000);
-    };
+    const $ = (s)=>document.querySelector(s);
+    const toast = (msg)=>{ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1800); };
 
-    async function loadList() {
+    async function loadList(){
       const res = await fetch('/admin/api/services');
-      const list = await res.json();
-      const tbody = document.querySelector('#list tbody');
+      const data = await res.json();
+      const tbody = document.querySelector('#tbl tbody');
       tbody.innerHTML = '';
-      for (const s of list) {
+      data.forEach(row => {
         const tr = document.createElement('tr');
         tr.innerHTML = \`
-          <td>\${s.name}</td>
-          <td>\${s.durationMin} мин</td>
-          <td>\${(s.priceCents/100).toFixed(2)} BYN</td>
-          <td class="row-actions">
-            <button class="secondary" data-id="\${s.id}" data-act="edit">Изм.</button>
-            <button class="secondary" data-id="\${s.id}" data-act="del">Удалить</button>
+          <td>\${row.name}</td>
+          <td class="muted">\${row.durationMin}</td>
+          <td>\${(row.priceCents/100).toFixed(2)}</td>
+          <td class="muted" style="font-family:monospace">\${row.id}</td>
+          <td class="actions">
+            <button data-act="edit" data-id="\${row.id}">Изм.</button>
+            <button data-act="del" data-id="\${row.id}">Удалить</button>
           </td>\`;
         tbody.appendChild(tr);
-      }
+      });
     }
 
-    document.getElementById('svcForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const payload = {
-        name: document.getElementById('name').value.trim(),
-        durationMin: Number(document.getElementById('durationMin').value),
-        priceCents: Number(document.getElementById('priceCents').value),
-      };
-      const r = await fetch('/admin/api/services', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        toast('Ошибка: ' + (err.error || r.status));
-        return;
+    $('#saveBtn').addEventListener('click', async () => {
+      const btn = $('#saveBtn');
+      btn.disabled = true;
+      try {
+        const name = $('#name').value.trim();
+        const durationMin = $('#durationMin').value;
+        const priceCents = $('#priceCents').value;
+        const res = await fetch('/admin/api/services', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, durationMin: Number(durationMin), priceCents: Number(priceCents) })
+        });
+        if(!res.ok){
+          const j = await res.json().catch(()=>({}));
+          throw new Error(j.error || ('HTTP ' + res.status));
+        }
+        $('#name').value = ''; $('#durationMin').value=''; $('#priceCents').value='';
+        toast('Сохранено');
+        await loadList();
+      } catch(e){
+        console.error(e);
+        toast('Ошибка: ' + e.message);
+      } finally {
+        btn.disabled = false;
       }
-      (e.target).reset();
-      toast('Сохранено');
-      await loadList();
     });
 
-    document.querySelector('#list').addEventListener('click', async (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
+    document.querySelector('#tbl').addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('button'); if(!btn) return;
       const id = btn.dataset.id;
       const act = btn.dataset.act;
-      if (act === 'del') {
-        if (!confirm('Удалить услугу?')) return;
-        const r = await fetch('/admin/api/services/' + id, { method: 'DELETE' });
-        if (!r.ok) { toast('Не удалось удалить'); return; }
-        toast('Удалено');
-        await loadList();
-      }
-      if (act === 'edit') {
-        const name = prompt('Новое название:');
-        if (name == null) return;
-        const r = await fetch('/admin/api/services/' + id, {
-          method: 'PUT', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ name })
-        });
-        if (!r.ok) { toast('Не удалось обновить'); return; }
-        toast('Обновлено');
-        await loadList();
+      if (act === 'del'){
+        if(!confirm('Удалить услугу?')) return;
+        const res = await fetch('/admin/api/services/' + id, { method: 'DELETE' });
+        if(res.ok){ toast('Удалено'); loadList(); } else { toast('Ошибка удаления'); }
+      } else if (act === 'edit'){
+        const name = prompt('Новое имя?'); if(!name) return;
+        const res = await fetch('/admin/api/services/' + id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name })});
+        if(res.ok){ toast('Обновлено'); loadList(); } else { toast('Ошибка обновления'); }
       }
     });
 
