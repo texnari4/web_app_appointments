@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
 export const masterCreateSchema = z.object({
-  name: z.string().min(1).max(120),
-  isActive: z.boolean().optional().default(true)
+  name: z.string().min(1, "Имя обязательно").max(100, "Слишком длинное имя")
 });
 
 export type MasterCreateInput = z.infer<typeof masterCreateSchema>;

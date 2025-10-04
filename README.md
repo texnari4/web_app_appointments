@@ -1,12 +1,26 @@
-# Web App Appointments — v2.3.1 (Hotfix)
+# Web App Appointments — v2.3.4
 
-Hotfix: исправлен `POST /api/masters` (парсинг JSON, валидация Zod, корректный ответ/обновление списка на админке).
+Stack: Express + Prisma + Zod + Pino, Node 22, Docker (Alpine). CJS build for predictable deploys on Railway.
 
-## Скрипты
-- `npm run build` — компиляция TypeScript
-- `npm start` — запуск скомпилированного кода
-- `npm run prisma:generate` — генерация Prisma Client
+## Local dev
+```bash
+npm i
+cp .env.example .env   # заполни DATABASE_URL
+npm run prisma:sync
+npm run dev
+```
 
-## Переменные
-- `PORT` (необяз.) — по умолчанию `8080`
-- `DATABASE_URL` — строка подключения PostgreSQL
+## Build
+```bash
+npm run build
+```
+
+## Prod (Docker)
+- Используй предоставленный `Dockerfile` и `docker/entrypoint.sh`.
+- Контейнер стартует на `$PORT` (по умолчанию 8080).
+
+Routes:
+- `GET /health`
+- `GET /admin` — простая страница создания мастеров
+- `GET /api/masters`
+- `POST /api/masters` { name }

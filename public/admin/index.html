@@ -1,54 +1,81 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Admin · Masters</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Админка — Masters</title>
   <style>
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
-      color:#0b0b0f;background:#f5f7fb;margin:0;padding:24px;}
-    .card{background:#fff;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,.06);padding:20px;max-width:760px;margin:auto;}
-    h1{font-size:20px;margin:0 0 16px}
-    .row{display:flex;gap:8px;margin:12px 0}
-    input,button{font-size:14px;padding:10px 12px;border-radius:10px;border:1px solid #e6e6ea}
-    button{cursor:pointer;border:0;background:#007aff;color:#fff}
-    ul{list-style:none;padding:0;margin:0}
-    li{padding:10px 0;border-bottom:1px solid #f0f0f3}
+    :root { color-scheme: light dark; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Arial, sans-serif;
+           margin: 0; padding: 24px; line-height: 1.4; }
+    .container { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    form { display: flex; gap: 12px; margin: 16px 0 24px; }
+    input[type="text"] { flex: 1; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(0,0,0,.15); outline: none; }
+    button { padding: 12px 16px; border-radius: 12px; border: none; background: #007aff; color: #fff; font-weight: 600; }
+    button:hover { filter: brightness(1.05); cursor: pointer; }
+    ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+    li { padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(0,0,0,.12); display: flex; justify-content: space-between; align-items: center; }
+    .muted { opacity: .6; font-size: 12px; }
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.85); color: #fff; padding: 10px 14px; border-radius: 12px; display:none; }
   </style>
 </head>
 <body>
-<div class="card">
-  <h1>Мастера</h1>
-  <div class="row">
-    <input id="name" placeholder="Имя мастера" />
-    <button id="create">Создать</button>
+  <div class="container">
+    <h1>Мастера</h1>
+    <form id="create-form">
+      <input id="name" type="text" placeholder="Имя мастера" required />
+      <button type="submit">Создать</button>
+    </form>
+    <ul id="list"></ul>
   </div>
-  <ul id="list"></ul>
-</div>
+  <div class="toast" id="toast">Сохранено</div>
+
 <script>
-async function load() {
-  const r = await fetch('/api/masters');
-  const j = await r.json();
-  const ul = document.getElementById('list');
-  ul.innerHTML = '';
-  if (j.ok) {
-     for (const m of j.data) {
-        const li = document.createElement('li');
-        li.textContent = m.name + (m.isActive ? '' : ' (inactive)');
-        ul.appendChild(li);
-     }
-  } else {
-     ul.innerHTML = '<li>Ошибка загрузки</li>';
-  }
+const listEl = document.getElementById('list');
+const toast = document.getElementById('toast');
+
+function showToast(text) {
+  toast.textContent = text;
+  toast.style.display = 'block';
+  setTimeout(() => toast.style.display = 'none', 1500);
 }
-document.getElementById('create').addEventListener('click', async () => {
+
+async function fetchMasters() {
+  const res = await fetch('/api/masters');
+  const data = await res.json();
+  if (data.ok) render(data.data);
+}
+
+function render(items) {
+  listEl.innerHTML = items.map(m => `
+    <li>
+      <span>${m.name}</span>
+      <span class="muted">${new Date(m.createdAt).toLocaleString()}</span>
+    </li>
+  `).join('');
+}
+
+document.getElementById('create-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
   const name = document.getElementById('name').value.trim();
   if (!name) return;
-  const r = await fetch('/api/masters', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name })});
-  if (r.ok) { document.getElementById('name').value=''; await load(); }
-  else { alert('Не удалось создать мастера'); }
+  const res = await fetch('/api/masters', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    showToast('Мастер создан');
+    document.getElementById('name').value = '';
+    fetchMasters();
+  } else {
+    alert(data.error || 'Ошибка');
+  }
 });
-load();
+
+fetchMasters();
 </script>
 </body>
 </html>

@@ -1,75 +1,65 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import pino from 'pino';
 import pinoHttp from 'pino-http';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url'; // safe for NodeNext or CJS transpile
-import { prisma } from './prisma';
-import { MasterCreateSchema } from './validators';
 
-// Resolve project root in both ESM/CJS scenarios
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ROOT = process.cwd();
+import { prisma } from './prisma';
+import { masterCreateSchema } from './validators';
 
 const app = express();
+const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
-// middleware
-app.use(cors());
 app.use(express.json());
-app.use(pinoHttp()); // correct usage: default import returns a middleware function
+app.use(cors());
+app.use(pinoHttp({ logger }));
 
-// health
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, ts: new Date().toISOString() });
+// Static files (admin UI)
+const publicDir = path.resolve(process.cwd(), 'public');
+app.use(express.static(publicDir));
+
+// Health
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ ok: true, ts: new Date().toISOString(), version: '2.3.4' });
 });
 
-// static
-app.use('/public', express.static(path.join(ROOT, 'public')));
-
-// simple admin: serve index
-app.get(['/admin', '/admin/'], (_req, res) => {
-  res.sendFile(path.join(ROOT, 'public', 'admin', 'index.html'));
-});
-
-// redirect root -> /admin
-app.get('/', (_req, res) => res.redirect('/admin'));
-
-// API: masters
-app.get('/api/masters', async (_req, res) => {
+// Masters API
+app.get('/api/masters', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const masters = await prisma.master.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json(masters);
-  } catch (err) {
-    req.log?.error({ err }, 'Failed to list masters');
-    res.status(500).json({ error: 'INTERNAL' });
+    const masters = await prisma.master.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ ok: true, data: masters });
+  } catch (e) {
+    next(e);
   }
 });
 
-app.post('/api/masters', async (req, res) => {
+app.post('/api/masters', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const parsed = MasterCreateSchema.parse(req.body);
-    const created = await prisma.master.create({
-      data: { name: parsed.name },
-    });
-    res.status(201).json(created);
-  } catch (err: any) {
-    if (err?.name === 'ZodError') {
-      return res.status(400).json({ error: 'VALIDATION', issues: err.issues });
-    }
-    if (err?.code === 'P2002') {
-      return res.status(409).json({ error: 'DUPLICATE' });
-    }
-    req.log?.error({ err }, 'Failed to create master');
-    res.status(500).json({ error: 'INTERNAL' });
+    const parsed = masterCreateSchema.parse(req.body);
+    const created = await prisma.master.create({ data: { name: parsed.name } });
+    res.status(201).json({ ok: true, data: created });
+  } catch (e) {
+    next(e);
   }
+});
+
+// Serve admin page at /admin
+app.get('/admin', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'admin', 'index.html'));
+});
+
+// 404 handler
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ ok: false, error: 'Not Found' });
+});
+
+// Error handler
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  const status = err?.statusCode || err?.status || 500;
+  res.status(status).json({ ok: false, error: err?.message || 'Internal Server Error' });
 });
 
 const port = Number(process.env.PORT) || 8080;
 app.listen(port, () => {
-  // Use console as a fallback logger in case pino is not configured to pretty-print
-  console.log(`Server started on :${port}`);
+  logger.info(`Server started on :${port}`);
 });
-
-export default app;
