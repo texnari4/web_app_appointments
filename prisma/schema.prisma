@@ -7,78 +7,66 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
 model Client {
   id           String        @id @default(cuid())
+  phone        String
   name         String
-  phone        String?
   tgUserId     String?       @unique
   createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
   appointments Appointment[]
 }
 
 model Master {
   id           String        @id @default(cuid())
   name         String
-  specialty    String?
   phone        String?
-  tgUserId     String?       @unique
   description  String?
   createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
   appointments Appointment[]
   services     MasterService[]
 }
 
 model Service {
-  id              String           @id @default(cuid())
-  name            String
-  description     String?
-  price           Int              @default(0)
-  durationMinutes Int              @default(30)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  masters         MasterService[]
-  appointments    Appointment[]
-}
-
-model Appointment {
-  id         String   @id @default(cuid())
-  clientId   String
-  masterId   String
-  serviceId  String
-  startsAt   DateTime
-  endsAt     DateTime
-  status     AppointmentStatus @default(SCHEDULED)
-  note       String?
-
-  client     Client   @relation(fields: [clientId], references: [id])
-  master     Master   @relation(fields: [masterId], references: [id])
-  service    Service  @relation(fields: [serviceId], references: [id])
-
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([masterId, startsAt])
-  @@index([clientId, startsAt])
+  id           String        @id @default(cuid())
+  name         String
+  description  String?
+  price        Int
+  durationMin  Int           // 30, 60, ...
+  createdAt    DateTime      @default(now())
+  masters      MasterService[]
+  appointments Appointment[]
 }
 
 model MasterService {
-  id         String  @id @default(cuid())
-  masterId   String
-  serviceId  String
-  // кастомная длительность/цена на уровне мастера (опционально)
-  priceOverride           Int?
-  durationMinutesOverride Int?
+  id        String  @id @default(cuid())
+  master    Master  @relation(fields: [masterId], references: [id], onDelete: Cascade)
+  masterId  String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  serviceId String
 
-  master    Master  @relation(fields: [masterId], references: [id])
-  service   Service @relation(fields: [serviceId], references: [id])
-
-  @@unique([masterId, serviceId])
+  @@unique([masterId, serviceId], name: "masterId_serviceId_unique")
 }
 
-enum AppointmentStatus {
-  SCHEDULED
-  CONFIRMED
-  CANCELLED
+model Appointment {
+  id         String            @id @default(cuid())
+  client     Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId   String
+  master     Master            @relation(fields: [masterId], references: [id], onDelete: Cascade)
+  masterId   String
+  service    Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  serviceId  String
+  startsAt   DateTime
+  endsAt     DateTime
+  status     AppointmentStatus @default(PENDING)
+  note       String?
+  createdAt  DateTime          @default(now())
+
+  @@index([masterId, startsAt])
+  @@index([clientId, startsAt])
 }

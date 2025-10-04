@@ -1,95 +1,79 @@
-import express, { Request, Response, NextFunction } from 'express';
-import cors from 'cors';
-import { PrismaClient, AppointmentStatus } from '@prisma/client';
+import express, { Request, Response } from "express";
+import cors from "cors";
+import pino from "pino";
+import pinoHttp from "pino-http";
+import { PrismaClient } from "@prisma/client";
+import {
+  serviceCreateSchema,
+  serviceUpdateSchema,
+  appointmentCreateSchema,
+} from "./validators.js";
 
+const logger = pino();
 const app = express();
 const prisma = new PrismaClient();
+const PORT = Number(process.env.PORT || 8080);
 
 app.use(cors());
 app.use(express.json());
+app.use(pinoHttp({ logger }));
 
-// Healthcheck
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ ok: true, env: process.env.NODE_ENV, time: new Date().toISOString() });
+app.get("/health", (_req: Request, res: Response) => {
+  res.json({ ok: true });
 });
 
-// Services CRUD (Admin MVP)
-app.get('/api/services', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const items = await prisma.service.findMany({ orderBy: { name: 'asc' } });
-    res.json(items);
-  } catch (e) { next(e); }
+// ==== Services CRUD ====
+app.get("/api/services", async (_req: Request, res: Response) => {
+  const items = await prisma.service.findMany({ orderBy: { createdAt: "desc" } });
+  res.json(items);
 });
 
-app.post('/api/services', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { name, description, price, durationMinutes } = req.body;
-    const created = await prisma.service.create({
-      data: { name, description, price: Number(price) || 0, durationMinutes: Number(durationMinutes) || 30 }
-    });
-    res.status(201).json(created);
-  } catch (e) { next(e); }
+app.post("/api/services", async (req: Request, res: Response) => {
+  const parse = serviceCreateSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
+  const created = await prisma.service.create({ data: parse.data });
+  res.status(201).json(created);
 });
 
-app.put('/api/services/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { id } = req.params;
-    const { name, description, price, durationMinutes } = req.body;
-    const updated = await prisma.service.update({
-      where: { id },
-      data: { name, description, price: Number(price), durationMinutes: Number(durationMinutes) }
-    });
-    res.json(updated);
-  } catch (e) { next(e); }
+app.patch("/api/services/:id", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const parse = serviceUpdateSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
+  const updated = await prisma.service.update({ where: { id }, data: parse.data });
+  res.json(updated);
 });
 
-app.delete('/api/services/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { id } = req.params;
-    await prisma.service.delete({ where: { id } });
-    res.status(204).send();
-  } catch (e) { next(e); }
+app.delete("/api/services/:id", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  await prisma.service.delete({ where: { id } });
+  res.status(204).send();
 });
 
-// Create Appointment (Client MVP)
-app.post('/api/appointments', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { clientName, clientPhone, masterId, serviceId, startsAt } = req.body;
-    const svc = await prisma.service.findUnique({ where: { id: serviceId } });
-    if (!svc) return res.status(400).json({ error: 'Service not found' });
+// ==== Create appointment ====
+app.post("/api/appointments", async (req: Request, res: Response) => {
+  const parse = appointmentCreateSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
+  const { clientId, masterId, serviceId, startsAt, note } = parse.data;
 
-    const start = new Date(startsAt);
-    const end = new Date(start.getTime() + (svc.durationMinutes || 30) * 60000);
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service) return res.status(400).json({ error: "Service not found" });
 
-    // Ensure client exists by name+phone (not unique in DB, so findFirst then create)
-    let client = await prisma.client.findFirst({ where: { name: clientName, phone: clientPhone } });
-    if (!client) {
-      client = await prisma.client.create({ data: { name: clientName, phone: clientPhone ?? null } });
-    }
+  const start = new Date(startsAt);
+  const ends = new Date(start.getTime() + service.durationMin * 60_000);
 
-    const appt = await prisma.appointment.create({
-      data: {
-        clientId: client.id,
-        masterId,
-        serviceId,
-        startsAt: start,
-        endsAt: end,
-        status: AppointmentStatus.SCHEDULED
-      },
-      include: { client: true, master: true, service: true }
-    });
-
-    res.status(201).json(appt);
-  } catch (e) { next(e); }
+  const created = await prisma.appointment.create({
+    data: {
+      clientId,
+      masterId,
+      serviceId,
+      startsAt: start,
+      endsAt: ends,
+      note,
+    },
+  });
+  res.status(201).json(created);
 });
 
-// Basic error handler
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error(err);
-  res.status(500).json({ error: 'Internal Server Error', detail: String(err?.message || err) });
-});
-
-const port = Number(process.env.PORT) || 8080;
-app.listen(port, () => {
-  console.log(`Server started on :${port}`);
+app.listen(PORT, () => {
+  logger.info(`Server started on :${PORT}`);
 });

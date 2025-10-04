@@ -1,31 +1,28 @@
+# Beauty Mini App Appointments — Variant A (Railway Ready)
 
-# Beauty Mini App Appointments (API)
-
-Express + Prisma (PostgreSQL) backend for salon appointments.
-
-## Quick Start
-
+## Install
 ```bash
 npm install
+```
+
+## Local dev (needs DATABASE_URL set)
+```bash
+npm run prisma:sync
+npm run dev
+```
+
+## Seed (optional)
+```bash
+npm run seed
+```
+
+## Build & Start
+```bash
 npm run build
-npm run seed   # optional
 npm start
 ```
 
-### Environment
-
-Required envs (Railway already has many of them):
-
-- `DATABASE_URL` (PostgreSQL)
-- `PORT` (defaults 8080)
-- `NODE_ENV`
-- other project vars as needed
-
-### Endpoints
-
-- `GET /health`
-- `GET /api/services`
-- `POST /api/services`  `{ name, description?, price, durationMinutes }`
-- `PUT /api/services/:id`
-- `DELETE /api/services/:id`
-- `POST /api/appointments` `{ clientName, clientPhone?, masterId, serviceId, startsAt }`
+### Notes
+- Prisma CLI is in production deps so Railway can run `prisma` during start.
+- TypeScript `rootDir` is `"."` and `include` captures `scripts/**/*.ts`.
+- Zod is added to dependencies and `src/validators.ts` imports it.
