@@ -1,14 +1,20 @@
-#!/usr/bin/env sh
+#!/bin/sh
 set -e
 
-echo "Running Prisma generate..."
-npx prisma generate
-
-echo "Trying Prisma migrate deploy..."
-if ! npx prisma migrate deploy; then
-  echo "migrate deploy failed or no migrations found, falling back to prisma db push..."
-  npx prisma db push
+echo "🔧 Prisma generate (best-effort)"
+if ! npx prisma generate; then
+  echo "⚠️  prisma generate failed, continuing (possibly no models)"
 fi
 
-echo "Starting app: $*"
-exec "$@"
+if [ -n "$DATABASE_URL" ]; then
+  echo "🚀 Applying migrations (deploy)"
+  if ! npx prisma migrate deploy; then
+    echo "ℹ️  No migrations found, trying db push to sync schema"
+    npx prisma db push || true
+  fi
+else
+  echo "⚠️  DATABASE_URL is not set; skipping DB sync"
+fi
+
+echo "✅ Starting app"
+exec node dist/index.js
