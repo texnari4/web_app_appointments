@@ -1,65 +1,59 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
 import cors from 'cors';
-import pino from 'pino';
 import pinoHttp from 'pino-http';
-import path from 'node:path';
-
 import { prisma } from './prisma';
 import { masterCreateSchema } from './validators';
 
 const app = express();
-const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
+const VERSION = '2.3.5';
 
-app.use(express.json());
+// Middlewares
 app.use(cors());
-app.use(pinoHttp({ logger }));
+app.use(express.json());
+app.use(
+  pinoHttp({
+    transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
+  })
+);
 
-// Static files (admin UI)
-const publicDir = path.resolve(process.cwd(), 'public');
-app.use(express.static(publicDir));
+// Static admin
+app.use('/admin', express.static('public/admin'));
+app.use('/', express.static('public'));
 
 // Health
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ ok: true, ts: new Date().toISOString(), version: '2.3.4' });
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, ts: new Date().toISOString(), version: VERSION });
 });
 
 // Masters API
-app.get('/api/masters', async (_req: Request, res: Response, next: NextFunction) => {
+app.get('/api/masters', async (_req, res) => {
   try {
     const masters = await prisma.master.findMany({ orderBy: { createdAt: 'desc' } });
     res.json({ ok: true, data: masters });
   } catch (e) {
-    next(e);
+    req.log?.error({ err: e }, 'Failed to list masters');
+    res.status(500).json({ ok: false, error: 'INTERNAL_ERROR' });
   }
 });
 
-app.post('/api/masters', async (req: Request, res: Response, next: NextFunction) => {
+app.post('/api/masters', async (req, res) => {
   try {
-    const parsed = masterCreateSchema.parse(req.body);
-    const created = await prisma.master.create({ data: { name: parsed.name } });
-    res.status(201).json({ ok: true, data: created });
+    const parsed = masterCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', issues: parsed.error.issues });
+    }
+    const master = await prisma.master.create({ data: { name: parsed.data.name } });
+    res.status(201).json({ ok: true, data: master });
   } catch (e) {
-    next(e);
+    req.log?.error({ err: e }, 'Failed to create master');
+    res.status(500).json({ ok: false, error: 'INTERNAL_ERROR' });
   }
 });
 
-// Serve admin page at /admin
-app.get('/admin', (_req: Request, res: Response) => {
-  res.sendFile(path.join(publicDir, 'admin', 'index.html'));
-});
+// 404
+app.use((_req, res) => res.status(404).json({ ok: false, error: 'NOT_FOUND' }));
 
-// 404 handler
-app.use((_req: Request, res: Response) => {
-  res.status(404).json({ ok: false, error: 'Not Found' });
-});
-
-// Error handler
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  const status = err?.statusCode || err?.status || 500;
-  res.status(status).json({ ok: false, error: err?.message || 'Internal Server Error' });
-});
-
-const port = Number(process.env.PORT) || 8080;
-app.listen(port, () => {
-  logger.info(`Server started on :${port}`);
+app.listen(PORT, () => {
+  console.log(`Server started on :${PORT}`);
 });

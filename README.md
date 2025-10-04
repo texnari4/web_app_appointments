@@ -1,26 +1,28 @@
-# Web App Appointments — v2.3.4
+# web-app-appointments (v2.3.5)
 
-Stack: Express + Prisma + Zod + Pino, Node 22, Docker (Alpine). CJS build for predictable deploys on Railway.
+Express + Prisma + Zod + Pino • Node 22 • Dockerized • Railway ready
 
-## Local dev
+## Endpoints
+- `GET /health`
+- `GET /api/masters`
+- `POST /api/masters` ({ name })
+- `GET /admin` — простая панель управления
+
+## Prisma
+Таблица: `public.masters` (фиксирует опечатку "Macter").
+Поля: id (cuid), name, created_at, updated_at.
+
+## Run locally
 ```bash
 npm i
-cp .env.example .env   # заполни DATABASE_URL
+export DATABASE_URL="postgresql://..."
 npm run prisma:sync
-npm run dev
-```
-
-## Build
-```bash
 npm run build
+npm start
 ```
 
-## Prod (Docker)
-- Используй предоставленный `Dockerfile` и `docker/entrypoint.sh`.
-- Контейнер стартует на `$PORT` (по умолчанию 8080).
-
-Routes:
-- `GET /health`
-- `GET /admin` — простая страница создания мастеров
-- `GET /api/masters`
-- `POST /api/masters` { name }
+## Docker
+```bash
+docker build -t web-app-appointments:2.3.5 .
+docker run -p 8080:8080 -e DATABASE_URL="postgresql://..." web-app-appointments:2.3.5
+```

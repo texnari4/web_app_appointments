@@ -1,9 +1,14 @@
-#!/bin/sh
+#!/usr/bin/env sh
 set -e
 
-# Sync Prisma schema at startup (safe on existing DB)
+echo "[entrypoint] running prisma: migrate deploy"
 npx prisma migrate deploy || true
-npx prisma db push || true
-npx prisma generate || true
 
-exec node dist/index.js
+echo "[entrypoint] running prisma: db push"
+npx prisma db push
+
+echo "[entrypoint] running prisma: generate"
+npx prisma generate
+
+echo "[entrypoint] starting app on port ${PORT:-8080}"
+node dist/index.js
