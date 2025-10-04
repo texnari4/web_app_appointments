@@ -1,92 +1,49 @@
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
 
-export type Master = {
-  id: string;
-  name: string;
-  phone?: string;
-  about?: string;
-  avatarUrl?: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type Service = {
-  id: string;
-  title: string;
-  price?: number;
-  durationMin?: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type DB = {
-  meta: { version: string; createdAt: string };
-  masters: Master[];
-  services: Service[];
-};
+import { promises as fs } from 'fs';
+import { join } from 'path';
 
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
-const DB_FILE = path.join(DATA_DIR, 'db.json');
-const TMP_FILE = path.join(DATA_DIR, 'db.json.tmp');
+const DB_FILE = join(DATA_DIR, 'db.json');
 
-async function readJSON<T>(file: string): Promise<T> {
-  const buf = await fs.readFile(file);
-  return JSON.parse(buf.toString('utf-8')) as T;
-}
+export type Master = { id: string; name: string; phone?: string|null; about?: string|null; avatarUrl?: string|null };
+type Db = { masters: Master[] };
 
-async function writeJSON<T>(file: string, data: T): Promise<void> {
-  const txt = JSON.stringify(data, null, 2);
-  await fs.writeFile(TMP_FILE, txt);
-  await fs.rename(TMP_FILE, file);
-}
-
-export async function loadDB(): Promise<DB> {
+async function readDb(): Promise<Db> {
   try {
-    return await readJSON<DB>(DB_FILE);
+    const raw = await fs.readFile(DB_FILE, 'utf-8');
+    return JSON.parse(raw);
   } catch {
-    const fresh: DB = { meta: { version: '2.4.0', createdAt: new Date().toISOString() }, masters: [], services: [] };
-    await writeJSON(DB_FILE, fresh);
-    return fresh;
+    return { masters: [] };
   }
 }
 
-export async function saveDB(db: DB): Promise<void> {
-  await writeJSON(DB_FILE, db);
+async function writeDb(db: Db) {
+  const tmp = DB_FILE + '.tmp';
+  await fs.writeFile(tmp, JSON.stringify(db, null, 2));
+  await fs.rename(tmp, DB_FILE);
 }
 
-function uid(): string {
-  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-}
+function uid() { return Math.random().toString(36).slice(2, 10); }
 
-// Masters
-export async function listMasters(): Promise<Master[]> {
-  const db = await loadDB();
-  return db.masters;
-}
-
-export async function createMaster(input: Partial<Master> & { name: string }): Promise<Master> {
-  const now = new Date().toISOString();
-  const m: Master = {
-    id: uid(),
-    name: input.name,
-    phone: input.phone,
-    about: input.about,
-    avatarUrl: input.avatarUrl,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const db = await loadDB();
-  db.masters.push(m);
-  await saveDB(db);
-  return m;
-}
-
-export async function deleteMaster(id: string): Promise<boolean> {
-  const db = await loadDB();
-  const before = db.masters.length;
-  db.masters = db.masters.filter(m => m.id !== id);
-  const changed = db.masters.length !== before;
-  if (changed) await saveDB(db);
-  return changed;
-}
+export const storage = {
+  masters: {
+    async all() {
+      const db = await readDb();
+      return db.masters;
+    },
+    async create(input: Omit<Master, 'id'>) {
+      const db = await readDb();
+      const item: Master = { id: uid(), ...input };
+      db.masters.push(item);
+      await writeDb(db);
+      return item;
+    },
+    async remove(id: string) {
+      const db = await readDb();
+      const before = db.masters.length;
+      db.masters = db.masters.filter(m => m.id !== id);
+      if (db.masters.length !== before) await writeDb(db);
+      return before !== db.masters.length;
+    }
+  }
+};
