@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,4 +14,50 @@ model AppMeta {
   value     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Master {
+  id           Int            @id @default(autoincrement())
+  name         String
+  phone        String?
+  isActive     Boolean        @default(true)
+  services     Service[]
+  appointments Appointment[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model Service {
+  id           Int            @id @default(autoincrement())
+  name         String
+  price        Int
+  durationMins Int
+  isActive     Boolean        @default(true)
+  masters      Master[]
+  appointments Appointment[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  DONE
+  CANCELED
+}
+
+model Appointment {
+  id           Int                @id @default(autoincrement())
+  masterId     Int
+  serviceId    Int
+  customerName String
+  customerPhone String?
+  startsAt     DateTime
+  status       AppointmentStatus  @default(SCHEDULED)
+  master       Master             @relation(fields: [masterId], references: [id])
+  service      Service            @relation(fields: [serviceId], references: [id])
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([masterId, startsAt])
+  @@index([serviceId, startsAt])
 }

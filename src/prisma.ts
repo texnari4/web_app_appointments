@@ -1,17 +1,12 @@
-import { PrismaClient } from '@prisma/client'
 
-declare global {
-  // allow global `var` declarations
-  // eslint-disable-next-line no-var
-  var __prisma: PrismaClient | undefined
-}
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = global as unknown as { prisma?: PrismaClient };
 
 export const prisma =
-  global.__prisma ??
+  globalForPrisma.prisma ||
   new PrismaClient({
-    log: ['warn', 'error']
-  })
+    log: ['query', 'info', 'warn', 'error'],
+  });
 
-if (process.env.NODE_ENV !== 'production') {
-  global.__prisma = prisma
-}
+if (process.env.NODE_ENV !== 'production') (globalForPrisma.prisma = prisma);

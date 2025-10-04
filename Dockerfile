@@ -1,39 +1,38 @@
-# -------- Builder --------
+
+# ---- Builder ----
 FROM node:22-alpine AS builder
-
-# Needed by Prisma on alpine
-RUN apk add --no-cache openssl libc6-compat
-
 WORKDIR /app
+
+# System deps for Prisma
+RUN apk add --no-cache openssl libc6-compat
 
 COPY package.json ./
 RUN npm install
 
+# Copy sources
 COPY tsconfig.json ./tsconfig.json
-COPY prisma ./prisma
 COPY src ./src
+COPY prisma ./prisma
 
-# Build TypeScript (no prisma generate here)
+# TypeScript build
 RUN npm run build
 
-# -------- Runner --------
+# ---- Runner ----
 FROM node:22-alpine AS runner
+WORKDIR /app
 
-# Needed by Prisma on alpine
+# System deps for Prisma in runtime
 RUN apk add --no-cache openssl libc6-compat
 
 ENV NODE_ENV=production
+ENV PORT=8080
 
-WORKDIR /app
-
-# Copy runtime artifacts
+# Copy artifacts from builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-COPY package.json ./package.json
-
-# Entrypoint orchestrates prisma + app start
+COPY prisma ./prisma
 COPY docker/entrypoint.sh ./entrypoint.sh
+
 RUN chmod +x ./entrypoint.sh
 
 EXPOSE 8080
