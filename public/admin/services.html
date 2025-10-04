@@ -1,144 +1,122 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"/>
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Админка — Услуги</title>
   <style>
-    body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif; margin:24px; color:#111;}
-    h1{font-size:20px;margin:0 0 16px}
-    .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px}
-    label{display:block;font-size:12px;color:#374151;margin:8px 0 4px}
-    input{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:10px;font-size:14px}
-    button{padding:10px 14px;border-radius:10px;border:1px solid #111;background:#111;color:#fff;cursor:pointer}
-    button.secondary{background:#fff;color:#111;border-color:#d1d5db}
-    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
-    th,td{border-bottom:1px solid #e5e7eb;padding:10px;text-align:left}
-    .row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end}
-    .error{color:#b91c1c;margin-top:8px}
-    .ok{color:#065f46;margin-top:8px}
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 24px; color: #111; }
+    h1 { font-size: 20px; margin-bottom: 12px; }
+    form, table { width: 100%; max-width: 720px; }
+    label { display:block; font-size: 12px; color:#666; margin-top:12px;}
+    input { width: 100%; padding: 10px 12px; border:1px solid #d0d0d0; border-radius:12px; font-size:14px; outline: none; }
+    input:focus { border-color:#007aff; box-shadow: 0 0 0 3px rgba(0,122,255,0.15); }
+    button { margin-top:16px; padding:10px 16px; border:0; border-radius:14px; background:#007aff; color:#fff; font-weight:600; cursor:pointer; }
+    button.secondary { background:#efefef; color:#222; }
+    table { border-collapse: collapse; margin-top: 24px; }
+    th, td { text-align:left; padding:10px 8px; border-bottom:1px solid #eee; font-size: 14px; }
+    .row-actions button { margin-right: 8px; }
+    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; padding: 10px 14px; border-radius: 10px; display: none; }
   </style>
 </head>
 <body>
   <h1>Услуги</h1>
 
-  <div class="card">
-    <div class="row">
-      <div>
-        <label>Название</label>
-        <input id="name" placeholder="Маникюр классический"/>
-      </div>
-      <div>
-        <label>Длительность (мин)</label>
-        <input id="durationMin" type="number" min="1" step="1" placeholder="60"/>
-      </div>
-      <div>
-        <label>Цена (копейки BYN)</label>
-        <input id="priceCents" type="number" min="0" step="1" placeholder="450000"/>
-      </div>
-      <div>
-        <button id="saveBtn" type="button">Сохранить</button>
-      </div>
-    </div>
-    <div id="msg"></div>
-  </div>
+  <form id="svcForm">
+    <label>Название</label>
+    <input id="name" required placeholder="Стрижка мужская">
 
-  <div class="card">
-    <table>
-      <thead>
-        <tr><th>Название</th><th>Длительность</th><th>Цена, BYN</th><th></th></tr>
-      </thead>
-      <tbody id="list"></tbody>
-    </table>
-  </div>
+    <label>Длительность (мин)</label>
+    <input id="durationMin" type="number" min="1" required placeholder="30">
 
-<script>
-const $ = sel => document.querySelector(sel);
-const api = {
-  async list(){ const r = await fetch('/admin/api/services'); if(!r.ok) throw new Error('list failed'); return r.json(); },
-  async create(payload){
-    const r = await fetch('/admin/api/services', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
+    <label>Цена (в копейках)</label>
+    <input id="priceCents" type="number" min="0" required placeholder="250000">
+
+    <button type="submit">Сохранить</button>
+  </form>
+
+  <table id="list">
+    <thead><tr><th>Название</th><th>Длительность</th><th>Цена</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="toast"></div>
+
+  <script>
+    const toast = (msg) => {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(()=> el.style.display = 'none', 2000);
+    };
+
+    async function loadList() {
+      const res = await fetch('/admin/api/services');
+      const list = await res.json();
+      const tbody = document.querySelector('#list tbody');
+      tbody.innerHTML = '';
+      for (const s of list) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td>\${s.name}</td>
+          <td>\${s.durationMin} мин</td>
+          <td>\${(s.priceCents/100).toFixed(2)} BYN</td>
+          <td class="row-actions">
+            <button class="secondary" data-id="\${s.id}" data-act="edit">Изм.</button>
+            <button class="secondary" data-id="\${s.id}" data-act="del">Удалить</button>
+          </td>\`;
+        tbody.appendChild(tr);
+      }
+    }
+
+    document.getElementById('svcForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById('name').value.trim(),
+        durationMin: Number(document.getElementById('durationMin').value),
+        priceCents: Number(document.getElementById('priceCents').value),
+      };
+      const r = await fetch('/admin/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        toast('Ошибка: ' + (err.error || r.status));
+        return;
+      }
+      (e.target).reset();
+      toast('Сохранено');
+      await loadList();
     });
-    if(!r.ok){
-      const t = await r.text().catch(()=>'');
-      throw new Error('save failed: ' + t);
-    }
-    return r.json();
-  },
-  async remove(id){
-    const r = await fetch('/admin/api/services/'+encodeURIComponent(id), { method:'DELETE' });
-    if(!r.ok) throw new Error('delete failed');
-  }
-};
 
-function byn(priceCents){ return (priceCents/100).toFixed(2); }
+    document.querySelector('#list').addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      const act = btn.dataset.act;
+      if (act === 'del') {
+        if (!confirm('Удалить услугу?')) return;
+        const r = await fetch('/admin/api/services/' + id, { method: 'DELETE' });
+        if (!r.ok) { toast('Не удалось удалить'); return; }
+        toast('Удалено');
+        await loadList();
+      }
+      if (act === 'edit') {
+        const name = prompt('Новое название:');
+        if (name == null) return;
+        const r = await fetch('/admin/api/services/' + id, {
+          method: 'PUT', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ name })
+        });
+        if (!r.ok) { toast('Не удалось обновить'); return; }
+        toast('Обновлено');
+        await loadList();
+      }
+    });
 
-async function render(){
-  const tbody = $('#list');
-  tbody.innerHTML = '<tr><td colspan="4">Загрузка…</td></tr>';
-  try{
-    const rows = await api.list();
-    if(!Array.isArray(rows) || rows.length === 0){
-      tbody.innerHTML = '<tr><td colspan="4">Пока пусто</td></tr>';
-      return;
-    }
-    tbody.innerHTML = rows.map(s=>`
-      <tr data-id="${s.id}">
-        <td>${s.name}</td>
-        <td>${s.durationMin} мин</td>
-        <td>${byn(s.priceCents)}</td>
-        <td><button class="secondary" data-del="${s.id}">Удалить</button></td>
-      </tr>
-    `).join('');
-  }catch(e){
-    tbody.innerHTML = '<tr><td colspan="4">Ошибка загрузки</td></tr>';
-    msg('Не удалось получить список услуг', true);
-  }
-}
-
-function msg(text, isErr=false){
-  const el = $('#msg');
-  el.className = isErr ? 'error' : 'ok';
-  el.textContent = text;
-  setTimeout(()=>{ el.textContent=''; el.className=''; }, 2500);
-}
-
-$('#saveBtn').addEventListener('click', async () => {
-  const name = $('#name').value.trim();
-  const durationMin = Number($('#durationMin').value);
-  const priceCents = Number($('#priceCents').value);
-  if(!name || !Number.isFinite(durationMin) || !Number.isFinite(priceCents)){
-    msg('Заполните все поля корректно', true);
-    return;
-  }
-  try{
-    await api.create({ name, durationMin, priceCents });
-    $('#name').value=''; $('#durationMin').value=''; $('#priceCents').value='';
-    msg('Сохранено');
-    render();
-  }catch(e){
-    console.error(e);
-    msg('Ошибка сохранения', true);
-  }
-});
-
-document.addEventListener('click', async (e) => {
-  const btn = e.target;
-  if(btn && btn.dataset && btn.dataset.del){
-    try{
-      await api.remove(btn.dataset.del);
-      msg('Удалено');
-      render();
-    }catch(_){
-      msg('Ошибка удаления', true);
-    }
-  }
-});
-
-render();
-</script>
+    loadList();
+  </script>
 </body>
 </html>

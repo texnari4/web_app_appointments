@@ -1,181 +1,141 @@
-import express from "express";
-import cors from "cors";
-import path from "path";
-import { PrismaClient } from "@prisma/client";
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
+const prisma = new PrismaClient();
 
-// Middlewares
-app.use(cors());
 app.use(express.json());
-// IMPORTANT: support HTML form posts if someone decides to submit <form> without JS
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, '../public')));
 
-// Static admin assets
-const publicDir = path.join(process.cwd(), "public");
-app.use(express.static(publicDir));
+app.get('/', (_req, res) => {
+  res.type('text/plain').send(
+`Онлайн‑запись
+Сервер: Express + Prisma
 
-// --------------------------- Public API ---------------------------
+GET  /api/services
+POST /api/appointments
+GET  /admin/api/services
+POST /admin/api/services
+PUT  /admin/api/services/:id
+DELETE /admin/api/services/:id
 
-// List services (for client app)
-app.get("/api/services", async (_req, res) => {
-  try {
-    const services = await prisma.service.findMany({
-      orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, durationMin: true, priceCents: true, createdAt: true, updatedAt: true },
-    });
-    res.json(services);
-  } catch (e: any) {
-    console.error("GET /api/services error", e);
-    res.status(500).json({ error: "Internal error" });
-  }
+Админка: /admin/services
+`);
 });
 
-// Create appointment (minimal version)
-app.post("/api/appointments", async (req, res) => {
+// PUBLIC API
+app.get('/api/services', async (_req, res) => {
+  const items = await prisma.service.findMany({ orderBy: { name: 'asc' } });
+  res.json(items);
+});
+
+app.post('/api/appointments', async (req, res) => {
   try {
-    const { serviceId, startAtISO, durationMin, staffId, client } = req.body || {};
-    if (!serviceId || !startAtISO || !client?.tgUserId) {
-      return res.status(400).json({ error: "serviceId, startAtISO and client.tgUserId are required" });
+    const { tgUserId, serviceId, startAt } = req.body ?? {};
+    if (!serviceId || !startAt) return res.status(400).json({ error: 'serviceId и startAt обязательны' });
+
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service) return res.status(404).json({ error: 'Услуга не найдена' });
+
+    const start = new Date(startAt);
+    if (isNaN(start.getTime())) return res.status(400).json({ error: 'Некорректный startAt' });
+    const end = new Date(start.getTime() + service.durationMin * 60_000);
+
+    let clientId: string | null = null;
+    if (tgUserId) {
+      const existing = await prisma.client.findFirst({ where: { tgUserId: String(tgUserId) } });
+      if (existing) clientId = existing.id;
+      else {
+        const created = await prisma.client.create({ data: { tgUserId: String(tgUserId) } });
+        clientId = created.id;
+      }
     }
-
-    const startAt = new Date(startAtISO);
-    const service = await prisma.service.findUnique({ where: { id: serviceId }, select: { durationMin: true } });
-    if (!service) return res.status(404).json({ error: "Service not found" });
-
-    const endAt = new Date(startAt.getTime() + (durationMin ?? service.durationMin) * 60_000);
-
-    // Upsert client by tgUserId ONLY — model doesn't have name/phone
-    const upsertedClient = await prisma.client.upsert({
-      where: { tgUserId: client.tgUserId },
-      update: {},
-      create: { tgUserId: client.tgUserId },
-      select: { id: true },
-    });
 
     const appt = await prisma.appointment.create({
       data: {
-        startAt,
-        endAt,
-        status: "CREATED",
-        client: { connect: { id: upsertedClient.id } },
-        // Optional relations are skipped if not provided in schema
+        startAt: start,
+        endAt: end,
+        status: 'CREATED',
+        ...(clientId ? { client: { connect: { id: clientId } } } : {}),
         service: { connect: { id: serviceId } },
-        ...(staffId ? { staff: { connect: { id: staffId } } } : {}),
       },
-      select: {
-        id: true, startAt: true, endAt: true, status: true,
-        client: { select: { id: true } },
-        service: { select: { id: true, name: true } },
-        staff: { select: { id: true, name: true } },
-      },
+      include: { service: true, client: true },
     });
 
     res.status(201).json(appt);
   } catch (e: any) {
-    console.error("POST /api/appointments error", e);
-    res.status(500).json({ error: "Internal error" });
+    console.error(e);
+    res.status(500).json({ error: 'Ошибка создания записи', detail: e?.message });
   }
 });
 
-// --------------------------- Admin API ---------------------------
-
-// List services (admin)
-app.get("/admin/api/services", async (_req, res) => {
-  try {
-    const services = await prisma.service.findMany({
-      orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, durationMin: true, priceCents: true, createdAt: true, updatedAt: true },
-    });
-    res.json(services);
-  } catch (e: any) {
-    console.error("GET /admin/api/services error", e);
-    res.status(500).json({ error: "Internal error" });
-  }
+// ADMIN PAGES
+app.get('/admin/services', (_req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin/services.html'));
 });
 
-// Create service
-app.post("/admin/api/services", async (req, res) => {
+app.get('/admin/api/services', async (_req, res) => {
+  const items = await prisma.service.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(items);
+});
+
+app.post('/admin/api/services', async (req, res) => {
   try {
-    const { name, durationMin, priceCents } = req.body || {};
-
-    // Support both form-urlencoded (strings) and JSON (numbers)
-    const _name = (name ?? "").toString().trim();
-    const _durationMin = Number(durationMin);
-    const _priceCents = Number(priceCents);
-
-    if (!_name || isNaN(_durationMin) || isNaN(_priceCents)) {
-      return res.status(400).json({ error: "name, durationMin, priceCents are required" });
+    const { name, durationMin, priceCents } = req.body ?? {};
+    if (!name || durationMin == null || priceCents == null) {
+      return res.status(400).json({ error: 'name, durationMin, priceCents обязательны' });
     }
-
     const created = await prisma.service.create({
-      data: { name: _name, durationMin: _durationMin, priceCents: _priceCents },
-      select: { id: true, name: true, durationMin: true, priceCents: true, createdAt: true, updatedAt: true },
+      data: {
+        name: String(name).trim(),
+        durationMin: Number(durationMin),
+        priceCents: Number(priceCents),
+      }
     });
     res.status(201).json(created);
   } catch (e: any) {
-    console.error("POST /admin/api/services error", e);
-    res.status(500).json({ error: "Internal error" });
+    console.error(e);
+    res.status(500).json({ error: 'Не удалось создать услугу', detail: e?.message });
   }
 });
 
-// Update service
-app.put("/admin/api/services/:id", async (req, res) => {
+app.put('/admin/api/services/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, durationMin, priceCents } = req.body || {};
-    const payload: any = {};
-
-    if (name !== undefined) payload.name = String(name).trim();
-    if (durationMin !== undefined) payload.durationMin = Number(durationMin);
-    if (priceCents !== undefined) payload.priceCents = Number(priceCents);
-
+    const { name, durationMin, priceCents } = req.body ?? {};
     const updated = await prisma.service.update({
       where: { id },
-      data: payload,
-      select: { id: true, name: true, durationMin: true, priceCents: true, createdAt: true, updatedAt: true },
+      data: {
+        ...(name != null ? { name: String(name).trim() } : {}),
+        ...(durationMin != null ? { durationMin: Number(durationMin) } : {}),
+        ...(priceCents != null ? { priceCents: Number(priceCents) } : {}),
+      }
     });
     res.json(updated);
   } catch (e: any) {
-    console.error("PUT /admin/api/services/:id error", e);
-    res.status(500).json({ error: "Internal error" });
+    console.error(e);
+    res.status(500).json({ error: 'Не удалось обновить услугу', detail: e?.message });
   }
 });
 
-// Delete service
-app.delete("/admin/api/services/:id", async (req, res) => {
+app.delete('/admin/api/services/:id', async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.service.delete({ where: { id } });
-    res.status(204).end();
   } catch (e: any) {
-    console.error("DELETE /admin/api/services/:id error", e);
-    res.status(500).json({ error: "Internal error" });
+    console.error(e);
+    return res.status(500).json({ error: 'Не удалось удалить услугу', detail: e?.message });
   }
+  res.status(204).send();
 });
 
-// Admin page
-app.get("/admin/services", (_req, res) => {
-  res.sendFile(path.join(publicDir, "admin", "services.html"));
-});
-
-// Root page (status)
-app.get("/", (_req, res) => {
-  res.type("text").send(`Онлайн‑запись
-Сервер: Express + Prisma
-
-GET /api/services
-POST /api/appointments
-GET /admin/api/services
-POST /admin/api/services
-PUT /admin/api/services/:id
-DELETE /admin/api/services/:id
-`);
-});
-
-// Start server
-const PORT = Number(process.env.PORT || 3000);
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 app.listen(PORT, () => {
-  console.log(`Server started on http://0.0.0.0:${PORT}`);
+  console.log(`Server listening on :${PORT}`);
 });
