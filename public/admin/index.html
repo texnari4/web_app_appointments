@@ -1,117 +1,78 @@
 <!doctype html>
-<html lang="en">
+<html>
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Admin · Masters</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Admin • Appointments</title>
     <style>
-      :root { color-scheme: light dark; }
-      body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 24px; }
-      .card { max-width: 720px; margin: 0 auto; border: 1px solid rgba(0,0,0,.08); border-radius: 16px; padding: 20px; box-shadow: 0 8px 20px rgba(0,0,0,.06); }
-      h1 { font-weight: 700; letter-spacing: -0.02em; margin: 0 0 16px; }
-      form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-      label { display: grid; gap: 6px; font-size: 14px; }
-      input, textarea { padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(0,0,0,.15); outline: none; }
-      button { grid-column: 1 / -1; padding: 12px 16px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer; }
-      button.primary { background: #007aff; color: white; }
-      ul { list-style: none; padding: 0; margin: 12px 0 0; }
-      li { padding: 12px; border-bottom: 1px solid rgba(0,0,0,.08); display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-      .muted { color: #6b7280; font-size: 12px; }
-      .toast { position: fixed; top: 16px; right: 16px; background: rgba(0,0,0,.85); color: #fff; padding: 10px 12px; border-radius: 12px; opacity: 0; transform: translateY(-6px); transition: all .2s ease; }
-      .toast.show { opacity: 1; transform: translateY(0); }
-      .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-      .empty { text-align: center; color: #9ca3af; padding: 16px; }
-      a.link { color: #007aff; text-decoration: none; }
+      body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #0b0b0b; }
+      .card { border: 1px solid #e5e5ea; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+      input, button { font-size: 16px; padding: 10px 12px; border-radius: 12px; border: 1px solid #d1d1d6; outline: none; }
+      input:focus { border-color: #007aff; box-shadow: 0 0 0 3px rgba(0,122,255,.15); }
+      button { background: #0a84ff; color: white; border: none; }
+      button:disabled { opacity: .5; }
+      ul { list-style: none; padding-left: 0; }
+      li { padding: 8px 0; border-bottom: 1px solid #f2f2f7; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
     </style>
   </head>
   <body>
+    <h1>Admin</h1>
+
     <div class="card">
+      <h3>Create master</h3>
       <div class="row">
-        <h1>Masters</h1>
-        <a class="link" href="/health" target="_blank">health</a>
+        <input id="name" placeholder="Name"/>
+        <input id="phone" placeholder="Phone"/>
       </div>
-      <form id="form">
-        <label>
-          Name
-          <input name="name" placeholder="Имя" required />
-        </label>
-        <label>
-          Phone
-          <input name="phone" placeholder="+7..." />
-        </label>
-        <label style="grid-column: 1 / -1;">
-          Bio
-          <textarea name="bio" rows="3" placeholder="О мастере"></textarea>
-        </label>
-        <button class="primary" type="submit">Сохранить</button>
-      </form>
-      <ul id="list"></ul>
-      <div id="empty" class="empty" style="display:none">Нет записей</div>
+      <div class="row">
+        <input id="about" placeholder="About"/>
+        <input id="avatarUrl" placeholder="Avatar URL"/>
+      </div>
+      <button id="create">Create</button>
+      <span id="msg"></span>
     </div>
-    <div id="toast" class="toast"></div>
+
+    <div class="card">
+      <h3>Masters</h3>
+      <ul id="list"></ul>
+    </div>
+
     <script>
-      const $form = document.getElementById('form');
-      const $list = document.getElementById('list');
-      const $empty = document.getElementById('empty');
-      const $toast = document.getElementById('toast');
-
-      function toast(msg, ok=true) {
-        $toast.textContent = msg;
-        $toast.style.background = ok ? 'rgba(0,0,0,.85)' : '#ef4444';
-        $toast.classList.add('show');
-        setTimeout(()=> $toast.classList.remove('show'), 1800);
-      }
-
-      async function loadList() {
-        $list.innerHTML = '';
-        const res = await fetch('/api/masters');
-        if (!res.ok) {
-          toast('Ошибка загрузки списка', false);
-          return;
-        }
-        const { data } = await res.json();
-        if (!data || !data.length) {
-          $empty.style.display = 'block';
-          return;
-        }
-        $empty.style.display = 'none';
-        for (const m of data) {
+      async function reload() {
+        const r = await fetch('/public/api/masters');
+        const j = await r.json();
+        const list = document.getElementById('list');
+        list.innerHTML = '';
+        (j.data || []).forEach(m => {
           const li = document.createElement('li');
-          li.innerHTML = \`
-            <div>
-              <div><strong>\${m.name}</strong></div>
-              <div class="muted">\${m.phone ?? ''}</div>
-            </div>
-            <div class="muted">#\${m.id}</div>
-          \`;
-          $list.appendChild(li);
-        }
-      }
-
-      $form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fd = new FormData($form);
-        const payload = Object.fromEntries(fd.entries());
-        const res = await fetch('/api/masters', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          li.textContent = m.name + (m.phone ? ' • ' + m.phone : '');
+          list.appendChild(li);
         });
-        if (res.ok) {
-          toast('Создано');
-          $form.reset();
-          await loadList();
-        } else {
-          let msg = 'Ошибка сохранения';
-          try {
-            const j = await res.json();
-            if (j?.error === 'VALIDATION_ERROR') msg = 'Проверьте поля формы';
-          } catch {}
-          toast(msg, false);
+      }
+      document.getElementById('create').addEventListener('click', async () => {
+        const btn = document.getElementById('create');
+        const msg = document.getElementById('msg');
+        btn.disabled = true; msg.textContent = '...';
+        try {
+          const body = {
+            name: document.getElementById('name').value,
+            phone: document.getElementById('phone').value,
+            about: document.getElementById('about').value,
+            avatarUrl: document.getElementById('avatarUrl').value
+          };
+          const r = await fetch('/admin/api/masters', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body) });
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error || 'Failed');
+          msg.textContent = '✓ created';
+          await reload();
+        } catch (e) {
+          msg.textContent = 'Error: ' + e.message;
+        } finally {
+          btn.disabled = false;
         }
       });
-
-      loadList();
+      reload();
     </script>
   </body>
 </html>
