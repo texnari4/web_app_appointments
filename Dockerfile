@@ -1,43 +1,50 @@
-# --- Builder ---
-FROM node:22-alpine AS builder
+# v2.3.7 — runtime fix for Prisma engines on Railway
+# Use Debian-based image (glibc) and install OpenSSL explicitly.
+FROM node:22-bookworm-slim AS builder
+
+ENV CI=true         PRISMA_CLIENT_ENGINE_TYPE=library         PRISMA_CLI_QUERY_ENGINE_TYPE=library
+
 WORKDIR /app
 
-# System deps needed by Prisma on Alpine
-RUN apk add --no-cache openssl
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \ 
+    && rm -rf /var/lib/apt/lists/*
 
-# Install only production deps first for better cache hits
-COPY package.json ./
-RUN npm install
+# Copy package manifests first to leverage cache
+COPY package.json package-lock.json* ./
+# Install all deps for build (dev deps included)
+RUN npm ci || npm install
 
-# Prisma schema (optional at build time)
+# Prisma client generation during build
 COPY prisma ./prisma
 RUN npx prisma generate || true
 
-# TS config & sources
+# App sources
 COPY tsconfig.json ./tsconfig.json
 COPY src ./src
 COPY public ./public
 
-# Build
+# Build TypeScript
 RUN npm run build
 
 # --- Runtime ---
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
+
+ENV NODE_ENV=production         PORT=8080         PRISMA_CLIENT_ENGINE_TYPE=library         PRISMA_CLI_QUERY_ENGINE_TYPE=library
+
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV PORT=8080
-EXPOSE 8080
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \ 
+    && rm -rf /var/lib/apt/lists/*
 
-# Bring build artifacts and runtime deps
+# Copy only what we need
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/prisma ./prisma
 
 # Entrypoint
 COPY docker/entrypoint.sh ./entrypoint.sh
-# normalize line endings and make executable
 RUN sed -i 's/\r$//' ./entrypoint.sh && chmod +x ./entrypoint.sh
 
-CMD ["./entrypoint.sh"]
+EXPOSE 8080
+ENTRYPOINT ["./entrypoint.sh"]
