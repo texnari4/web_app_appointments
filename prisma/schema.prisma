@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
@@ -8,11 +9,20 @@ datasource db {
 }
 
 model Master {
-  id         String   @id @default(cuid())
-  name       String
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id        Int       @id @default(autoincrement())
+  name      String
+  phone     String?
+  about     String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
 
-  @@index([name], map: "masters_name_idx")
-  @@map("masters") // physical table name
+model Service {
+  id        Int       @id @default(autoincrement())
+  title     String
+  price     Int
+  durationM Int       @default(60)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
