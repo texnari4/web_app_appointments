@@ -2,25 +2,26 @@
   "name": "web-app-appointments",
   "version": "1.0.0",
   "private": true,
+  "type": "commonjs",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "postinstall": "prisma generate",
-    "prisma:sync": "prisma migrate deploy || prisma db push",
-    "start": "npm run prisma:sync && node dist/index.js"
+    "start": "npm run prisma:sync && node dist/index.js",
+    "prisma:sync": "prisma migrate deploy && prisma db push",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "@prisma/client": "5.22.0",
-    "cors": "^2.8.5"
+    "@prisma/client": "^5.22.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
   },
   "devDependencies": {
-    "prisma": "5.22.0",
-    "typescript": "^5.6.3",
-    "@types/node": "^20.11.30",
+    "prisma": "^5.22.0",
+    "typescript": "^5.5.4",
+    "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17"
+    "@types/node": "^20.11.30"
   }
 }
