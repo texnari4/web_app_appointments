@@ -1,217 +1,198 @@
 import express from "express";
 import path from "path";
-import { PrismaClient, AppointmentStatus } from "@prisma/client";
-import tgRouter from "./telegram"; // assume existing telegram router
-// If cors is installed, use it; otherwise skip to avoid runtime crash
-let maybeCors: any = null;
-try { maybeCors = require("cors"); } catch {}
+import cors from "cors";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const app = express();
 
+// Middleware
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-if (maybeCors) {
-  app.use(maybeCors());
+app.use(cors());
+
+// Static
+app.use("/public", express.static(path.join(__dirname, "..", "public")));
+
+// Optional Telegram router: mounted only if file exists/exports router
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const tg = require("./telegram");
+  if (tg?.tgRouter) {
+    app.use("/tg", tg.tgRouter);
+  }
+} catch (e) {
+  // ignore if there's no telegram module
 }
 
-// __dirname is available because we compile to CommonJS. No import.meta here.
-const ROOT_DIR = path.resolve(__dirname, "..");
-const PUBLIC_DIR = path.join(ROOT_DIR, "public");
-const ADMIN_DIR = path.join(PUBLIC_DIR, "admin");
-
-// Static files (admin UI and others)
-app.use(express.static(PUBLIC_DIR));
-
-// Home page: simple index with available endpoints
+// Root page
 app.get("/", (_req, res) => {
-  res.type("html").send(`
-    <h1>Онлайн‑запись</h1>
-    <p>Сервер: Express + Prisma</p>
-    <ul>
-      <li>GET /api/services</li>
-      <li>POST /api/appointments</li>
-      <li>GET /admin/api/services</li>
-      <li>POST /admin/api/services</li>
-      <li>PUT /admin/api/services/:id</li>
-      <li>DELETE /admin/api/services/:id</li>
-    </ul>
-  `);
+  res.type("text/plain").send([
+    "Онлайн‑запись",
+    "Сервер: Express + Prisma",
+    "",
+    "GET /api/services",
+    "POST /api/appointments",
+    "GET /admin/services",
+    "GET /admin/api/services",
+    "POST /admin/api/services",
+    "PUT /admin/api/services/:id",
+    "DELETE /admin/api/services/:id",
+  ].join("\n"));
 });
 
-/* ========= PUBLIC API ========= */
-
-// Список услуг
+/** SERVICES (public) */
 app.get("/api/services", async (_req, res) => {
   try {
-    const services = await prisma.service.findMany({
-      orderBy: { name: "asc" }
+    const items = await prisma.service.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true, durationMin: true, priceCents: true },
     });
-    res.json(services);
-  } catch (err: any) {
-    console.error("[api/services] error", err);
-    res.status(500).json({ error: "failed_to_list_services" });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch services" });
   }
 });
 
-// Создание записи
+/** APPOINTMENTS (public create) */
 app.post("/api/appointments", async (req, res) => {
   try {
-    const { serviceId, staffId, locationId, startAtISO, durationMin, client } = req.body || {};
+    const { serviceId, staffId, startAtISO, durationMin, client } = req.body ?? {};
 
-    if (!serviceId || !staffId || !locationId) {
-      return res.status(400).json({ error: "serviceId, staffId, locationId are required" });
+    if (!serviceId || !startAtISO || !durationMin) {
+      return res.status(400).json({ error: "serviceId, startAtISO, durationMin are required" });
     }
-    if (!startAtISO || !durationMin) {
-      return res.status(400).json({ error: "startAtISO and durationMin are required" });
-    }
-
     const startAt = new Date(startAtISO);
-    const endAt = new Date(startAt.getTime() + Number(durationMin) * 60000);
-
-    // client can be { id } to connect by existing client id, or minimal data to create
-    let clientConnectOrCreate: any = undefined;
-    if (client?.id) {
-      clientConnectOrCreate = { connect: { id: String(client.id) } };
-    } else if (client?.tgUserId) {
-      // Try connect by tgUserId or create a minimal client
-      const existing = await prisma.client.findUnique({ where: { tgUserId: String(client.tgUserId) } });
-      if (existing) {
-        clientConnectOrCreate = { connect: { id: existing.id } };
-      } else {
-        clientConnectOrCreate = {
-          create: {
-            tgUserId: String(client.tgUserId),
-            firstName: client.firstName || "—",
-            lastName: client.lastName || "—",
-            // emailEnc/phoneEnc optional in schema; only set if present in request
-            ...(client.emailEnc ? { emailEnc: String(client.emailEnc) } : {}),
-            ...(client.phoneEnc ? { phoneEnc: String(client.phoneEnc) } : {}),
-          }
-        };
-      }
+    if (isNaN(startAt.getTime())) {
+      return res.status(400).json({ error: "startAtISO is invalid datetime" });
     }
+    const endAt = new Date(startAt.getTime() + Number(durationMin) * 60 * 1000);
+
+    // Ensure service exists
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service) return res.status(404).json({ error: "service not found" });
+
+    // Resolve client (support by id OR by tgUserId but tgUserId may be non-unique in Prisma schema types)
+    let clientConnect: { id: string } | undefined = undefined;
+    if (client?.id) {
+      const c = await prisma.client.findUnique({ where: { id: client.id } });
+      if (!c) return res.status(404).json({ error: "client not found" });
+      clientConnect = { id: c.id };
+    } else if (client?.tgUserId) {
+      // Use findFirst instead of whereUnique to avoid TS error when tgUserId is not unique in schema
+      const existing = await prisma.client.findFirst({ where: { tgUserId: String(client.tgUserId) } });
+      const ensured = existing ?? await prisma.client.create({
+        data: {
+          tgUserId: String(client.tgUserId),
+          name: client.name ?? null,
+        },
+      });
+      clientConnect = { id: ensured.id };
+    }
+
+    // Build create data; include only relations that exist in schema
+    const data: any = {
+      startAt,
+      endAt,
+      status: "CREATED",
+      service: { connect: { id: service.id } },
+    };
+    if (clientConnect) data.client = { connect: clientConnect };
+    if (staffId) data.staff = { connect: { id: staffId } }; // will work only if Staff relation exists
 
     const created = await prisma.appointment.create({
-      data: {
-        startAt,
-        endAt,
-        status: AppointmentStatus.CREATED,
-        service: { connect: { id: String(serviceId) } },
-        staff:   { connect: { id: String(staffId) } },
-        location:{ connect: { id: String(locationId) } },
-        ...(clientConnectOrCreate ? { client: clientConnectOrCreate } : {}),
-      },
+      data,
       include: {
         service: true,
-        staff: true,
-        location: true,
         client: true,
-      }
+        staff: true,
+      },
     });
-
     res.status(201).json(created);
-  } catch (err: any) {
-    console.error("[api/appointments] error", err);
-    res.status(500).json({ error: "failed_to_create_appointment", detail: err?.message });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create appointment" });
   }
 });
 
-/* ========= ADMIN API (Services CRUD) ========= */
-const adminApi = express.Router();
+/** ADMIN PAGE */
+app.get("/admin/services", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "admin", "services.html"));
+});
 
-function checkAdminKey(req: express.Request, res: express.Response): boolean {
-  const requiredKey = process.env.ADMIN_KEY;
-  if (!requiredKey) return true;
-  const provided = req.header("X-Admin-Key");
-  if (provided !== requiredKey) {
+/** ADMIN API (simple key check via header X-Admin-Key = ADMIN_KEY env) */
+function checkAdmin(req: express.Request, res: express.Response): boolean {
+  const reqKey = req.header("X-Admin-Key") ?? "";
+  const admKey = process.env.ADMIN_KEY ?? "";
+  if (admKey && reqKey !== admKey) {
     res.status(401).json({ error: "unauthorized" });
     return false;
   }
   return true;
 }
 
-adminApi.get("/services", async (req, res) => {
-  if (!checkAdminKey(req, res)) return;
+app.get("/admin/api/services", async (req, res) => {
+  if (!checkAdmin(req, res)) return;
   try {
-    const items = await prisma.service.findMany({ orderBy: { createdAt: "desc" } });
+    const items = await prisma.service.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true, durationMin: true, priceCents: true },
+    });
     res.json(items);
-  } catch (e: any) {
-    console.error("[admin] list services", e);
-    res.status(500).json({ error: "list_failed", detail: e?.message });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch services" });
   }
 });
 
-adminApi.post("/services", async (req, res) => {
-  if (!checkAdminKey(req, res)) return;
+app.post("/admin/api/services", async (req, res) => {
+  if (!checkAdmin(req, res)) return;
   try {
-    const { name, priceCents, durationMin } = req.body || {};
-    if (!name || priceCents == null || durationMin == null) {
-      return res.status(400).json({ error: "name, priceCents, durationMin required" });
+    const { name, durationMin, priceCents } = req.body ?? {};
+    if (!name || durationMin == null || priceCents == null) {
+      return res.status(400).json({ error: "name, durationMin, priceCents are required" });
     }
     const created = await prisma.service.create({
-      data: {
-        name: String(name),
-        priceCents: Number(priceCents),
-        durationMin: Number(durationMin),
-      }
+      data: { name: String(name), durationMin: Number(durationMin), priceCents: Number(priceCents) },
+      select: { id: true, name: true, durationMin: true, priceCents: true },
     });
     res.status(201).json(created);
-  } catch (e: any) {
-    console.error("[admin] create service", e);
-    res.status(500).json({ error: "create_failed", detail: e?.message });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create service" });
   }
 });
 
-adminApi.put("/services/:id", async (req, res) => {
-  if (!checkAdminKey(req, res)) return;
+app.put("/admin/api/services/:id", async (req, res) => {
+  if (!checkAdmin(req, res)) return;
   try {
     const { id } = req.params;
-    const { name, priceCents, durationMin } = req.body || {};
+    const { name, durationMin, priceCents } = req.body ?? {};
     const updated = await prisma.service.update({
-      where: { id: String(id) },
+      where: { id },
       data: {
         ...(name != null ? { name: String(name) } : {}),
-        ...(priceCents != null ? { priceCents: Number(priceCents) } : {}),
         ...(durationMin != null ? { durationMin: Number(durationMin) } : {}),
-      }
+        ...(priceCents != null ? { priceCents: Number(priceCents) } : {}),
+      },
+      select: { id: true, name: true, durationMin: true, priceCents: true },
     });
     res.json(updated);
-  } catch (e: any) {
-    console.error("[admin] update service", e);
-    res.status(500).json({ error: "update_failed", detail: e?.message });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update service" });
   }
 });
 
-adminApi.delete("/services/:id", async (req, res) => {
-  if (!checkAdminKey(req, res)) return;
+app.delete("/admin/api/services/:id", async (req, res) => {
+  if (!checkAdmin(req, res)) return;
   try {
     const { id } = req.params;
-    await prisma.service.delete({ where: { id: String(id) } });
+    await prisma.service.delete({ where: { id } });
     res.json({ ok: true });
-  } catch (e: any) {
-    console.error("[admin] delete service", e);
-    res.status(500).json({ error: "delete_failed", detail: e?.message });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete service" });
   }
 });
-
-app.use("/admin/api", adminApi);
-
-// Admin page route (serve static HTML)
-app.get("/admin/services", (_req, res) => {
-  const filePath = path.join(ADMIN_DIR, "services.html");
-  res.sendFile(filePath);
-});
-
-// Telegram webhook/router (keep mounted if present)
-app.use("/tg", tgRouter);
 
 // Start server
 const PORT = Number(process.env.PORT || 3000);
-app.listen(PORT, async () => {
-  console.log(`[http] listening on :${PORT}`);
-  try {
-    // Attempt a simple query to init Prisma
-    await prisma.$queryRaw`SELECT 1`;
-  } catch {}
+app.listen(PORT, () => {
+  console.log(`Server listening on :${PORT}`);
 });

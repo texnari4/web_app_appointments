@@ -1,96 +1,86 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Админка — Услуги</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 24px; }
-    input, button { font-size: 16px; padding: 8px 10px; margin: 4px; }
+    body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; }
     table { border-collapse: collapse; width: 100%; margin-top: 16px; }
-    th, td { border-bottom: 1px solid #ddd; padding: 8px; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .toast { position: fixed; right: 16px; top: 16px; background: #111; color: #fff; padding: 10px 14px; border-radius: 8px; display: none; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f5f5f7; text-align: left; }
+    input, button { font-size: 14px; padding: 8px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .row > * { flex: 1; min-width: 160px; }
+    .muted { color: #666; }
   </style>
 </head>
 <body>
   <h1>Услуги</h1>
   <div class="row">
-    <input id="name" placeholder="Название">
-    <input id="priceCents" type="number" placeholder="Цена, копейки">
-    <input id="durationMin" type="number" placeholder="Длительность, мин">
+    <input id="name" placeholder="Название" />
+    <input id="durationMin" type="number" placeholder="Длительность, мин" />
+    <input id="priceCents" type="number" placeholder="Цена, копейки (BYN*100)" />
     <button id="save">Сохранить</button>
   </div>
+  <p class="muted">Подсказка: если включён ADMIN_KEY на сервере, положите ключ сюда: <code>localStorage.ADMIN_KEY = "your_key"</code>.</p>
   <table id="tbl">
-    <thead><tr><th>Название</th><th>Цена, BYN</th><th>Мин</th><th></th></tr></thead>
+    <thead><tr><th>Название</th><th>Длительность</th><th>Цена (BYN)</th><th></th></tr></thead>
     <tbody></tbody>
   </table>
-  <div class="toast" id="toast"></div>
+
   <script>
-    const toast = (msg, ok=true) => {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.style.background = ok ? '#0a7' : '#a00';
-      t.style.display = 'block';
-      setTimeout(()=> t.style.display='none', 2000);
+    const api = (path, opts = {}) => {
+      const headers = opts.headers || {};
+      const adminKey = localStorage.getItem("ADMIN_KEY");
+      if (adminKey) headers["X-Admin-Key"] = adminKey;
+      return fetch(path, { ...opts, headers: { "Content-Type": "application/json", ...headers } });
     };
 
-    const adminKey = localStorage.getItem('ADMIN_KEY') || '';
-    const headers = { 'Content-Type': 'application/json', ...(adminKey ? {'X-Admin-Key': adminKey} : {}) };
-
     async function load() {
-      const res = await fetch('/admin/api/services', { headers });
+      const res = await api("/admin/api/services");
       const data = await res.json();
-      const tb = document.querySelector('#tbl tbody');
-      tb.innerHTML = '';
-      (Array.isArray(data) ? data : []).forEach(s => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = \`
-          <td><input data-id="\${s.id}" data-k="name" value="\${s.name}"></td>
-          <td><input data-id="\${s.id}" data-k="priceCents" type="number" value="\${s.priceCents}"></td>
-          <td><input data-id="\${s.id}" data-k="durationMin" type="number" value="\${s.durationMin}"></td>
-          <td><button data-del="\${s.id}">Удалить</button></td>
-        \`;
-        tb.appendChild(tr);
+      const tbody = document.querySelector("#tbl tbody");
+      tbody.innerHTML = "";
+      data.forEach(s => {
+        const tr = document.createElement("tr");
+        const byn = (s.priceCents/100).toFixed(2);
+        tr.innerHTML = `
+          <td>${s.name}</td>
+          <td>${s.durationMin} мин</td>
+          <td>${byn}</td>
+          <td><button data-id="${s.id}" class="del">Удалить</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.querySelectorAll("button.del").forEach(btn => {
+        btn.onclick = async () => {
+          if (!confirm("Удалить услугу?")) return;
+          await api("/admin/api/services/" + btn.dataset.id, { method: "DELETE" });
+          await load();
+        };
       });
     }
 
-    document.getElementById('save').addEventListener('click', async () => {
-      const name = (document.getElementById('name')).value.trim();
-      const priceCents = Number((document.getElementById('priceCents')).value);
-      const durationMin = Number((document.getElementById('durationMin')).value);
-      if (!name || isNaN(priceCents) || isNaN(durationMin)) return toast('Заполните все поля', false);
-      const res = await fetch('/admin/api/services', { method: 'POST', headers, body: JSON.stringify({ name, priceCents, durationMin }) });
-      if (!res.ok) { const t = await res.text(); return toast('Ошибка: ' + t, false); }
-      (document.getElementById('name')).value='';
-      (document.getElementById('priceCents')).value='';
-      (document.getElementById('durationMin')).value='';
-      toast('Сохранено');
-      load();
-    });
-
-    document.addEventListener('change', async (e) => {
-      const el = e.target;
-      if (el.tagName === 'INPUT' && el.dataset.id && el.dataset.k) {
-        const id = el.dataset.id;
-        const k = el.dataset.k;
-        const v = el.type === 'number' ? Number(el.value) : el.value;
-        const res = await fetch('/admin/api/services/' + id, { method: 'PUT', headers, body: JSON.stringify({ [k]: v }) });
-        if (!res.ok) { const t = await res.text(); return toast('Ошибка: ' + t, false); }
-        toast('Обновлено');
+    document.getElementById("save").onclick = async () => {
+      const name = (document.getElementById("name")).value.trim();
+      const durationMin = Number((document.getElementById("durationMin")).value);
+      const priceCents = Number((document.getElementById("priceCents")).value);
+      if (!name || !durationMin || isNaN(priceCents)) {
+        alert("Заполните имя, длительность и цену");
+        return;
       }
-    });
-
-    document.addEventListener('click', async (e) => {
-      const btn = e.target;
-      if (btn.dataset && btn.dataset.del) {
-        const id = btn.dataset.del;
-        const res = await fetch('/admin/api/services/' + id, { method: 'DELETE', headers });
-        if (!res.ok) { const t = await res.text(); return toast('Ошибка: ' + t, false); }
-        toast('Удалено');
-        load();
+      const res = await api("/admin/api/services", { method: "POST", body: JSON.stringify({ name, durationMin, priceCents }) });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        alert("Ошибка: " + (err.error || res.statusText));
+        return;
       }
-    });
+      (document.getElementById("name")).value = "";
+      (document.getElementById("durationMin")).value = "";
+      (document.getElementById("priceCents")).value = "";
+      await load();
+    };
 
     load();
   </script>
