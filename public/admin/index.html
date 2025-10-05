@@ -1,233 +1,259 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Админка · Beauty App</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Админка — Мастера</title>
   <style>
-    :root{
-      --bg:#0b0c0e;
-      --panel:#111317;
-      --card:#151820;
-      --stroke:#232733;
-      --text:#e9edf1;
-      --muted:#a5adbb;
-      --accent:#0ea5e9;
-      --accent-2:#22d3ee;
-      --ok:#10b981;
-      --err:#ef4444;
-      --warn:#f59e0b;
-      --focus-shadow: 0 0 0 3px rgba(14,165,233,.25);
-      --radius:18px;
+    :root { --bg:#0b0b0c; --panel:#141417; --muted:#8f9098; --text:#fff; --accent:#0ea5e9; --ok:#22c55e; --err:#ef4444; }
+    * { box-sizing: border-box; }
+    html, body { height:100%; }
+    body {
+      margin:0; background:linear-gradient(180deg, #0b0b0c, #111113);
+      color:var(--text); font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;background:linear-gradient(180deg,#0b0c0e, #0c111b) fixed;
-      color:var(--text);font:500 15px/1.5 system-ui,-apple-system,Segoe UI,Roboto;
-      -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .title { font-size:20px; font-weight:700; letter-spacing:.2px; }
+    .status { font-size:12px; color:var(--muted); }
+    .grid { display:grid; grid-template-columns: 360px 1fr; gap:16px; }
+    .card { background:var(--panel); border:1px solid #1f2025; border-radius:16px; padding:16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+    .card h2 { margin:0 0 12px 0; font-size:16px; }
+    label { display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
+    input[type="text"], input[type="tel"], input[type="url"] {
+      width:100%; height:40px; border-radius:12px; border:1px solid #2a2b31; background:#0e0e11;
+      color:var(--text); padding: 0 12px; outline:none;
     }
-    .wrap{max-width:1100px;margin:0 auto;padding:28px}
-    header{display:flex;align-items:center;gap:14px;margin-bottom:22px}
-    .logo{width:34px;height:34px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:white;font-weight:900}
-    h1{font-size:20px;margin:0}
-    .panel{
-      display:grid;grid-template-columns: 400px 1fr;gap:22px;
+    input[type="text"]:focus, input[type="tel"]:focus, input[type="url"]:focus { border-color:#2f8dee; box-shadow: 0 0 0 4px rgba(14,165,233,.15); }
+    .row { display:flex; gap:8px; }
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      height:40px; padding:0 14px; border-radius:12px; border:1px solid #2a2b31; background:#0e0e11;
+      color:var(--text); cursor:pointer; transition: all .15s ease;
     }
-    @media (max-width: 940px){ .panel{grid-template-columns:1fr; } }
-    .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.02));
-      border:1px solid var(--stroke);border-radius:var(--radius);padding:18px;backdrop-filter: blur(6px);
-      box-shadow: 0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+    .btn.primary { background:linear-gradient(180deg, #2f8dee, #1a62c9); border-color:#2f8dee; }
+    .btn.primary:hover { filter:brightness(1.05); transform: translateY(-1px); }
+    .btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+    .hint { color:var(--muted); font-size:12px; margin-top:8px; }
+    .list { display:grid; gap:10px; }
+    .item {
+      display:flex; align-items:center; gap:12px;
+      padding:10px; border-radius:12px; border:1px solid #22232a; background:#101015;
     }
-    .card h2{font-size:16px;margin:0 0 12px 0;color:#dfe5ee}
-    label{display:block;color:var(--muted);font-size:12px;margin:12px 0 6px}
-    input[type="text"],input[type="tel"],input[type="url"]{
-      width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--stroke);background:#0f131a;color:var(--text);
-      outline:none;transition:border .2s, box-shadow .2s;
+    .avatar { width:40px; height:40px; border-radius:12px; background:#1f2025; object-fit:cover; }
+    .name { font-weight:600; }
+    .phone { color:var(--muted); font-size:12px; }
+    .pill { padding:2px 8px; font-size:11px; border-radius:999px; border:1px solid #2a2b31; color:#b6b7bd; }
+    .toast {
+      position:fixed; right:16px; bottom:16px; padding:10px 12px; border-radius:12px; border:1px solid #2a2b31;
+      background:#101015; color:#fff; box-shadow:0 10px 30px rgba(0,0,0,.3); opacity:0; transform: translateY(8px);
+      transition: all .18s ease;
     }
-    input:focus{border-color:var(--accent);box-shadow:var(--focus-shadow)}
-    .row{display:flex;gap:10px;align-items:center}
-    .row .grow{flex:1}
-    .switch{display:flex;align-items:center;gap:8px;margin-top:10px}
-    .switch input{accent-color:var(--accent)}
-    button.primary{
-      margin-top:14px;width:100%;padding:12px 16px;border:0;border-radius:14px;
-      background:linear-gradient(180deg,var(--accent),#1977bd);
-      color:white;font-weight:700;cursor:pointer;transition:transform .05s ease, filter .2s;
-    }
-    button.primary:active{transform:translateY(1px)}
-    button.primary:disabled{filter:grayscale(1);opacity:.6;cursor:not-allowed}
-    .hint{font-size:12px;color:var(--muted);margin-top:8px}
-    .status{margin-top:10px;font-size:13px}
-    .status.ok{color:var(--ok)} .status.err{color:var(--err)} .status.warn{color:var(--warn)}
-    .list{display:grid;grid-template-columns: repeat(auto-fill,minmax(240px,1fr));gap:14px}
-    .item{background:linear-gradient(180deg,#0f131a,#0f141b); border:1px solid var(--stroke);border-radius:16px;padding:14px;display:grid;gap:8px}
-    .item .top{display:flex;gap:10px;align-items:center}
-    .avatar{width:40px;height:40px;border-radius:12px;background:#0b0f16;border:1px solid var(--stroke);overflow:hidden;display:grid;place-items:center;color:#8aa4c7;font-weight:800}
-    .avatar img{width:100%;height:100%;object-fit:cover}
-    .name{font-weight:700}
-    .meta{font-size:12px;color:var(--muted)}
-    .pill{font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--stroke);color:#a9f1d1;background:rgba(16,185,129,.12)}
-    .toolbar{display:flex;gap:8px;justify-content:flex-end}
-    .btn{padding:8px 10px;border-radius:10px;border:1px solid var(--stroke);background:#10141a;color:var(--text);cursor:pointer}
-    .empty{border:1px dashed var(--stroke);border-radius:16px;padding:24px;text-align:center;color:var(--muted)}
-    .footer{margin-top:18px;color:var(--muted);font-size:12px;text-align:center}
+    .toast.show { opacity:1; transform: translateY(0); }
+    .toast.ok { border-color: rgba(34,197,94,.4); }
+    .toast.err { border-color: rgba(239,68,68,.4); }
+    .empty { color:var(--muted); font-size:13px; padding:16px; border:1px dashed #2a2b31; border-radius:12px; background:#0f0f13; }
+    .toolbar { display:flex; align-items:center; gap:8px; justify-content:space-between; margin:0 0 8px 0; }
+    .search { flex:1; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <div class="logo">B</div>
-      <h1>Админка · Мастера</h1>
+      <div class="title">Мастера</div>
+      <div class="status" id="status">готово</div>
     </header>
 
-    <div class="panel">
+    <div class="grid">
       <section class="card">
-        <h2>Новый мастер</h2>
+        <h2>Добавить мастера</h2>
         <form id="form">
-          <label>Имя</label>
-          <input id="name" type="text" placeholder="Напр. Юлия" required />
+          <label for="name">Имя</label>
+          <input id="name" type="text" placeholder="Например, Юлия" autocomplete="name" required>
 
-          <label>Телефон</label>
-          <input id="phone" type="tel" placeholder="+375..." required />
+          <label for="phone">Телефон</label>
+          <input id="phone" type="tel" placeholder="+375…" required>
 
-          <label>Аватар (URL)</label>
-          <input id="avatarUrl" type="url" placeholder="https://..." />
+          <label for="avatarUrl">Аватар (URL)</label>
+          <input id="avatarUrl" type="url" placeholder="https://…">
 
-          <div class="switch">
-            <input id="isActive" type="checkbox" checked />
-            <span class="hint">Активен</span>
+          <div class="row" style="margin-top:12px;">
+            <button class="btn" type="button" id="reset">Очистить</button>
+            <button class="btn primary" type="submit" id="save">Сохранить</button>
           </div>
-
-          <button class="primary" id="submit" type="submit">Сохранить</button>
-          <div id="status" class="status"></div>
           <div class="hint">После сохранения запись сразу появится справа в списке.</div>
         </form>
       </section>
 
       <section class="card">
-        <h2>Список мастеров</h2>
+        <div class="toolbar">
+          <div class="pill" id="count">0 записей</div>
+          <input class="search" id="q" type="text" placeholder="Поиск по имени или телефону">
+        </div>
         <div id="list" class="list"></div>
-        <div id="empty" class="empty" style="display:none">Пока нет записей</div>
       </section>
     </div>
-
-    <div class="footer">UI в стиле Apple‑ish: мягкие градиенты, большие радиусы, лаконично ✨</div>
   </div>
 
+  <div id="toast" class="toast" role="status" aria-live="polite">Готово</div>
+
   <script>
-    // --- Конфиг API: всегда используем публичный префикс, который у тебя уже работает
-    const API_BASE = "/public/api";
+  (function(){
+    "use strict";
 
-    // Универсальный фетчер с обработкой ошибок
-    async function api(path, options={}){
-      const res = await fetch(API_BASE + path, {
-        headers: { "Content-Type":"application/json" },
-        ...options
+    // API endpoints (server already exposes public API)
+    var API = {
+      list: "/public/api/masters",
+      create: "/public/api/masters"
+    };
+
+    var d = document;
+    var el = function(id){ return d.getElementById(id); };
+    var $form = el("form");
+    var $name = el("name");
+    var $phone = el("phone");
+    var $avatar = el("avatarUrl");
+    var $save = el("save");
+    var $reset = el("reset");
+    var $list = el("list");
+    var $count = el("count");
+    var $status = el("status");
+    var $q = el("q");
+    var $toast = el("toast");
+
+    function toast(text, kind){
+      $toast.textContent = text;
+      $toast.className = "toast show" + (kind ? " " + kind : "");
+      setTimeout(function(){ $toast.className = "toast"; }, 1800);
+    }
+
+    function setStatus(text){ $status.textContent = text; }
+
+    function createNode(tag, props){
+      var node = d.createElement(tag);
+      if(props){
+        if(props.className) node.className = props.className;
+        if(props.text) node.textContent = props.text;
+        if(props.src) node.src = props.src;
+        if(props.alt) node.alt = props.alt;
+      }
+      return node;
+    }
+
+    function render(list){
+      var q = ($q.value || "").toLowerCase();
+      $list.innerHTML = "";
+      if(!list || !list.length){
+        var empty = createNode("div", { className: "empty", text: "Пока пусто. Добавьте первого мастера слева." });
+        $list.appendChild(empty);
+        $count.textContent = "0 записей";
+        return;
+      }
+      var filtered = list.filter(function(x){
+        var s = (x.name || "") + " " + (x.phone || "");
+        return s.toLowerCase().indexOf(q) !== -1;
       });
-      const text = await res.text();
-      let data = null;
-      try{ data = text ? JSON.parse(text) : null; }catch(e){ /* not json */ }
-      if(!res.ok){
-        const msg = (data && (data.error || data.message)) || res.status + " " + res.statusText;
-        throw new Error(msg);
-      }
-      return data;
+      filtered.forEach(function(x){
+        var item = createNode("div", { className: "item" });
+        var img = createNode("img", { className: "avatar", alt: x.name || "avatar" });
+        img.src = x.avatarUrl ? x.avatarUrl : "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+        var meta = createNode("div");
+        var nm = createNode("div", { className: "name", text: x.name || "Без имени" });
+        var ph = createNode("div", { className: "phone", text: x.phone || "" });
+        meta.appendChild(nm); meta.appendChild(ph);
+        var pill = createNode("div", { className: "pill", text: x.isActive ? "Активен" : "Скрыт" });
+        item.appendChild(img); item.appendChild(meta); item.appendChild(pill);
+        $list.appendChild(item);
+      });
+      $count.textContent = String(filtered.length) + " записей";
     }
 
-    // Рендер карточки
-    function card(m){
-      const phone = m.phone || "";
-      const au = m.avatarUrl || "";
-      const avatar = au ? '<img alt=""/>' : (m.name ? m.name[0].toUpperCase() : "M");
-      return \`
-      <div class="item" data-id="\${m.id}">
-        <div class="top">
-          <div class="avatar">\${au ? '<img src="'+au+'" alt=""/>' : avatar}</div>
-          <div class="grow">
-            <div class="name">\${m.name || "Без имени"}</div>
-            <div class="meta">\${phone}</div>
-          </div>
-          <span class="pill">\${m.isActive ? "active" : "disabled"}</span>
-        </div>
-        <div class="toolbar">
-          <button class="btn" data-del="\${m.id}">Удалить</button>
-        </div>
-      </div>\`;
+    function normalizeResponse(data){
+      // Accept either { items: [...] } or plain [...]
+      if(!data) return [];
+      if(Array.isArray(data)) return data;
+      if(data.items && Array.isArray(data.items)) return data.items;
+      return [];
     }
 
-    // Рендер списка
-    function renderList(items){
-      const list = document.getElementById("list");
-      const empty = document.getElementById("empty");
-      list.innerHTML = items.map(card).join("");
-      empty.style.display = items.length ? "none" : "block";
+    function parseJsonSafe(res){
+      return res.text().then(function(t){
+        try { return JSON.parse(t); } catch(e){ return {}; }
+      });
     }
 
-    // Загрузка
-    async function load(){
-      setStatus("Загрузка...", "warn");
-      try{
-        const data = await api("/masters");
-        const items = (data && data.items) || [];
-        renderList(items);
-        setStatus("Готово", "ok");
-      }catch(e){
-        setStatus("Ошибка загрузки: " + e.message, "err");
-      }
-    }
-
-    // Статус
-    function setStatus(msg, type){
-      const el = document.getElementById("status");
-      el.className = "status " + (type || "");
-      el.textContent = msg || "";
-    }
-
-    // Сабмит
-    document.getElementById("form").addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const btn = document.getElementById("submit");
-      btn.disabled = true; setStatus("Сохраняю...", "warn");
-      const payload = {
-        name: document.getElementById("name").value.trim(),
-        phone: document.getElementById("phone").value.trim(),
-        avatarUrl: document.getElementById("avatarUrl").value.trim(),
-        isActive: document.getElementById("isActive").checked
-      };
-      try{
-        const res = await api("/masters", {
-          method:"POST",
-          body: JSON.stringify(payload)
+    function load(){
+      setStatus("загрузка…");
+      return fetch(API.list, { method:"GET", headers: { "Accept":"application/json" } })
+        .then(parseJsonSafe)
+        .then(function(data){
+          var items = normalizeResponse(data);
+          render(items);
+          setStatus("готово");
+        })
+        .catch(function(err){
+          console.error("load error", err);
+          setStatus("ошибка");
+          toast("Не удалось загрузить список", "err");
         });
-        // принимаем оба формата {item} или просто объект
-        const created = (res && (res.item || res)) || null;
-        await load();
-        setStatus("Сохранено", "ok");
-        ev.target.reset();
-        document.getElementById("isActive").checked = true;
-      }catch(e){
-        setStatus("Ошибка сохранения: " + e.message, "err");
-      }finally{
-        btn.disabled = false;
-      }
-    });
+    }
 
-    // Удаление (опционально — если эндпоинт есть)
-    document.getElementById("list").addEventListener("click", async (ev)=>{
-      const id = ev.target?.dataset?.del;
-      if(!id) return;
-      if(!confirm("Удалить мастера?")) return;
-      try{
-        await api("/masters/" + encodeURIComponent(id), { method:"DELETE" });
-        await load();
-        setStatus("Удалено", "ok");
-      }catch(e){
-        setStatus("Ошибка удаления: " + e.message, "err");
-      }
-    });
+    function formData(){
+      return {
+        name: ($name.value || "").trim(),
+        phone: ($phone.value || "").trim(),
+        avatarUrl: ($avatar.value || "").trim(),
+        isActive: true
+      };
+    }
 
+    function canSave(v){
+      if(!v.name) return false;
+      if(!v.phone) return false;
+      return true;
+    }
+
+    function save(e){
+      e.preventDefault();
+      var v = formData();
+      if(!canSave(v)){
+        toast("Заполните имя и телефон", "err");
+        return;
+      }
+      $save.disabled = true;
+      setStatus("сохраняю…");
+      fetch(API.create, {
+        method: "POST",
+        headers: { "Content-Type":"application/json", "Accept":"application/json" },
+        body: JSON.stringify(v)
+      })
+      .then(parseJsonSafe)
+      .then(function(_){
+        // не полагаемся на ответ сервера — просто перезагружаем список
+        $form.reset();
+        setStatus("обновляю список…");
+        return load();
+      })
+      .then(function(){
+        toast("Сохранено", "ok");
+        setStatus("готово");
+      })
+      .catch(function(err){
+        console.error("save error", err);
+        toast("Ошибка сохранения", "err");
+        setStatus("ошибка");
+      })
+      .finally(function(){ $save.disabled = false; });
+    }
+
+    $form.addEventListener("submit", save);
+    $reset.addEventListener("click", function(){ $form.reset(); });
+    $q.addEventListener("input", function(){ load(); });
+
+    // старт
     load();
+  })();
   </script>
 </body>
 </html>
