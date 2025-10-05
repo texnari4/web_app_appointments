@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Админка — Услуги</title>
+  <link rel="stylesheet" href="./services.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <strong>Beauty Admin</strong>
+      <span class="sep">/</span>
+      <span>Услуги</span>
+    </div>
+    <nav class="topnav">
+      <a href="/admin/">Главная</a>
+      <a class="active" href="/admin/services.html">Услуги</a>
+      <a href="/admin/masters.html">Мастера</a>
+      <a href="/admin/appointments.html">Записи</a>
+      <a href="/admin/clients.html">Клиенты</a>
+      <a href="/admin/reports.html">Отчёты</a>
+      <a href="/admin/settings.html">Настройки</a>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar card">
+      <div class="sidebar-header">
+        <h2>Группы услуг</h2>
+        <button id="btnNewGroup" class="btn primary">+ Группа</button>
+      </div>
+      <div id="groupSearchWrap">
+        <input id="groupSearch" type="search" placeholder="Поиск группы..." />
+      </div>
+      <ul id="groupList" class="group-list" aria-live="polite"></ul>
+    </aside>
+
+    <section class="content">
+      <div class="content-header">
+        <div class="titlewrap">
+          <h2 id="currentGroupTitle">Выберите группу</h2>
+          <div class="actions">
+            <button id="btnEditGroup" class="btn subtle" disabled>Редактировать</button>
+            <button id="btnDeleteGroup" class="btn danger" disabled>Удалить</button>
+          </div>
+        </div>
+        <div class="toolbar">
+          <div class="filters">
+            <input id="serviceSearch" type="search" placeholder="Поиск услуги..." />
+            <select id="activeFilter">
+              <option value="all">Все</option>
+              <option value="active">Только активные</option>
+              <option value="inactive">Только скрытые</option>
+            </select>
+          </div>
+          <button id="btnNewService" class="btn primary" disabled>+ Услуга</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <table class="table" id="servicesTable">
+          <thead>
+            <tr>
+              <th style="width:28%">Название</th>
+              <th style="width:32%">Описание</th>
+              <th style="width:12%">Цена</th>
+              <th style="width:12%">Длительность</th>
+              <th style="width:8%">Активна</th>
+              <th style="width:8%"></th>
+            </tr>
+          </thead>
+          <tbody id="servicesTbody">
+            <tr class="empty-row">
+              <td colspan="6" class="muted center">Нет услуг. Добавьте первую услугу в этой группе.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modals -->
+  <dialog id="groupModal" class="modal">
+    <form id="groupForm" method="dialog">
+      <h3 id="groupModalTitle">Новая группа</h3>
+      <label>Название группы
+        <input name="name" required maxlength="80" placeholder="Например: Ногтевой сервис"/>
+      </label>
+      <label>Порядок (число для сортировки)
+        <input name="order" type="number" step="1" min="0" value="0"/>
+      </label>
+      <menu class="modal-actions">
+        <button type="button" class="btn subtle" id="groupCancel">Отмена</button>
+        <button type="submit" class="btn primary" id="groupSave">Сохранить</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="serviceModal" class="modal">
+    <form id="serviceForm" method="dialog">
+      <h3 id="serviceModalTitle">Новая услуга</h3>
+      <label>Название
+        <input name="name" required maxlength="120" placeholder="Например: Маникюр с покрытием" />
+      </label>
+      <label>Описание
+        <textarea name="description" rows="3" placeholder="Краткое описание услуги"></textarea>
+      </label>
+      <div class="grid2">
+        <label>Цена (BYN)
+          <input name="price" type="number" step="0.01" min="0" value="0" />
+        </label>
+        <label>Длительность (мин.)
+          <input name="durationMin" type="number" step="5" min="5" value="60" />
+        </label>
+      </div>
+      <label class="switch">
+        <input type="checkbox" name="isActive" checked />
+        <span>Активна</span>
+      </label>
+      <menu class="modal-actions">
+        <button type="button" class="btn subtle" id="serviceCancel">Отмена</button>
+        <button type="submit" class="btn primary" id="serviceSave">Сохранить</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <template id="groupItemTpl">
+    <li class="group-item" data-id="">
+      <button class="group-btn">
+        <span class="name">—</span>
+        <span class="count badge">0</span>
+      </button>
+    </li>
+  </template>
+
+  <template id="serviceRowTpl">
+    <tr data-id="">
+      <td class="name"></td>
+      <td class="desc muted"></td>
+      <td class="price"></td>
+      <td class="duration"></td>
+      <td class="active"></td>
+      <td class="row-actions">
+        <button class="btn tiny subtle edit">Изм.</button>
+        <button class="btn tiny danger del">Удал.</button>
+      </td>
+    </tr>
+  </template>
+
+  <script src="./services.js" type="module"></script>
+</body>
+</html>
