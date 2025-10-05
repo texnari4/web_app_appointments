@@ -1,8 +1,14 @@
+import express from "express";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const pinoHttp = require("pino-http");
+import pino from "pino";
+const logger = pino();
+
 import express from 'express';
 import path from 'node:path';
 import cors from 'cors';
 import pino from 'pino';
-import pinoHttp from 'pino-http';
 import { db } from './db.js';
 
 const PORT = Number(process.env.PORT || 8080);
