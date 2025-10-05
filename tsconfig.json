@@ -7,18 +7,17 @@
     ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "rootDir": "src",
-    "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "src",
     "types": [
       "node"
     ]
   },
   "include": [
-    "src/**/*",
-    "public/**/*"
+    "src"
   ]
 }

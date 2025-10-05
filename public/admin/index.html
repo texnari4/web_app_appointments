@@ -3,99 +3,63 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Админка — Beauty App</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <title>Админка — Мастера</title>
+  <link rel="stylesheet" href="/public/admin/styles.css" />
 </head>
 <body>
-  <div class="container">
-    <h1>Мастера</h1>
-    <form id="createForm" class="card">
-      <div class="grid">
-        <label>Имя
-          <input name="name" required />
-        </label>
-        <label>Телефон
-          <input name="phone" required />
-        </label>
-        <label>Аватар URL
-          <input name="avatarUrl" />
-        </label>
-        <label class="row">
-          <input type="checkbox" name="isActive" checked />
-          Активен
+  <header class="topbar">
+    <h1>Панель управления</h1>
+    <nav>
+      <a class="active" href="/admin/">Мастера</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Добавить мастера</h2>
+      <form id="create-form">
+        <div class="grid">
+          <label>Имя
+            <input name="name" placeholder="Например, Юлия" required />
+          </label>
+          <label>Телефон
+            <input name="phone" placeholder="+375..." required />
+          </label>
+          <label>Avatar URL
+            <input name="avatarUrl" placeholder="https://..." />
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit">Сохранить</button>
+          <span id="form-status" class="muted"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="row-head">
+        <h2>Список мастеров</h2>
+        <button id="refresh">Обновить</button>
+      </div>
+      <div id="list" class="list"></div>
+    </section>
+  </main>
+
+  <template id="item-tpl">
+    <div class="item">
+      <div class="primary">
+        <div class="title"></div>
+        <div class="subtitle"></div>
+      </div>
+      <div class="controls">
+        <label class="switch">
+          <input type="checkbox" class="toggle" />
+          <span></span>
         </label>
       </div>
-      <button type="submit">Сохранить</button>
-      <span id="error" class="error" hidden></span>
-    </form>
+    </div>
+  </template>
 
-    <ul id="list" class="list"></ul>
-  </div>
-
-  <script>
-    const listEl = document.getElementById('list');
-    const form = document.getElementById('createForm');
-    const errorEl = document.getElementById('error');
-
-    async function fetchList() {
-      const r = await fetch('/public/api/masters');
-      const data = await r.json();
-      renderList(data.items || []);
-    }
-
-    function renderList(items) {
-      listEl.innerHTML = '';
-      for (const m of items) {
-        const li = document.createElement('li');
-        li.className = 'item';
-        li.innerHTML = \`
-          <img src="\${m.avatarUrl || 'https://placehold.co/48x48'}" alt="" />
-          <div class="col">
-            <div class="name">\${m.name}</div>
-            <div class="meta">\${m.phone} · \${m.isActive ? 'активен' : 'скрыт'}</div>
-          </div>
-        \`;
-        listEl.appendChild(li);
-      }
-    }
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      errorEl.hidden = true;
-      const fd = new FormData(form);
-      const payload = {
-        name: fd.get('name'),
-        phone: fd.get('phone'),
-        avatarUrl: fd.get('avatarUrl'),
-        isActive: fd.get('isActive') === 'on'
-      };
-      try {
-        const r = await fetch('/public/api/masters', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await r.json();
-        if (!r.ok || data.error) throw new Error(data.error || 'Ошибка сохранения');
-
-        // Optimistic update
-        const current = Array.from(listEl.querySelectorAll('li')).map(li => ({
-          name: li.querySelector('.name').textContent,
-          phone: li.querySelector('.meta').textContent.split(' · ')[0],
-          avatarUrl: li.querySelector('img').src,
-          isActive: li.querySelector('.meta').textContent.includes('активен')
-        }));
-        renderList([{...payload, ...data.item}, ...current]);
-
-        form.reset();
-        form.querySelector('input[name="isActive"]').checked = true;
-      } catch (err) {
-        errorEl.textContent = err.message;
-        errorEl.hidden = false;
-      }
-    });
-
-    fetchList();
-  </script>
+  <script src="/public/admin/app.js" defer></script>
 </body>
 </html>
