@@ -1,17 +1,17 @@
-
-#!/bin/sh
+#!/usr/bin/env bash
 set -e
 
-DATA_DIR="${DATA_DIR:-/app/data}"
-DB_FILE="${DB_FILE:-$DATA_DIR/db.json}"
-
+export DATA_DIR="${DATA_DIR:-/app/data}"
 mkdir -p "$DATA_DIR"
-# try to ensure permissions, ignore errors
-chmod 777 "$DATA_DIR" || true
 
-if [ ! -f "$DB_FILE" ]; then
-  echo '{"version":"1","masters":[]}' > "$DB_FILE" || true
-  chmod 666 "$DB_FILE" || true
+# ensure file exists
+if [ ! -f "$DATA_DIR/db.json" ]; then
+  echo '{ "masters": [] }' > "$DATA_DIR/db.json"
 fi
 
-exec node dist/index.js
+# relax permissions for Railway volume
+chmod -R 777 "$DATA_DIR" || true
+chmod 666 "$DATA_DIR/db.json" || true
+
+echo "[entrypoint] DATA_DIR=$DATA_DIR"
+node dist/index.js

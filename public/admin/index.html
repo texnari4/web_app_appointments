@@ -1,101 +1,180 @@
-
 <!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin · Masters</title>
+  <title>Админка — Мастера</title>
   <style>
-    :root { --bg:#0b0b0c; --card:#141417; --muted:#a0a0aa; --text:#fff; --accent:#0a84ff; }
-    html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font:16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, Roboto, Arial, sans-serif; }
-    .wrap { max-width:960px; margin:40px auto; padding:0 16px; }
-    h1 { font-weight:700; letter-spacing:-0.02em; }
-    .row { display:grid; grid-template-columns: 1fr auto; gap:16px; align-items:end; }
-    .card { background:var(--card); border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
-    label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
-    input[type="text"], input[type="url"], input[type="tel"] { width:100%; padding:12px 14px; border-radius:12px; background:#0f0f12; color:var(--text); border:1px solid #1f1f26; outline:none; }
-    input[type="checkbox"] { transform: scale(1.2); }
-    .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:16px; }
-    .btn { background:var(--accent); color:#fff; border:none; padding:12px 16px; border-radius:12px; font-weight:600; cursor:pointer; }
-    .list { margin-top:24px; display:grid; gap:12px; }
-    .item { display:flex; gap:12px; align-items:center; padding:12px; border-radius:12px; background:#101014; border:1px solid #1f1f26; }
-    .item img { width:40px; height:40px; border-radius:10px; object-fit:cover; background:#222 }
+    :root { --bg:#0b0b0c; --card:#141416; --muted:#9aa0a6; --text:#e6e9ee; --accent:#0a84ff; --good:#32d74b; --bad:#ff453a; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Inter", Arial; background: var(--bg); color: var(--text); }
+    header { padding: 20px clamp(16px, 4vw, 40px); display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #222; position:sticky; top:0; backdrop-filter:saturate(180%) blur(10px); background:rgba(11,11,12,0.6); }
+    h1 { font-size: 18px; margin:0; letter-spacing: .2px; }
+    main { padding: 24px clamp(16px, 4vw, 40px); display:grid; grid-template-columns: 380px 1fr; gap:24px; align-items:start; }
+    .card { background: var(--card); border:1px solid #222; border-radius: 18px; padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,.3); }
+    .card h2 { margin: 0 0 12px; font-size: 16px; font-weight:600; }
+    label { font-size: 12px; color: var(--muted); display:block; margin-bottom:6px; }
+    input[type="text"], input[type="tel"], input[type="url"] { width:100%; background:#0f0f11; border:1px solid #2a2a2e; color:var(--text); border-radius: 12px; padding: 10px 12px; outline:none; transition:border .2s; }
+    input:focus { border-color: var(--accent); }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .switch { display:flex; align-items:center; gap:10px; margin-top:10px; }
+    .switch input { transform: scale(1.1); }
+    button { -webkit-appearance:none; appearance:none; background:var(--accent); color:white; border:none; border-radius:14px; padding:10px 14px; font-weight:600; cursor:pointer; transition: transform .06s ease, box-shadow .2s; box-shadow: 0 6px 18px rgba(10,132,255,.35); }
+    button:active { transform: scale(.98); }
+    .list { display:grid; gap:12px; }
+    .item { display:flex; align-items:center; justify-content:space-between; gap:12px; background:#0f0f11; border:1px solid #29292d; padding:12px; border-radius:14px; }
+    .meta { display:flex; align-items:center; gap:12px; }
+    .avatar { width:40px; height:40px; border-radius:12px; background:#1b1b1d; object-fit:cover; }
+    .name { font-weight:600; }
     .muted { color:var(--muted); font-size:12px; }
-    .actions { margin-left:auto; display:flex; gap:8px; }
-    .ghost { background:transparent; border:1px solid #2a2a33; color:#ddd; }
+    .pill { font-size:11px; padding:6px 8px; border-radius:999px; border:1px solid #2b2b2f; }
+    .pill.good { border-color:#214d2a; background:#0f2013; color:#5cf077; }
+    .pill.bad { border-color:#4d2121; background:#201010; color:#ff7b75; }
+    .actions { display:flex; align-items:center; gap:8px; }
+    .danger { background:var(--bad); box-shadow: 0 6px 18px rgba(255,69,58,.25); }
+    .empty { color:var(--muted); text-align:center; padding:24px; border:1px dashed #2a2a2e; border-radius:16px; }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <header>
     <h1>Мастера</h1>
-    <div class="card">
-      <div class="grid">
-        <div><label>Имя</label><input id="name" type="text" placeholder="Имя мастера" /></div>
-        <div><label>Телефон</label><input id="phone" type="tel" placeholder="+7..." /></div>
-        <div><label>Аватар (URL)</label><input id="avatarUrl" type="url" placeholder="https://..." /></div>
-        <div><label>Активен</label><div><input id="isActive" type="checkbox" checked /></div></div>
-      </div>
-      <div style="margin-top:16px; display:flex; gap:8px;">
-        <button class="btn" id="save">Сохранить</button>
-        <span id="status" class="muted"></span>
-      </div>
-    </div>
+    <a href="/health" class="muted">health</a>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Создать мастера</h2>
+      <form id="form">
+        <label>Имя</label>
+        <input type="text" name="name" placeholder="Например: Анна" required />
+        <div class="row">
+          <div>
+            <label>Телефон</label>
+            <input type="tel" name="phone" placeholder="+7 999 123-45-67" />
+          </div>
+          <div>
+            <label>Avatar URL</label>
+            <input type="url" name="avatarUrl" placeholder="https://..." />
+          </div>
+        </div>
+        <div class="switch">
+          <input type="checkbox" id="isActive" name="isActive" checked />
+          <label for="isActive">Активен</label>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+          <button type="submit">Сохранить</button>
+          <button type="button" id="reset">Сброс</button>
+        </div>
+        <p id="status" class="muted" style="margin-top:8px;"></p>
+      </form>
+    </section>
 
-    <div class="list" id="list"></div>
-  </div>
+    <section class="card">
+      <h2>Список мастеров</h2>
+      <div id="list" class="list"></div>
+    </section>
+  </main>
 
-<script type="module">
-const api = (p) => fetch(p).then(r => r.json());
-
-async function load() {
-  const data = await api('/public/api/masters');
-  const list = document.getElementById('list');
-  list.innerHTML = '';
-  (data.items || []).forEach(m => {
-    const el = document.createElement('div');
-    el.className = 'item';
-    el.innerHTML = \`
-      <img src="\${m.avatarUrl || ''}" alt="">
-      <div>
-        <div><strong>\${m.name}</strong></div>
-        <div class="muted">\${m.phone || ''}</div>
+  <template id="item-tpl">
+    <div class="item">
+      <div class="meta">
+        <img class="avatar" />
+        <div>
+          <div class="name"></div>
+          <div class="muted phone"></div>
+        </div>
       </div>
       <div class="actions">
-        <button class="btn ghost" data-act="toggle" data-id="\${m.id}">\${m.isActive ? 'Скрыть' : 'Активировать'}</button>
-        <button class="btn ghost" data-act="delete" data-id="\${m.id}">Удалить</button>
-      </div>\`;
-    list.appendChild(el);
-  });
-}
+        <span class="pill state"></span>
+        <button class="danger del">Удалить</button>
+      </div>
+    </div>
+  </template>
 
-document.getElementById('save').addEventListener('click', async () => {
-  const body = {
-    name: (document.getElementById('name') as HTMLInputElement).value.trim(),
-    phone: (document.getElementById('phone') as HTMLInputElement).value.trim() || undefined,
-    avatarUrl: (document.getElementById('avatarUrl') as HTMLInputElement).value.trim() || undefined,
-    isActive: (document.getElementById('isActive') as HTMLInputElement).checked
-  };
-  const res = await fetch('/public/api/masters', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  const t = document.getElementById('status');
-  if (res.ok) { t.textContent = 'Сохранено ✓'; await load(); }
-  else { const msg = await res.json().catch(()=>({error:'ERR'})); t.textContent = 'Ошибка: ' + (msg.error||res.status); }
-  setTimeout(()=>t.textContent='', 1500);
-});
+  <script>
+    const API = '/public/api/masters';
+    const listEl = document.getElementById('list');
+    const form = document.getElementById('form');
+    const statusEl = document.getElementById('status');
+    const resetBtn = document.getElementById('reset');
 
-document.getElementById('list').addEventListener('click', async (e) => {
-  const btn = (e.target as HTMLElement).closest('button');
-  if (!btn) return;
-  const id = btn.getAttribute('data-id');
-  const act = btn.getAttribute('data-act');
-  if (act === 'delete') {
-    await fetch('/public/api/masters/' + id, { method:'DELETE' });
-  } else if (act === 'toggle') {
-    await fetch('/public/api/masters/' + id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ isActive: btn.textContent === 'Скрыть' ? false : true }) });
-  }
-  await load();
-});
+    async function fetchList() {
+      listEl.innerHTML = '<div class="empty">Загрузка…</div>';
+      try {
+        const r = await fetch(API, { cache: 'no-store' });
+        const data = await r.json();
+        renderList(data.items || []);
+      } catch (e) {
+        listEl.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+      }
+    }
 
-load();
-</script>
+    function renderList(items) {
+      if (!items.length) {
+        listEl.innerHTML = '<div class="empty">Пока пусто</div>';
+        return;
+      }
+      listEl.innerHTML = '';
+      for (const m of items) {
+        const tpl = document.getElementById('item-tpl');
+        const node = tpl.content.firstElementChild.cloneNode(true);
+        const img = node.querySelector('.avatar');
+        const name = node.querySelector('.name');
+        const phone = node.querySelector('.phone');
+        const pill = node.querySelector('.state');
+        const del = node.querySelector('.del');
+
+        img.src = m.avatarUrl || 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><rect width=%2240%22 height=%2240%22 rx=%228%22 fill=%22%231b1b1d%22/><text x=%2250%25%22 y=%2255%25%22 text-anchor=%22middle%22 font-size=%2216%22 fill=%22%239aa0a6%22>👤</text></svg>';
+        name.textContent = m.name;
+        phone.textContent = m.phone || '—';
+        pill.textContent = m.isActive ? 'Активен' : 'Скрыт';
+        pill.classList.add(m.isActive ? 'good' : 'bad');
+
+        del.addEventListener('click', async () => {
+          del.disabled = true;
+          await fetch(`${API}/${m.id}`, { method: 'DELETE' });
+          await fetchList();
+        });
+
+        listEl.appendChild(node);
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      statusEl.textContent = 'Сохраняю…';
+      const fd = new FormData(form);
+      const payload = {
+        name: fd.get('name')?.toString().trim(),
+        phone: fd.get('phone')?.toString().trim(),
+        avatarUrl: fd.get('avatarUrl')?.toString().trim(),
+        isActive: document.getElementById('isActive').checked
+      };
+      try {
+        const r = await fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!r.ok) throw new Error('bad status ' + r.status);
+        statusEl.textContent = 'Готово ✓';
+        form.reset();
+        document.getElementById('isActive').checked = true;
+        await fetchList();
+      } catch (err) {
+        statusEl.textContent = 'Ошибка сохранения';
+      }
+    });
+
+    resetBtn.addEventListener('click', () => {
+      form.reset();
+      document.getElementById('isActive').checked = true;
+      statusEl.textContent = '';
+    });
+
+    fetchList();
+  </script>
 </body>
 </html>

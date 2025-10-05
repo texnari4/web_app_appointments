@@ -1,9 +1,8 @@
-
-import { promises as fs } from 'fs';
-import path from 'path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
-const DB_FILE = process.env.DB_FILE || path.join(DATA_DIR, 'db.json');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 type Master = {
   id: string;
@@ -16,31 +15,51 @@ type Master = {
 };
 
 type DbShape = {
-  version: string;
   masters: Master[];
 };
 
-async function ensureFile(): Promise<void> {
+async function ensureFile() {
   try {
     await fs.mkdir(DATA_DIR, { recursive: true });
-  } catch {}
-  try {
-    await fs.access(DB_FILE);
-  } catch {
-    const initial: DbShape = { version: '1', masters: [] };
-    await fs.writeFile(DB_FILE, JSON.stringify(initial, null, 2), 'utf8');
+    // Try open existing; if not exists, create minimal JSON
+    try {
+      await fs.access(DB_FILE);
+    } catch {
+      const initial: DbShape = { masters: [] };
+      await fs.writeFile(DB_FILE, JSON.stringify(initial, null, 2));
+    }
+    // Relax permissions for Railway volume edge-cases
+    try {
+      await fs.chmod(DATA_DIR, 0o777);
+      await fs.chmod(DB_FILE, 0o666);
+    } catch {}
+  } catch (e) {
+    throw e;
   }
+}
+
+export async function ensureDataWritable() {
+  await ensureFile();
 }
 
 async function readDb(): Promise<DbShape> {
   await ensureFile();
-  const buf = await fs.readFile(DB_FILE, 'utf8');
-  return JSON.parse(buf) as DbShape;
+  const raw = await fs.readFile(DB_FILE, 'utf8');
+  try {
+    return JSON.parse(raw) as DbShape;
+  } catch {
+    // If corrupted, reset safely
+    const empty: DbShape = { masters: [] };
+    await fs.writeFile(DB_FILE, JSON.stringify(empty, null, 2));
+    return empty;
+  }
 }
 
-async function writeDb(db: DbShape): Promise<void> {
-  await ensureFile();
-  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
+async function writeDb(db: DbShape) {
+  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2));
+  try {
+    await fs.chmod(DB_FILE, 0o666);
+  } catch {}
 }
 
 export async function listMasters(): Promise<Master[]> {
@@ -48,28 +67,49 @@ export async function listMasters(): Promise<Master[]> {
   return db.masters;
 }
 
-export async function createMaster(m: Omit<Master, 'id' | 'createdAt' | 'updatedAt'> & { id: string }): Promise<Master> {
+export async function createMaster(input: Partial<Master>): Promise<Master> {
   const db = await readDb();
   const now = new Date().toISOString();
-  const full: Master = { ...m, createdAt: now, updatedAt: now };
-  db.masters.push(full);
+  const id = crypto.randomUUID();
+  const name = (input.name || '').toString().trim();
+  if (!name) throw new Error('name is required');
+  const m: Master = {
+    id,
+    name,
+    phone: (input.phone || '').toString(),
+    avatarUrl: (input.avatarUrl || '').toString(),
+    isActive: input.isActive !== false,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.masters.push(m);
   await writeDb(db);
-  return full;
+  return m;
 }
 
-export async function updateMaster(id: string, patch: Partial<Omit<Master, 'id' | 'createdAt'>>): Promise<Master | null> {
+export async function updateMaster(id: string, input: Partial<Master>): Promise<Master | null> {
   const db = await readDb();
-  const idx = db.masters.findIndex(x => x.id === id);
+  const idx = db.masters.findIndex(m => m.id === id);
   if (idx === -1) return null;
-  db.masters[idx] = { ...db.masters[idx], ...patch, updatedAt: new Date().toISOString() };
+  const prev = db.masters[idx];
+  const next: Master = {
+    ...prev,
+    name: input.name !== undefined ? String(input.name) : prev.name,
+    phone: input.phone !== undefined ? String(input.phone) : prev.phone,
+    avatarUrl: input.avatarUrl !== undefined ? String(input.avatarUrl) : prev.avatarUrl,
+    isActive: input.isActive !== undefined ? Boolean(input.isActive) : prev.isActive,
+    updatedAt: new Date().toISOString(),
+  };
+  db.masters[idx] = next;
   await writeDb(db);
-  return db.masters[idx];
+  return next;
 }
 
 export async function deleteMaster(id: string): Promise<boolean> {
   const db = await readDb();
   const before = db.masters.length;
-  db.masters = db.masters.filter(x => x.id !== id);
+  db.masters = db.masters.filter(m => m.id != id);
+  if (db.masters.length === before) return false;
   await writeDb(db);
-  return db.masters.length < before;
+  return true;
 }
