@@ -1,125 +1,157 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
-echo ">>> Развёртывание мини-приложения (сервер + админка)..."
 
-# --- Создание структуры ---
-mkdir -p app/public app/data
+echo ">>> 🚀 Развёртывание мини-приложения (сервер + админка)..."
+
+# --- Подготовка окружения ---
+mkdir -p app/data
+mkdir -p app/public
 
 # --- Тестовые данные ---
 cat <<EOF > app/data/services.json
 {
   "groups": [
-    { "id": 1, "name": "Ногтевой сервис" },
-    { "id": 2, "name": "Парикмахерские услуги" },
-    { "id": 3, "name": "Массаж" }
-  ],
-  "services": [
-    { "id": 1, "groupId": 1, "name": "Маникюр классический", "description": "Уход за ногтями и кутикулой", "price": 1200, "duration": 60 },
-    { "id": 2, "groupId": 1, "name": "Покрытие гель-лаком", "description": "Покрытие ногтей стойким гель-лаком", "price": 1500, "duration": 90 },
-    { "id": 3, "groupId": 2, "name": "Стрижка женская", "description": "Модельная стрижка с укладкой", "price": 1800, "duration": 60 },
-    { "id": 4, "groupId": 3, "name": "Классический массаж спины", "description": "Расслабляющий массаж", "price": 2000, "duration": 60 }
+    {
+      "id": 1,
+      "name": "Ногтевой сервис",
+      "services": [
+        {"id": 1, "name": "Маникюр", "description": "Классический маникюр", "price": 1200, "duration": 60},
+        {"id": 2, "name": "Покрытие гель-лаком", "description": "Цветное покрытие", "price": 800, "duration": 45}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Массаж",
+      "services": [
+        {"id": 1, "name": "Классический массаж", "description": "Расслабляющий массаж спины", "price": 2500, "duration": 90}
+      ]
+    }
   ]
 }
 EOF
 
-# --- Простая админка ---
-cat <<'EOF' > app/public/admin.html
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<title>Админка — BeautyApp</title>
-<style>
-body { font-family: sans-serif; background: #fafafa; margin: 0; padding: 20px; color: #333; }
-h1 { text-align: center; }
-.container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-button { padding: 8px 12px; border: none; background: #007bff; color: #fff; border-radius: 6px; cursor: pointer; }
-button:hover { background: #0056b3; }
-.service { border-bottom: 1px solid #eee; padding: 10px 0; }
-label { display:block; margin-top:8px; }
-input, textarea, select { width:100%; padding:6px; margin-top:4px; border:1px solid #ccc; border-radius:6px; }
-</style>
-</head>
-<body>
-<h1>Управление услугами</h1>
-<div class="container">
-  <div id="groups"></div>
-</div>
-
-<script>
-async function loadServices() {
-  const data = await fetch('/api/services').then(r => r.json());
-  const groups = await fetch('/api/groups').then(r => r.json());
-  const container = document.getElementById('groups');
-  container.innerHTML = '';
-  groups.forEach(g => {
-    const div = document.createElement('div');
-    div.innerHTML = \`<h2>\${g.name}</h2>\`;
-    data.filter(s => s.groupId === g.id).forEach(s => {
-      div.innerHTML += \`
-        <div class="service">
-          <b>\${s.name}</b> — \${s.price}₽ (\${s.duration} мин)
-          <p>\${s.description}</p>
-        </div>\`;
-    });
-    container.appendChild(div);
-  });
+# --- package.json (ESM) ---
+cat <<EOF > app/package.json
+{
+  "name": "beauty-miniapp",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.19.2",
+    "body-parser": "^1.20.2"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
 }
-loadServices();
-</script>
-</body>
-</html>
 EOF
 
 # --- Сервер ---
 cat <<'EOF' > app/server.js
-import http from 'http';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import express from "express";
+import bodyParser from "body-parser";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const app = express();
 const PORT = process.env.PORT || 8080;
-const dataFile = path.join(__dirname, 'data/services.json');
+const DATA_PATH = path.join(__dirname, "data", "services.json");
 
-function readData() {
-  return JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
-}
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-const server = http.createServer((req, res) => {
-  if (req.url === '/health') {
-    res.writeHead(200, {'Content-Type':'application/json'});
-    return res.end(JSON.stringify({ ok:true }));
+// --- Health-check ---
+app.get("/health", (_, res) => res.json({ status: "ok" }));
+
+// --- Получить все услуги ---
+app.get("/api/services", (req, res) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(DATA_PATH, "utf-8"));
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: "Ошибка чтения данных" });
   }
-
-  if (req.url === '/api/services') {
-    res.writeHead(200, {'Content-Type':'application/json'});
-    return res.end(JSON.stringify(readData().services));
-  }
-
-  if (req.url === '/api/groups') {
-    res.writeHead(200, {'Content-Type':'application/json'});
-    return res.end(JSON.stringify(readData().groups));
-  }
-
-  // --- статика ---
-  let filePath = path.join(__dirname, 'public', req.url === '/' ? 'admin.html' : req.url);
-  fs.readFile(filePath, (err, content) => {
-    if (err) {
-      res.writeHead(404, {'Content-Type':'text/plain'});
-      res.end('Файл не найден');
-    } else {
-      res.writeHead(200, {'Content-Type': filePath.endsWith('.html') ? 'text/html' : 'text/plain'});
-      res.end(content);
-    }
-  });
 });
 
-server.listen(PORT, () => console.log('✅ Сервер запущен на порту', PORT));
+// --- Сохранить услуги ---
+app.post("/api/services", (req, res) => {
+  try {
+    fs.writeFileSync(DATA_PATH, JSON.stringify(req.body, null, 2), "utf-8");
+    res.json({ status: "ok" });
+  } catch (e) {
+    res.status(500).json({ error: "Ошибка записи файла" });
+  }
+});
+
+// --- Админка ---
+app.get("/admin", (_, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+// --- Запуск ---
+app.listen(PORT, () => {
+  console.log(`✅ Сервер запущен на порту ${PORT}`);
+});
 EOF
 
-echo ">>> Установка Node.js окружения..."
-apt-get update -y && apt-get install -y nodejs npm
+# --- Простой интерфейс админки ---
+cat <<'EOF' > app/public/admin.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Админка — Beauty MiniApp</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #fafafa; color: #333; padding: 20px; }
+    h1 { color: #a84aff; }
+    .group { background: white; border-radius: 8px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .service { border-top: 1px solid #eee; padding: 8px 0; }
+    button { margin: 4px; padding: 6px 12px; background: #a84aff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    button:hover { background: #922be7; }
+  </style>
+</head>
+<body>
+  <h1>Панель управления услугами</h1>
+  <div id="content"></div>
 
-echo ">>> Запуск сервера..."
+  <script>
+    async function load() {
+      const res = await fetch('/api/services');
+      const data = await res.json();
+      const div = document.getElementById('content');
+      div.innerHTML = '';
+      data.groups.forEach(group => {
+        const gEl = document.createElement('div');
+        gEl.className = 'group';
+        gEl.innerHTML = \`<h2>\${group.name}</h2>\`;
+        group.services.forEach(s => {
+          const sEl = document.createElement('div');
+          sEl.className = 'service';
+          sEl.textContent = \`\${s.name} — \${s.price}₽ (\${s.duration} мин)\`;
+          gEl.appendChild(sEl);
+        });
+        div.appendChild(gEl);
+      });
+    }
+    load();
+  </script>
+</body>
+</html>
+EOF
+
+# --- Установка Node / npm при необходимости ---
+if ! command -v node &>/dev/null; then
+  echo ">>> Устанавливаю Node.js..."
+  apt-get update -y && apt-get install -y nodejs npm
+fi
+
 cd app
-node server.js
+npm install
+echo ">>> Запуск сервера..."
+npm start
+EOF
