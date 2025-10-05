@@ -1,230 +1,152 @@
+
 <!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Админка — Мастера</title>
+  <link rel="icon" href="data:," />
   <style>
-    :root{--bg:#0b0f14;--panel:#111827;--muted:#6b7280;--txt:#e5e7eb;--accent:#14b8a6;--accent-2:#22d3ee;--danger:#ef4444;--ok:#22c55e}
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:linear-gradient(180deg,#0a0f16,#0b1220);color:var(--txt);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans","Helvetica Neue",Arial}
-    .wrap{display:grid;grid-template-columns:340px 1fr;gap:20px;max-width:1200px;margin:0 auto;padding:20px}
-    header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-    .brand{font-weight:700;letter-spacing:.2px}
-    .status{font-size:12px;color:var(--muted)}
-    .card{background:radial-gradient(1200px 200px at -10% -10%,rgba(20,184,166,.08),transparent 60%),radial-gradient(1000px 160px at 120% 0,rgba(34,211,238,.08),transparent 60%),var(--panel);border:1px solid rgba(255,255,255,.06);border-radius:16px;box-shadow:0 10px 35px rgba(0,0,0,.3);padding:16px}
-    .h2{margin:0 0 10px;font-size:16px;font-weight:700}
-    form .row{display:flex;gap:10px}
-    label{display:block;font-size:12px;color:var(--muted);margin:12px 0 6px}
-    input[type=text], input[type=tel], input[type=url]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:#0e1622;color:var(--txt);outline:none}
-    input::placeholder{color:#94a3b8}
-    .actions{display:flex;gap:10px;margin-top:14px}
-    button{appearance:none;border:0;border-radius:12px;padding:10px 14px;font-weight:600;cursor:pointer}
-    .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#051014}
-    .btn-secondary{background:#1f2937;color:var(--txt)}
-    .btn-primary[disabled]{opacity:.6;cursor:not-allowed}
-    .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-    .item{display:flex;gap:12px;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.06);background:#0f172a}
-    .avatar{width:48px;height:48px;border-radius:10px;object-fit:cover;background:#0b1220;border:1px solid rgba(255,255,255,.06)}
-    .name{font-weight:700}
+    :root { --bg:#0b0b0c; --card:#111215; --text:#e7e7ea; --muted:#a1a1aa; --accent:#0a84ff; --ok:#34c759; --err:#ff3b30; --border:#1f2024; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,Inter,Roboto,Helvetica,Arial,sans-serif;}
+    header{position:sticky;top:0;background:rgba(11,11,12,.7);backdrop-filter:saturate(180%) blur(20px);padding:14px 20px;border-bottom:1px solid var(--border);}
+    h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.2px}
+    main{max-width:980px;margin:24px auto;padding:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 0 rgba(255,255,255,.02) inset}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input{width:100%;padding:10px 12px;border:1px solid var(--border);background:#0e0f12;color:var(--text);border-radius:12px;outline:none}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .btn{background:var(--accent);border:none;color:#fff;padding:10px 14px;border-radius:12px;font-weight:600;cursor:pointer}
+    .btn[disabled]{opacity:.6;cursor:wait}
+    ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+    .item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:12px;background:#0e0f12}
+    .avatar{width:40px;height:40px;border-radius:10px;object-fit:cover;background:#1a1b20}
     .muted{color:var(--muted);font-size:12px}
-    .toast{position:fixed;right:16px;bottom:16px;background:#111827;border:1px solid rgba(255,255,255,.08);padding:10px 12px;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.35);opacity:0;transform:translateY(6px);transition:.2s}
-    .toast.show{opacity:1;transform:translateY(0)}
-    .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-    .toolbar input{flex:1}
-    .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(20,184,166,.15);color:var(--accent);font-size:11px;margin-left:6px}
-    @media (max-width:900px){.wrap{grid-template-columns:1fr}}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111214;border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:12px;display:none}
+    nav a{color:var(--muted);text-decoration:none;margin-right:12px}
+    nav a.active{color:var(--text)}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="brand">Админка • Мастера <span id="count" class="badge">0</span></div>
-      <div class="status" id="status">готово</div>
-    </header>
-
-    <section class="card">
-      <div class="h2">Добавить мастера</div>
-      <form id="f">
-        <label>Имя</label>
-        <input id="name" type="text" placeholder="Напр. Юлия" required />
-        <div class="row">
-          <div style="flex:1">
-            <label>Телефон</label>
-            <input id="phone" type="text" placeholder="+375..." required />
-          </div>
-          <div style="flex:1">
-            <label>Avatar URL</label>
-            <input id="avatar" type="url" placeholder="https://..." />
-          </div>
-        </div>
-        <div class="actions">
-          <button class="btn-primary" id="saveBtn" type="submit">Сохранить</button>
-          <button class="btn-secondary" type="button" id="resetBtn">Очистить</button>
-        </div>
-      </form>
-    </section>
-
-    <section class="card">
-      <div class="h2">Список мастеров</div>
-      <div class="toolbar">
-        <input id="q" type="text" placeholder="Поиск по имени или телефону" />
-        <button class="btn-secondary" id="refreshBtn" type="button">Обновить</button>
-      </div>
-      <div id="list" class="list" aria-live="polite"></div>
-    </section>
+<header>
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <h1>Админка · Мастера</h1>
+    <nav>
+      <a href="/admin/" class="active">Мастера</a>
+      <a href="/admin/appointments">Записи</a>
+    </nav>
   </div>
+</header>
+<main>
+  <section class="card">
+    <div class="toolbar">
+      <strong>Добавить мастера</strong>
+    </div>
+    <form id="form">
+      <label>Имя</label>
+      <input id="name" required placeholder="Например, Юлия" />
+      <div class="row">
+        <div>
+          <label>Телефон</label>
+          <input id="phone" required placeholder="+375..." />
+        </div>
+        <div>
+          <label>Avatar URL</label>
+          <input id="avatarUrl" placeholder="https://..." />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn" id="saveBtn">Сохранить</button>
+      </div>
+    </form>
+  </section>
+  <section class="card">
+    <div class="toolbar">
+      <strong>Список мастеров</strong>
+      <input id="search" placeholder="Поиск..." style="max-width:220px" />
+    </div>
+    <ul id="list"></ul>
+    <div class="muted" id="empty" style="display:none">Записей нет</div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+  const API = "/public/api/masters";
+  const listEl = document.getElementById("list");
+  const emptyEl = document.getElementById("empty");
+  const form = document.getElementById("form");
+  const saveBtn = document.getElementById("saveBtn");
+  const toast = document.getElementById("toast");
+  const search = document.getElementById("search");
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  const state = { items: [] };
 
-  <script>
-    (function(){
-      "use strict";
+  function showToast(text, ok=true){
+    toast.textContent = text;
+    toast.style.display = "block";
+    toast.style.borderColor = ok ? "var(--ok)" : "var(--err)";
+    setTimeout(()=>toast.style.display="none", 1800);
+  }
 
-      var API = "/public/api/masters";
-      var listEl = document.getElementById("list");
-      var countEl = document.getElementById("count");
-      var statusEl = document.getElementById("status");
-      var toastEl = document.getElementById("toast");
-      var formEl = document.getElementById("f");
-      var btnSave = document.getElementById("saveBtn");
-      var btnReset = document.getElementById("resetBtn");
-      var btnRefresh = document.getElementById("refreshBtn");
-      var qEl = document.getElementById("q");
-      var memory = []; // текущее состояние
+  function render(){
+    const q = search.value?.toLowerCase?.() || "";
+    const items = state.items.filter(x => x.name.toLowerCase().includes(q) || x.phone.includes(q));
+    listEl.innerHTML = "";
+    items.forEach(x => {
+      const li = document.createElement("li");
+      li.className="item";
+      li.innerHTML = \`
+        <img class="avatar" src="\${x.avatarUrl || ""}" alt="" onerror="this.style.opacity=.2" />
+        <div style="flex:1">
+          <div style="font-weight:600">\${x.name}</div>
+          <div class="muted">\${x.phone}</div>
+        </div>
+        <span class="muted">\${new Date(x.createdAt).toLocaleString()}</span>
+      \`;
+      listEl.appendChild(li);
+    });
+    emptyEl.style.display = items.length ? "none" : "block";
+  }
 
-      function showToast(text){
-        toastEl.textContent = text;
-        toastEl.classList.add("show");
-        setTimeout(function(){ toastEl.classList.remove("show"); }, 1500);
-      }
+  async function fetchList(){
+    const r = await fetch(API, { cache:"no-store", headers: { "Cache-Control":"no-store","Pragma":"no-cache" } });
+    const j = await r.json();
+    state.items = j.items || [];
+    render();
+  }
 
-      function setBusy(flag, text){
-        if(flag){ statusEl.textContent = text || "выполняю..."; }
-        else { statusEl.textContent = "готово"; }
-        btnSave.disabled = !!flag;
-      }
-
-      function normalizeItems(x){
-        if(!x) return [];
-        if (Array.isArray(x)) return x;
-        if (x.items && Array.isArray(x.items)) return x.items;
-        return [];
-      }
-
-      function render(items){
-        memory = items.slice();
-        countEl.textContent = String(items.length);
-        listEl.innerHTML = "";
-        for (var i=0;i<items.length;i++){
-          var it = items[i];
-          var card = document.createElement("div");
-          card.className = "item";
-          var img = document.createElement("img");
-          img.className = "avatar";
-          img.alt = "";
-          img.src = it.avatarUrl || "";
-          var body = document.createElement("div");
-          var name = document.createElement("div");
-          name.className = "name";
-          name.textContent = it.name || "(без имени)";
-          var phone = document.createElement("div");
-          phone.className = "muted";
-          phone.textContent = it.phone || "";
-          var meta = document.createElement("div");
-          meta.className = "muted";
-          meta.textContent = (it.isActive ? "активен" : "скрыт") + " • " + (it.createdAt || "");
-          body.appendChild(name); body.appendChild(phone); body.appendChild(meta);
-          card.appendChild(img); card.appendChild(body);
-          listEl.appendChild(card);
-        }
-      }
-
-      function fetchList(){
-        setBusy(true,"загружаю...");
-        return fetch(API, {
-          method: "GET",
-          headers: {
-            "Accept":"application/json",
-            "Cache-Control":"no-store, no-cache, must-revalidate, proxy-revalidate",
-            "Pragma":"no-cache"
-          },
-          cache: "no-store"
-        })
-        .then(function(r){ return r.json().catch(function(){ return []; }); })
-        .then(function(data){ render(normalizeItems(data)); })
-        .catch(function(err){ console.error(err); showToast("Не удалось загрузить"); })
-        .finally(function(){ setBusy(false); });
-      }
-
-      function doSave(payload){
-        setBusy(true,"сохраняю...");
-        return fetch(API, {
-          method: "POST",
-          headers: { "Content-Type":"application/json", "Accept":"application/json" },
-          body: JSON.stringify(payload),
-          cache: "no-store"
-        })
-        .then(function(r){
-          // Сервер может вернуть 201/200 без тела — это ок
-          if(!r.ok){ throw new Error("HTTP "+r.status); }
-          return r.text().then(function(t){
-            try { return t ? JSON.parse(t) : null; } catch(_){ return null; }
-          });
-        })
-        .then(function(_data){
-          showToast("Сохранено");
-          // Жёстко перезагружаем список, чтобы не зависеть от ответа
-          return fetchList();
-        })
-        .catch(function(err){
-          console.error(err);
-          showToast("Ошибка сохранения");
-        })
-        .finally(function(){ setBusy(false); });
-      }
-
-      // Поиск по локальному состоянию без запроса
-      function filterLocal(q){
-        var s = (q||"").trim().toLowerCase();
-        if(!s){ render(memory); return; }
-        var f = memory.filter(function(it){
-          return String(it.name||"").toLowerCase().indexOf(s) >= 0 ||
-                 String(it.phone||"").toLowerCase().indexOf(s) >= 0;
-        });
-        render(f);
-      }
-
-      // handlers
-      formEl.addEventListener("submit", function(ev){
-        ev.preventDefault();
-        var payload = {
-          name: document.getElementById("name").value.trim(),
-          phone: document.getElementById("phone").value.trim(),
-          avatarUrl: document.getElementById("avatar").value.trim(),
-          isActive: true
-        };
-        if(!payload.name || !payload.phone){
-          showToast("Заполните имя и телефон"); return;
-        }
-        doSave(payload).then(function(){
-          formEl.reset();
-          document.getElementById("name").focus();
-        });
+  form.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    saveBtn.disabled = true;
+    try {
+      const body = {
+        name: document.getElementById("name").value.trim(),
+        phone: document.getElementById("phone").value.trim(),
+        avatarUrl: document.getElementById("avatarUrl").value.trim() || undefined,
+        isActive: true
+      };
+      const r = await fetch(API, {
+        method:"POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify(body)
       });
+      if(!r.ok){
+        const err = await r.json().catch(()=>({}));
+        showToast("Ошибка сохранения", false);
+        console.error("save error", err);
+      } else {
+        showToast("Сохранено");
+        await fetchList(); // instant refresh
+        form.reset();
+      }
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
 
-      btnReset.addEventListener("click", function(){
-        formEl.reset(); document.getElementById("name").focus();
-      });
-
-      btnRefresh.addEventListener("click", function(){ fetchList(); });
-
-      qEl.addEventListener("input", function(){ filterLocal(qEl.value); });
-
-      // Первичная загрузка
-      fetchList();
-    })();
-  </script>
+  search.addEventListener("input", render);
+  fetchList();
+</script>
 </body>
 </html>

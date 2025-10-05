@@ -1,3 +1,5 @@
+
+# --- Build stage ---
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 COPY package.json ./
@@ -13,16 +15,18 @@ FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
+# Allow overriding DATA_DIR, default /app/data
 ENV DATA_DIR=/app/data
 
-COPY --from=builder /app/node_modules ./node_modules
+# copy built artifacts
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
-COPY package.json ./package.json
-COPY docker/entrypoint.sh ./entrypoint.sh
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
 
-# ensure data dir exists and is writable even under non-root
-RUN mkdir -p /app/data && chmod -R 777 /app && chmod +x ./entrypoint.sh
+# prepare data dir and set ownership to node user
+RUN mkdir -p /app/data && chown -R node:node /app
+USER node
 
 EXPOSE 8080
-CMD ["./entrypoint.sh"]
+CMD ["node","dist/index.js"]

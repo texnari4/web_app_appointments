@@ -1,0 +1,156 @@
+
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Админка — Записи</title>
+  <style>
+    :root { --bg:#0b0b0c; --card:#111215; --text:#e7e7ea; --muted:#a1a1aa; --accent:#0a84ff; --ok:#34c759; --err:#ff3b30; --border:#1f2024; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,Inter,Roboto,Helvetica,Arial,sans-serif;}
+    header{position:sticky;top:0;background:rgba(11,11,12,.7);backdrop-filter:saturate(180%) blur(20px);padding:14px 20px;border-bottom:1px solid var(--border);}
+    h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.2px}
+    main{max-width:980px;margin:24px auto;padding:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 0 rgba(255,255,255,.02) inset}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input, select{width:100%;padding:10px 12px;border:1px solid var(--border);background:#0e0f12;color:var(--text);border-radius:12px;outline:none}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .btn{background:var(--accent);border:none;color:#fff;padding:10px 14px;border-radius:12px;font-weight:600;cursor:pointer}
+    .btn[disabled]{opacity:.6;cursor:wait}
+    ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+    .item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:12px;background:#0e0f12}
+    .muted{color:var(--muted);font-size:12px}
+    nav a{color:var(--muted);text-decoration:none;margin-right:12px}
+    nav a.active{color:var(--text)}
+  </style>
+</head>
+<body>
+<header>
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <h1>Админка · Записи</h1>
+    <nav>
+      <a href="/admin/">Мастера</a>
+      <a href="/admin/appointments" class="active">Записи</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <section class="card">
+    <strong>Создать запись</strong>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Мастер</label>
+        <select id="master"></select>
+      </div>
+      <div>
+        <label>Услуга (опц.)</label>
+        <input id="service" placeholder="Маникюр / Стрижка" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Клиент</label>
+        <input id="customerName" placeholder="Имя" />
+      </div>
+      <div>
+        <label>Телефон</label>
+        <input id="customerPhone" placeholder="+375..." />
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Начало</label>
+        <input id="start" type="datetime-local" />
+      </div>
+      <div>
+        <label>Окончание</label>
+        <input id="end" type="datetime-local" />
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn" id="create">Создать</button>
+    </div>
+    <div class="muted" id="msg" style="margin-top:8px"></div>
+  </section>
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <strong>Ближайшие записи</strong>
+      <input id="filter" placeholder="Поиск..." style="max-width:220px" />
+    </div>
+    <ul id="list"></ul>
+  </section>
+</main>
+<script>
+  const API_MASTERS="/public/api/masters";
+  const API_APPTS="/public/api/appointments";
+  const masterSel=document.getElementById("master");
+  const msg=document.getElementById("msg");
+  const list=document.getElementById("list");
+  const filter=document.getElementById("filter");
+
+  const state={ masters:[], items:[] };
+
+  function fmt(dt){ try{ return new Date(dt).toLocaleString(); }catch{return dt} }
+
+  function renderList(){
+    const q = filter.value?.toLowerCase?.() || "";
+    list.innerHTML="";
+    state.items.filter(a => 
+      a.customerName.toLowerCase().includes(q) ||
+      (a.service||"").toLowerCase().includes(q)
+    ).forEach(a=>{
+      const m = state.masters.find(x=>x.id===a.masterId);
+      const li = document.createElement("li");
+      li.className="item";
+      li.innerHTML = \`
+        <div style="flex:1">
+          <div style="font-weight:600">\${m?.name||"Мастер?"} — \${a.service||"Без услуги"}</div>
+          <div class="muted">\${a.customerName} · \${a.customerPhone}</div>
+          <div class="muted">\${fmt(a.start)} — \${fmt(a.end)}</div>
+        </div>
+        <span class="muted">\${a.status}</span>
+      \`;
+      list.appendChild(li);
+    });
+  }
+
+  async function loadMasters(){
+    const r = await fetch(API_MASTERS, { cache:"no-store" });
+    const j = await r.json();
+    state.masters = j.items||[];
+    masterSel.innerHTML = state.masters.map(m=>\`<option value="\${m.id}">\${m.name}</option>\`).join("");
+  }
+  async function loadAppts(){
+    const r = await fetch(API_APPTS+"?from="+encodeURIComponent(new Date(Date.now()-86400000).toISOString()), { cache:"no-store" });
+    const j = await r.json();
+    state.items = j.items||[];
+    renderList();
+  }
+  async function create(){
+    msg.textContent=""; 
+    const body={
+      masterId: masterSel.value,
+      service: document.getElementById("service").value.trim()||undefined,
+      customerName: document.getElementById("customerName").value.trim(),
+      customerPhone: document.getElementById("customerPhone").value.trim(),
+      start: new Date(document.getElementById("start").value).toISOString(),
+      end: new Date(document.getElementById("end").value).toISOString()
+    };
+    const r = await fetch(API_APPTS, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
+    if(!r.ok){
+      const err = await r.json().catch(()=>({}));
+      msg.textContent = "Ошибка: " + (err.error||r.statusText);
+      msg.style.color = "var(--err)";
+      return;
+    }
+    msg.textContent = "Создано";
+    msg.style.color = "var(--ok)";
+    await loadAppts();
+  }
+
+  document.getElementById("create").addEventListener("click", create);
+  filter.addEventListener("input", renderList);
+  Promise.all([loadMasters(), loadAppts()]);
+</script>
+</body>
+</html>
