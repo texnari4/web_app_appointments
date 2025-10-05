@@ -1,97 +1,76 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureDataWritable, listMasters, createMaster, updateMaster, deleteMaster } from './db.js';
+import { nanoid } from 'nanoid';
+import { readDb, writeDb, type Master } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
-const DATA_DIR = process.env.DATA_DIR || '/app/data';
+const PORT = Number(process.env.PORT || 8080);
 
-// Simple request log
-app.use((req, res, next) => {
-  const started = Date.now();
-  res.on('finish', () => {
-    const ms = Date.now() - started;
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} -> ${res.statusCode} ${ms}ms`);
-  });
+// basic logging
+app.use((req, _res, next) => {
+  console.info(`[req] ${req.method} ${req.url}`);
   next();
 });
 
 app.use(express.json());
+app.use('/public', express.static(path.join(__dirname, '../public')));
 
+// health
 app.get('/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-// Serve admin UI
-app.use('/admin/', express.static(path.join(__dirname, '../public/admin')));
-
-// Public API for masters
-app.get('/public/api/masters', async (_req, res) => {
-  try {
-    const items = await listMasters();
-    res.json({ items });
-  } catch (e) {
-    console.error('list masters error', e);
-    res.status(500).json({ error: 'INTERNAL_ERROR' });
-  }
+// admin UI
+app.get(['/admin', '/admin/'], (_req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin/index.html'));
 });
 
-app.post('/public/api/masters', async (req, res) => {
+// API: Masters
+app.get('/public/api/masters', async (_req, res, next) => {
   try {
-    const body = req.body ?? {};
-    const created = await createMaster({
-      name: String(body.name || '').trim(),
-      phone: (body.phone ? String(body.phone).trim() : ''),
-      avatarUrl: (body.avatarUrl ? String(body.avatarUrl).trim() : ''),
-      isActive: body.isActive !== false
-    });
-    res.status(201).json(created);
-  } catch (e: unknown) {
-    console.error('create master error', e);
-    res.status(400).json({ error: 'BAD_REQUEST' });
-  }
+    const db = await readDb();
+    res.json({ items: db.masters });
+  } catch (e) { next(e); }
 });
 
-app.put('/public/api/masters/:id', async (req, res) => {
+app.post('/public/api/masters', async (req, res, next) => {
   try {
-    const id = String(req.params.id);
-    const body = req.body ?? {};
-    const updated = await updateMaster(id, body);
-    if (!updated) return res.status(404).json({ error: 'NOT_FOUND' });
-    res.json(updated);
-  } catch (e) {
-    console.error('update master error', e);
-    res.status(400).json({ error: 'BAD_REQUEST' });
-  }
+    const { name, phone, avatarUrl } = req.body ?? {};
+    if (!name || !phone) {
+      return res.status(400).json({ error: 'name and phone are required' });
+    }
+    const now = new Date().toISOString();
+    const item: Master = {
+      id: nanoid(),
+      name: String(name),
+      phone: String(phone),
+      avatarUrl: String(avatarUrl || ''),
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
+    };
+    const db = await readDb();
+    db.masters.push(item);
+    await writeDb(db);
+    res.status(201).json({ ok: true, item });
+  } catch (e) { next(e); }
 });
 
-app.delete('/public/api/masters/:id', async (req, res) => {
-  try {
-    const id = String(req.params.id);
-    const ok = await deleteMaster(id);
-    if (!ok) return res.status(404).json({ error: 'NOT_FOUND' });
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('delete master error', e);
-    res.status(400).json({ error: 'BAD_REQUEST' });
-  }
-});
-
-// Fallback 404 JSON for root and others
-app.use((_req, res) => {
+app.use((req, res, _next) => {
   res.status(404).json({ error: 'NOT_FOUND' });
 });
 
-// Start server only after ensuring data dir/file exists & writable
-ensureDataWritable().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server started on :${PORT}`);
-  });
-}).catch((err) => {
-  console.error('Failed to ensure data dir/file', err);
-  process.exit(1);
+// error handler with JSON body to avoid admin-side parse errors
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[error]', err);
+  const message = err instanceof Error ? err.message : 'Internal Error';
+  res.status(500).json({ error: message });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server started on :${PORT}`);
 });

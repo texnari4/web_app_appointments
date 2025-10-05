@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-export DATA_DIR="${DATA_DIR:-/app/data}"
-mkdir -p "$DATA_DIR"
+# Prepare data dir and file with permissive rights for mounted volumes
+mkdir -p "${DATA_DIR:-/app/data}"
+touch "${DATA_DIR:-/app/data}/db.json" || true
+chmod -R 777 /app || true
+chmod 666 "${DATA_DIR:-/app/data}/db.json" || true
 
-# ensure file exists
-if [ ! -f "$DATA_DIR/db.json" ]; then
-  echo '{ "masters": [] }' > "$DATA_DIR/db.json"
-fi
-
-# relax permissions for Railway volume
-chmod -R 777 "$DATA_DIR" || true
-chmod 666 "$DATA_DIR/db.json" || true
-
-echo "[entrypoint] DATA_DIR=$DATA_DIR"
 node dist/index.js
