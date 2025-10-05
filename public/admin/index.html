@@ -1,41 +1,143 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Админка — Masters</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <style>
-    body { max-width: 1100px; margin: 32px auto; }
-    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 24px; }
-    .list { display: grid; gap: 12px; }
-    .row { display:flex; align-items:center; justify-content:space-between; padding:12px; border:1px solid #eee; border-radius:12px; }
-    .row .meta { display:flex; gap:12px; align-items:center; }
-    .avatar { width:40px; height:40px; border-radius:50%; object-fit:cover; background:#f2f2f2; }
-    .status { font-size: 12px; opacity: .7; }
-    .error { color: #b00020; }
-    .success { color: #0a7; }
-  </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Админка — Мастера</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <h1>Мастера</h1>
-  <div id="msg"></div>
-  <div class="grid">
-    <article>
-      <h3>Создать мастера</h3>
-      <form id="createForm">
-        <label>Имя <input name="name" required /></label>
-        <label>Телефон <input name="phone" required /></label>
-        <label>Avatar URL <input name="avatarUrl" placeholder="https://…" /></label>
-        <button id="saveBtn" type="submit">Сохранить</button>
-      </form>
-    </article>
-    <article>
-      <h3>Список</h3>
-      <div id="list" class="list"></div>
-    </article>
-  </div>
+  <header class="topbar">
+    <h1>Мастера</h1>
+    <div class="status" id="status">—</div>
+  </header>
 
-  <script type="module" src="./admin.js"></script>
+  <main class="container">
+    <section class="card">
+      <h2>Список</h2>
+      <div id="list-empty" class="muted" hidden>Пока пусто…</div>
+      <ul id="masters-list" class="list"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Создать</h2>
+      <form id="create-form" class="form">
+        <label>Имя <input name="name" required placeholder="Имя мастера" /></label>
+        <label>Телефон <input name="phone" required placeholder="+375..." /></label>
+        <label>Аватар (URL) <input name="avatarUrl" placeholder="https://..." /></label>
+        <label class="row">
+          <input type="checkbox" name="isActive" checked /> Активен
+        </label>
+        <div class="actions">
+          <button type="submit">Сохранить</button>
+          <span id="form-msg" class="muted"></span>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    // API base. We know сервер отдает JSON по /public/api/masters
+    const API_BASE = "/public/api";
+
+    function setStatus(text) {
+      const el = document.getElementById("status");
+      el.textContent = text;
+    }
+
+    function fmt(ts) {
+      try { return new Date(ts).toLocaleString(); } catch { return ts; }
+    }
+
+    function liFor(m) {
+      const li = document.createElement("li");
+      li.className = "item";
+      li.innerHTML = \`
+        <div class="title">
+          <strong>\${m.name}</strong>
+          <span class="badge \${m.isActive ? 'ok' : 'muted'}">\${m.isActive ? 'активен' : 'неактивен'}</span>
+        </div>
+        <div class="meta">
+          <span>📱 \${m.phone || '—'}</span>
+          <span>🕒 \${fmt(m.updatedAt || m.createdAt)}</span>
+          <span class="id">id: \${m.id}</span>
+        </div>
+      \`;
+      return li;
+    }
+
+    async function loadMasters() {
+      setStatus("Загрузка…");
+      try {
+        const res = await fetch(\`\${API_BASE}/masters\`, { headers: { "accept": "application/json" } });
+        if (!res.ok) throw new Error(\`HTTP \${res.status}\`);
+        const data = await res.json();
+        const items = Array.isArray(data?.items) ? data.items : [];
+        const list = document.getElementById("masters-list");
+        list.innerHTML = "";
+        if (items.length === 0) {
+          document.getElementById("list-empty").hidden = false;
+        } else {
+          document.getElementById("list-empty").hidden = true;
+          for (const m of items) list.appendChild(liFor(m));
+        }
+        setStatus(\`Загружено: \${items.length}\`);
+      } catch (e) {
+        console.error(e);
+        setStatus("Ошибка загрузки");
+      }
+    }
+
+    async function createMaster(payload) {
+      // Бэкенд может возвращать 200 или 201 — поддержим оба
+      const res = await fetch(\`\${API_BASE}/masters\`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "accept": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch {}
+      if (!res.ok) {
+        const msg = data?.error || data?.message || \`HTTP \${res.status}\`;
+        throw new Error(msg);
+      }
+      return data?.item || data; // поддержим {item} или плоский объект
+    }
+
+    function hookForm() {
+      const form = document.getElementById("create-form");
+      const msg = document.getElementById("form-msg");
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        msg.textContent = "Сохраняю…";
+        const fd = new FormData(form);
+        const payload = {
+          name: String(fd.get("name") || "").trim(),
+          phone: String(fd.get("phone") || "").trim(),
+          avatarUrl: String(fd.get("avatarUrl") || "").trim() || null,
+          isActive: !!fd.get("isActive"),
+        };
+        try {
+          const item = await createMaster(payload);
+          msg.textContent = "Сохранено ✔";
+          // Оптимистично добавим в список
+          const list = document.getElementById("masters-list");
+          list.prepend(liFor(item));
+          document.getElementById("list-empty").hidden = true;
+          form.reset();
+          form.elements["isActive"].checked = true;
+          setStatus("ОК");
+        } catch (e) {
+          console.error(e);
+          msg.textContent = "Ошибка сохранения";
+          setStatus("Ошибка сохранения");
+        }
+      });
+    }
+
+    hookForm();
+    loadMasters();
+  </script>
 </body>
 </html>
