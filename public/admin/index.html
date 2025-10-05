@@ -1,286 +1,184 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Админка — inline v4</title>
-
-<style>
-:root{
-  --bg:#0b0f14; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#22c55e; --accent-2:#38bdf8;
-  --danger:#ef4444; --warn:#f59e0b; --border:#1f2937;
-}
-*{box-sizing:border-box}
-html,body{height:100%}
-body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial; background:linear-gradient(180deg,#0b0f14,#0b0f14 240px,#0e1620); color:var(--text)}
-.container{max-width:1100px; margin:24px auto; padding:0 16px}
-
-.header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px}
-.brand{display:flex; align-items:center; gap:12px}
-.logo{width:34px;height:34px;border-radius:10px; background:linear-gradient(135deg,var(--accent-2),var(--accent)); box-shadow:0 6px 20px rgba(56,189,248,.35)}
-h1{font-size:20px; margin:0}
-
-.tabs{display:flex; gap:8px; background:rgba(31,41,55,.6); padding:6px; border-radius:12px; border:1px solid var(--border)}
-.tab{border:none; background:transparent; color:var(--muted); padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600}
-.tab.active{background:linear-gradient(180deg,rgba(34,197,94,.15),transparent); color:#d1fae5; border:1px solid rgba(34,197,94,.25)}
-.main{margin-top:16px; display:grid; grid-template-columns: 1.1fr .9fr; gap:16px}
-@media (max-width: 900px){ .main{grid-template-columns:1fr} }
-
-.card{background:rgba(17,24,39,.72); border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow:0 8px 28px rgba(0,0,0,.25)}
-.card h2{margin:0 0 10px; font-size:16px; color:#e2e8f0}
-.card .muted{color:var(--muted); font-size:13px; margin-top:4px}
-
-.list{display:flex; flex-direction:column; gap:10px; max-height:62vh; overflow:auto}
-.row{display:flex; align-items:center; gap:12px; padding:10px; border:1px solid var(--border); border-radius:12px; background:rgba(30,41,59,.6)}
-.avatar{width:40px; height:40px; border-radius:10px; background:#0b0f14; object-fit:cover; border:1px solid var(--border)}
-.row .name{font-weight:700}
-.badge{font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:#9ca3af}
-.badge.active{color:#22c55e; border-color:rgba(34,197,94,.35); background:rgba(34,197,94,.1)}
-
-.form{display:grid; gap:10px}
-label{font-size:12px; color:#94a3b8}
-input, textarea, select{width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:#0b0f14; color:var(--text)}
-.actions{display:flex; gap:10px; justify-content:flex-end}
-.btn{padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:#0e1620; color:var(--text); cursor:pointer}
-.btn.primary{background:linear-gradient(180deg,rgba(34,197,94,.2),rgba(34,197,94,.05)); border-color:rgba(34,197,94,.35)}
-.btn.secondary{background:linear-gradient(180deg,rgba(56,189,248,.2),rgba(56,189,248,.05)); border-color:rgba(56,189,248,.35)}
-.btn:disabled{opacity:.6; cursor:not-allowed}
-
-.toast{position:fixed; right:16px; bottom:16px; background:#0b0f14; border:1px solid var(--border); border-radius:12px; padding:10px 14px; color:#e5e7eb; box-shadow:0 8px 24px rgba(0,0,0,.35); opacity:0; transform:translateY(8px); transition:all .2s}
-.toast.show{opacity:1; transform:translateY(0)}
-hr.sep{border:0; border-top:1px dashed var(--border); margin:12px 0}
-.small{font-size:12px; color:#9aa4b2}
-</style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Админка — inline v4</title>
+  <style>
+    :root { --bg:#0b1220; --card:#121a2b; --muted:#9fb0d0; --accent:#4da3ff; --success:#22c55e; --danger:#ef4444; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:white;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto}
+    .container{max-width:1100px;margin:40px auto;padding:0 16px}
+    .nav{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+    .nav a{padding:10px 14px;border-radius:10px;background:#0e1626;color:#cfe3ff;text-decoration:none;border:1px solid #1a2540}
+    .nav a.active{background:#14213a;border-color:#263657;color:#fff}
+    .card{background:var(--card);border:1px solid #1a2540;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.28);overflow:hidden}
+    .card .hd{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #1a2540}
+    .card .bd{padding:16px}
+    .btn{border:1px solid #2a3d67;background:#152341;color:#dbeafe;padding:8px 12px;border-radius:10px;cursor:pointer}
+    .btn.primary{background:linear-gradient(135deg,#1f3b75,#25468f);border-color:#2e4d9e}
+    .btn.success{background:#14532d;border-color:#1a6a3a}
+    .btn.danger{background:#3a0d12;border-color:#5e141d}
+    input,select,textarea{background:#0e1626;border:1px solid #243150;color:#e6efff;padding:10px 12px;border-radius:10px;width:100%}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px 8px;border-bottom:1px solid #243150}
+    tr:hover td{background:#0e1626}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mt20{margin-top:20px}
+    .row{display:flex;gap:8px;align-items:center}
+    .pill{background:#16233f;border:1px solid #27406b;border-radius:9999px;padding:6px 10px;color:#b5d2ff;font-size:12px}
+  </style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <div class="brand">
-      <div class="logo"></div>
-      <div>
-        <h1>Панель администратора</h1>
-        <div class="small">inline v4 • без внешних CSS/JS</div>
+  <div class="container">
+    <div class="nav">
+      <a href="#" data-tab="masters" class="active">Мастера</a>
+      <a href="#" data-tab="services">Услуги</a>
+    </div>
+
+    <div id="tab-masters" class="card">
+      <div class="hd"><h3>Мастера</h3></div>
+      <div class="bd">
+        <div class="grid">
+          <div>
+            <label>Имя</label>
+            <input id="m-name" placeholder="Имя"/>
+          </div>
+          <div>
+            <label>Телефон</label>
+            <input id="m-phone" placeholder="+375..."/>
+          </div>
+          <div>
+            <label>Аватар URL</label>
+            <input id="m-avatar" placeholder="https://..."/>
+          </div>
+          <div class="row mt20">
+            <label><input type="checkbox" id="m-active" checked/> Активен</label>
+            <button class="btn success" id="m-add">Добавить</button>
+          </div>
+        </div>
+        <div class="mt16">
+          <table id="m-table">
+            <thead><tr><th>Имя</th><th>Телефон</th><th>Статус</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
-    <div class="tabs" id="tabs">
-      <button class="tab active" data-tab="masters">Мастера</button>
-      <button class="tab" data-tab="services">Услуги</button>
+
+    <div id="tab-services" class="card" style="display:none">
+      <div class="hd"><h3>Услуги</h3></div>
+      <div class="bd">
+        <div class="grid">
+          <div>
+            <label>Группа</label>
+            <select id="s-group"></select>
+          </div>
+          <div>
+            <label>Название</label>
+            <input id="s-title" placeholder="Название услуги"/>
+          </div>
+          <div>
+            <label>Цена</label>
+            <input id="s-price" type="number" min="0" step="1" value="0"/>
+          </div>
+          <div>
+            <label>Длительность (мин)</label>
+            <input id="s-duration" type="number" min="10" step="5" value="60"/>
+          </div>
+          <div class="row mt20">
+            <button class="btn success" id="s-add">Добавить</button>
+          </div>
+        </div>
+        <div class="mt16">
+          <div class="row" id="group-pills"></div>
+          <table id="s-table" class="mt12">
+            <thead><tr><th>Группа</th><th>Название</th><th>Цена</th><th>Мин</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div id="view-masters" class="main">
-    <div class="card">
-      <h2>Список мастеров</h2>
-      <div id="masters-list" class="list"></div>
-    </div>
-    <div class="card">
-      <h2>Добавить мастера</h2>
-      <form id="master-form" class="form">
-        <div>
-          <label>Имя</label>
-          <input name="name" placeholder="Напр. Юлия" required/>
-        </div>
-        <div>
-          <label>Телефон</label>
-          <input name="phone" placeholder="+375..." required/>
-        </div>
-        <div>
-          <label>URL аватара</label>
-          <input name="avatarUrl" placeholder="https://..."/>
-        </div>
-        <div>
-          <label>Активен</label>
-          <select name="isActive">
-            <option value="true" selected>Да</option>
-            <option value="false">Нет</option>
-          </select>
-        </div>
-        <div class="actions">
-          <button class="btn" type="reset">Сброс</button>
-          <button class="btn primary" type="submit">Сохранить</button>
-        </div>
-      </form>
-      <hr class="sep"/>
-      <div class="small">После сохранения список обновится автоматически.</div>
-    </div>
-  </div>
+  <script>
+    const q = (sel, el=document) => el.querySelector(sel);
+    const qa = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+    const GET = (u) => fetch(u).then(r => { if(!r.ok) throw new Error(`${r.status} ${u}`); return r.json(); });
+    const POST = (u,b) => fetch(u,{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)}).then(r=>{ if(!r.ok) throw new Error('POST '+u); return r.json(); });
+    const PATCH = (u,b) => fetch(u,{method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)}).then(r=>{ if(!r.ok) throw new Error('PATCH '+u); return r.json(); });
+    const DEL = (u) => fetch(u,{method:'DELETE'}).then(r=>{ if(!r.ok) throw new Error('DEL '+u); return r.json(); });
 
-  <div id="view-services" class="main" style="display:none">
-    <div class="card">
-      <h2>Группы и услуги</h2>
-      <div id="services-list" class="list"></div>
-    </div>
-    <div class="card">
-      <h2>Справка</h2>
-      <div class="muted">Раздел «Услуги» пока только отображает данные. CRUD добавим позже.</div>
-    </div>
-  </div>
-</div>
-
-<div id="toast" class="toast"></div>
-
-<script>
-const API = {
-  masters: '/public/api/masters',
-  services: '/public/api/services'
-};
-
-function toast(msg, type='info'){
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast show';
-  setTimeout(()=> el.className='toast', 2200);
-}
-
-async function jsonGET(url){
-  const r = await fetch(url, {headers:{'accept':'application/json'}});
-  if(!r.ok) throw new Error(`GET ${url}`);
-  return r.json();
-}
-async function jsonPOST(url, body){
-  const r = await fetch(url, {
-    method:'POST',
-    headers:{'content-type':'application/json','accept':'application/json'},
-    body: JSON.stringify(body)
-  });
-  if(!r.ok){
-    const text = await r.text().catch(()=>'');
-    throw new Error(`POST ${url}: ${r.status} ${text}`);
-  }
-  return r.json();
-}
-
-function renderMasterRow(m){
-  const div = document.createElement('div');
-  div.className = 'row';
-  const img = document.createElement('img');
-  img.className = 'avatar';
-  img.src = m.avatarUrl || 'https://via.placeholder.com/80x80.png?text=%F0%9F%A4%97';
-  img.alt = m.name || 'avatar';
-  const box = document.createElement('div');
-  const name = document.createElement('div');
-  name.className = 'name';
-  name.textContent = m.name || '—';
-  const meta = document.createElement('div');
-  meta.className = 'small';
-  meta.textContent = `${m.phone || '—'} • ID: ${m.id?.slice(0,8) || '—'}`;
-  box.appendChild(name);
-  box.appendChild(meta);
-  const badge = document.createElement('div');
-  badge.className = 'badge ' + (m.isActive ? 'active' : '');
-  badge.textContent = m.isActive ? 'Активен' : 'Не активен';
-  div.appendChild(img);
-  div.appendChild(box);
-  div.appendChild(badge);
-  return div;
-}
-
-async function loadMasters(){
-  const list = document.getElementById('masters-list');
-  list.innerHTML = '<div class="small">Загрузка...</div>';
-  try{
-    const data = await jsonGET(API.masters);
-    const items = data.items || [];
-    list.innerHTML = '';
-    if(items.length === 0){
-      list.innerHTML = '<div class="small">Записей пока нет</div>';
-      return;
-    }
-    items.forEach(m=> list.appendChild(renderMasterRow(m)));
-  }catch(e){
-    list.innerHTML = '<div class="small" style="color:#fca5a5">Ошибка загрузки мастеров</div>';
-    console.error(e);
-  }
-}
-
-async function loadServices(){
-  const list = document.getElementById('services-list');
-  list.innerHTML = '<div class="small">Загрузка...</div>';
-  try{
-    const data = await jsonGET(API.services);
-    const groups = data.items || [];
-    list.innerHTML = '';
-    if(groups.length === 0){
-      list.innerHTML = '<div class="small">Услуги не найдены</div>';
-      return;
-    }
-    groups.forEach(g=>{
-      const wrap = document.createElement('div');
-      wrap.className = 'row';
-      const box = document.createElement('div');
-      const title = document.createElement('div');
-      title.className = 'name';
-      title.textContent = g.name || 'Группа';
-      const meta = document.createElement('div');
-      meta.className = 'small';
-      meta.textContent = (g.services?.length || 0) + ' услуг(и)';
-      box.appendChild(title); box.appendChild(meta);
-      wrap.appendChild(box);
-      list.appendChild(wrap);
-      if(g.services && g.services.length){
-        g.services.forEach(s=>{
-          const r = document.createElement('div');
-          r.className = 'row'; r.style.marginLeft = '44px';
-          const b = document.createElement('div');
-          const t = document.createElement('div'); t.className='name'; t.textContent = s.title || 'Услуга';
-          const m = document.createElement('div'); m.className='small'; m.textContent = `${s.price || 0} • ${s.durationMin || 0} мин`;
-          b.appendChild(t); b.appendChild(m);
-          r.appendChild(b);
-          list.appendChild(r);
-        });
-      }
+    qa('.nav a').forEach(a=>a.onclick=(e)=>{e.preventDefault(); qa('.nav a').forEach(x=>x.classList.remove('active')); a.classList.add('active');
+      q('#tab-masters').style.display = a.dataset.tab==='masters'?'block':'none';
+      q('#tab-services').style.display = a.dataset.tab==='services'?'block':'none';
+      if (a.dataset.tab==='services') renderServices();
+      if (a.dataset.tab==='masters') renderMasters();
     });
-  }catch(e){
-    list.innerHTML = '<div class="small" style="color:#fca5a5">Ошибка загрузки услуг</div>';
-    console.error(e);
-  }
-}
 
-function bindForm(){
-  const form = document.getElementById('master-form');
-  form.addEventListener('submit', async (ev)=>{
-    ev.preventDefault();
-    const fd = new FormData(form);
-    const payload = {
-      name: (fd.get('name')||'').toString().trim(),
-      phone: (fd.get('phone')||'').toString().trim(),
-      avatarUrl: (fd.get('avatarUrl')||'').toString().trim(),
-      isActive: (fd.get('isActive')||'true') === 'true'
-    };
-    if(!payload.name){ toast('Введите имя'); return; }
-    try{
-      const res = await jsonPOST(API.masters, payload);
-      toast('Сохранено');
-      form.reset();
-      await loadMasters(); // refresh instantly
-    }catch(e){
-      console.error(e);
-      toast('Ошибка сохранения');
+    async function renderMasters(){
+      const data = await GET('/public/api/masters');
+      const tb = q('#m-table tbody'); tb.innerHTML='';
+      data.items.forEach(m=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td>\${m.name}</td>
+          <td>\${m.phone}</td>
+          <td>\${m.isActive? '✅':'⛔️'}</td>
+          <td><button class="btn danger" data-id="\${m.id}">Удалить</button></td>
+        \`;
+        tr.querySelector('button').onclick = async () => { await DEL('/public/api/masters/'+m.id); renderMasters(); };
+        tb.appendChild(tr);
+      });
     }
-  });
-}
+    q('#m-add').onclick = async ()=>{
+      const name = q('#m-name').value.trim();
+      const phone = q('#m-phone').value.trim();
+      const avatarUrl = q('#m-avatar').value.trim();
+      const isActive = q('#m-active').checked;
+      if(!name||!phone){ alert('Имя и телефон обязательны'); return; }
+      await POST('/public/api/masters', {name, phone, avatarUrl, isActive});
+      q('#m-name').value=''; q('#m-phone').value=''; q('#m-avatar').value=''; q('#m-active').checked=true;
+      renderMasters();
+    };
 
-function setupTabs(){
-  const tabs = document.getElementById('tabs');
-  const views = {masters: document.getElementById('view-masters'), services: document.getElementById('view-services')};
-  tabs.addEventListener('click', (e)=>{
-    const btn = e.target.closest('.tab'); if(!btn) return;
-    document.querySelectorAll('.tab').forEach(b=> b.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    Object.values(views).forEach(v=> v.style.display='none');
-    views[tab].style.display = '';
-    if(tab==='masters') loadMasters();
-    if(tab==='services') loadServices();
-  });
-}
+    async function renderServices(){
+      const groups = (await GET('/public/api/service-groups')).items;
+      const services = (await GET('/public/api/services')).items;
+      // groups select
+      const sel = q('#s-group'); sel.innerHTML='';
+      groups.forEach(g=>{ const o=document.createElement('option'); o.value=g.id; o.textContent=g.name; sel.appendChild(o); });
+      // group pills
+      const pills = q('#group-pills'); pills.innerHTML='';
+      groups.forEach(g=>{ const span=document.createElement('span'); span.className='pill'; span.textContent=g.name; pills.appendChild(span); });
 
-async function init(){
-  setupTabs();
-  bindForm();
-  await loadMasters();
-}
-init();
-</script>
+      const tb = q('#s-table tbody'); tb.innerHTML='';
+      services.forEach(s=>{
+        const g = groups.find(x=>x.id===s.groupId);
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td>\${g?g.name:'—'}</td>
+          <td>\${s.title}</td>
+          <td>\${s.price}</td>
+          <td>\${s.durationMin}</td>
+          <td><button class="btn danger" data-id="\${s.id}">Удалить</button></td>
+        \`;
+        tr.querySelector('button').onclick = async () => { await DEL('/public/api/services/'+s.id); renderServices(); };
+        tb.appendChild(tr);
+      });
+    }
+    q('#s-add').onclick = async ()=>{
+      const groupId = q('#s-group').value;
+      const title = q('#s-title').value.trim();
+      const price = Number(q('#s-price').value);
+      const durationMin = Number(q('#s-duration').value);
+      if(!groupId || !title){ alert('Группа и название обязательны'); return; }
+      await POST('/public/api/services', { groupId, title, price, durationMin });
+      q('#s-title').value=''; q('#s-price').value='0'; q('#s-duration').value='60';
+      renderServices();
+    };
+
+    // initial
+    renderMasters();
+  </script>
 </body>
 </html>

@@ -5,168 +5,173 @@ import crypto from 'node:crypto';
 export type Master = {
   id: string;
   name: string;
-  phone?: string;
+  phone: string;
   avatarUrl?: string;
   isActive: boolean;
-  specialties?: string[];
   description?: string;
-  schedule?: {
-    type: 'weekly' | 'custom';
-    weekly?: { [weekday: string]: { from: string; to: string }[] }; // e.g. Mon..Sun
-    custom?: { date: string; from: string; to: string }[];
-  }
+  specialties?: string[];
+  schedule?: { daysOfWeek?: number[]; custom?: Array<{ from: string; to: string }>; };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Service = {
+  id: string;
+  groupId: string; // e.g. "nails", "hair"
+  title: string;
+  description?: string;
+  price: number;
+  durationMin: number;
   createdAt: string;
   updatedAt: string;
 };
 
 export type ServiceGroup = {
   id: string;
-  name: string; // e.g., Ногтевой сервис
-  description?: string;
-  sort?: number;
-  services: Service[];
-}
-
-export type Service = {
-  id: string;
-  groupId: string;
-  name: string;
-  description?: string;
-  price: number;
-  durationMinutes: number;
-  isActive: boolean;
+  name: string; // e.g. "Ногтевой сервис"
+  order?: number;
   createdAt: string;
   updatedAt: string;
 };
 
-export type Client = {
-  id: string;
-  name: string;
-  phone?: string;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type Booking = {
-  id: string;
-  masterId: string;
-  clientId: string;
-  serviceId: string;
-  date: string; // ISO date
-  start: string; // HH:mm
-  end: string;   // HH:mm
-  comment?: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type DbShape = {
+type DbShape = {
   masters: Master[];
+  services: Service[];
   serviceGroups: ServiceGroup[];
-  clients: Client[];
-  bookings: Booking[];
+  clients: any[];
+  bookings: any[];
 };
 
-const DATA_DIR = process.env.DATA_DIR || '/data';
-const DB_PATH = path.join(DATA_DIR, 'db.json');
+const DATA_DIR = process.env.DATA_DIR || '/app/data';
+const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-async function ensureDbFile(): Promise<void> {
+async function ensureFile(): Promise<void> {
+  await fs.mkdir(DATA_DIR, { recursive: true });
   try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.access(DB_PATH);
+    await fs.access(DB_FILE);
   } catch {
-    // Seed default dataset
     const now = new Date().toISOString();
-    const masterId = crypto.randomUUID();
-    const groupId = crypto.randomUUID();
-    const serviceId = crypto.randomUUID();
-
     const seed: DbShape = {
       masters: [
         {
-          id: masterId,
-          name: 'Юлия',
-          phone: '+375331126113',
-          avatarUrl: 'https://placehold.co/96x96',
-          isActive: true,
-          specialties: ['Маникюр', 'Педикюр'],
-          description: 'Опыт 5 лет. Аккуратно, стерильно, вовремя.',
-          schedule: {
-            type: 'weekly',
-            weekly: {
-              Mon: [{ from: '10:00', to: '18:00' }],
-              Tue: [{ from: '10:00', to: '18:00' }],
-              Wed: [{ from: '10:00', to: '18:00' }],
-              Thu: [{ from: '12:00', to: '20:00' }],
-              Fri: [{ from: '12:00', to: '20:00' }],
-              Sat: [],
-              Sun: []
-            }
-          },
-          createdAt: now,
-          updatedAt: now
+          id: crypto.randomUUID(), name: 'Юлия', phone: '+375331126113',
+          avatarUrl: 'https://placehold.co/100x100', isActive: true,
+          description: 'Мастер маникюра', specialties: ['маникюр', 'педикюр'],
+          schedule: { daysOfWeek: [1,2,3,4,5] },
+          createdAt: now, updatedAt: now
         }
       ],
       serviceGroups: [
-        {
-          id: groupId,
-          name: 'Ногтевой сервис',
-          sort: 1,
-          services: [
-            {
-              id: serviceId,
-              groupId,
-              name: 'Маникюр классический',
-              description: 'Обработка ногтей и кутикулы',
-              price: 30,
-              durationMinutes: 60,
-              isActive: true,
-              createdAt: now,
-              updatedAt: now
-            }
-          ]
-        }
+        { id: 'nails', name: 'Ногтевой сервис', order: 1, createdAt: now, updatedAt: now },
+        { id: 'hair', name: 'Волосы', order: 2, createdAt: now, updatedAt: now }
+      ],
+      services: [
+        { id: crypto.randomUUID(), groupId: 'nails', title: 'Маникюр классический', price: 25, durationMin: 60, createdAt: now, updatedAt: now },
+        { id: crypto.randomUUID(), groupId: 'nails', title: 'Покрытие гель-лаком', price: 30, durationMin: 50, createdAt: now, updatedAt: now },
+        { id: crypto.randomUUID(), groupId: 'hair', title: 'Стрижка женская', price: 40, durationMin: 60, createdAt: now, updatedAt: now }
       ],
       clients: [],
       bookings: []
     };
-    await fs.writeFile(DB_PATH, JSON.stringify(seed, null, 2), 'utf-8');
+    await fs.writeFile(DB_FILE, JSON.stringify(seed, null, 2), 'utf-8');
   }
 }
 
 async function readDb(): Promise<DbShape> {
-  await ensureDbFile();
-  const raw = await fs.readFile(DB_PATH, 'utf-8');
+  await ensureFile();
+  const raw = await fs.readFile(DB_FILE, 'utf-8');
   return JSON.parse(raw) as DbShape;
 }
-
 async function writeDb(db: DbShape): Promise<void> {
-  await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2), 'utf-8');
+  await ensureFile();
+  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
 }
 
-export const db = {
-  async listMasters() {
-    const d = await readDb();
-    return d.masters;
-  },
-  async createMaster(input: Partial<Master>) {
-    const d = await readDb();
-    const now = new Date().toISOString();
-    const m: Master = {
-      id: crypto.randomUUID(),
-      name: input.name || 'Без имени',
-      phone: input.phone,
-      avatarUrl: input.avatarUrl,
-      isActive: input.isActive ?? true, // will fix below
-      specialties: input.specialties || [],
-      description: input.description,
-      schedule: input.schedule || { type: 'weekly', weekly: {} },
-      createdAt: now,
-      updatedAt: now
-    } as Master;
-    d.masters.push(m);
-    await writeDb(d);
-    return m;
+// Masters
+export async function listMasters(): Promise<Master[]> {
+  const db = await readDb();
+  return db.masters;
+}
+export async function createMaster(input: Omit<Master, 'id' | 'createdAt' | 'updatedAt'>): Promise<Master> {
+  const db = await readDb();
+  const now = new Date().toISOString();
+  const item: Master = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...input };
+  db.masters.push(item);
+  await writeDb(db);
+  return item;
+}
+export async function updateMaster(id: string, patch: Partial<Master>): Promise<Master | null> {
+  const db = await readDb();
+  const idx = db.masters.findIndex(m => m.id === id);
+  if (idx === -1) return null;
+  db.masters[idx] = { ...db.masters[idx], ...patch, updatedAt: new Date().toISOString() };
+  await writeDb(db);
+  return db.masters[idx];
+}
+export async function deleteMaster(id: string): Promise<boolean> {
+  const db = await readDb();
+  const prev = db.masters.length;
+  db.masters = db.masters.filter(m => m.id !== id);
+  await writeDb(db);
+  return db.masters.length < prev;
+}
+
+// Service Groups
+export async function listServiceGroups(): Promise<ServiceGroup[]> {
+  const db = await readDb();
+  return db.serviceGroups.sort((a,b) => (a.order ?? 999) - (b.order ?? 999));
+}
+export async function upsertServiceGroup(g: Partial<ServiceGroup> & { name: string }): Promise<ServiceGroup> {
+  const db = await readDb();
+  const now = new Date().toISOString();
+  if (g.id) {
+    const idx = db.serviceGroups.findIndex(x => x.id === g.id);
+    if (idx !== -1) {
+      db.serviceGroups[idx] = { ...db.serviceGroups[idx], ...g, updatedAt: now };
+      await writeDb(db);
+      return db.serviceGroups[idx];
+    }
   }
-};
+  const created: ServiceGroup = { id: g.id ?? crypto.randomUUID(), name: g.name, order: g.order ?? 999, createdAt: now, updatedAt: now };
+  db.serviceGroups.push(created);
+  await writeDb(db);
+  return created;
+}
+export async function deleteServiceGroup(id: string): Promise<boolean> {
+  const db = await readDb();
+  const prev = db.serviceGroups.length;
+  db.serviceGroups = db.serviceGroups.filter(sg => sg.id !== id);
+  // also detach services
+  db.services = db.services.filter(s => s.groupId !== id);
+  await writeDb(db);
+  return db.serviceGroups.length < prev;
+}
+
+// Services
+export async function listServices(): Promise<Service[]> {
+  const db = await readDb();
+  return db.services;
+}
+export async function createService(input: Omit<Service, 'id' | 'createdAt' | 'updatedAt'>): Promise<Service> {
+  const db = await readDb();
+  const now = new Date().toISOString();
+  const item: Service = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...input };
+  db.services.push(item);
+  await writeDb(db);
+  return item;
+}
+export async function updateService(id: string, patch: Partial<Service>): Promise<Service | null> {
+  const db = await readDb();
+  const idx = db.services.findIndex(s => s.id === id);
+  if (idx === -1) return null;
+  db.services[idx] = { ...db.services[idx], ...patch, updatedAt: new Date().toISOString() };
+  await writeDb(db);
+  return db.services[idx];
+}
+export async function deleteService(id: string): Promise<boolean> {
+  const db = await readDb();
+  const prev = db.services.length;
+  db.services = db.services.filter(s => s.id !== id);
+  await writeDb(db);
+  return db.services.length < prev;
+}

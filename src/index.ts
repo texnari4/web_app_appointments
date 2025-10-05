@@ -2,63 +2,105 @@ import express from 'express';
 import path from 'node:path';
 import cors from 'cors';
 import pino from 'pino';
-import { db } from './db.js';
+import pinoHttp from 'pino-http';
+
+import {
+  listMasters, createMaster, updateMaster, deleteMaster,
+  listServices, createService, updateService, deleteService,
+  listServiceGroups, upsertServiceGroup, deleteServiceGroup
+} from './db.js';
 
 const app = express();
-const log = pino();
+const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+app.use(pinoHttp({ logger }));
+app.use(cors());
+app.use(express.json());
+app.use('/public', express.static(path.join(process.cwd(), 'public')));
 
 const PORT = Number(process.env.PORT || 8080);
 
-app.use(cors());
-app.use(express.json());
+app.get('/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
-// simple request logger
-app.use((req, _res, next) => {
-  log.info({ method: req.method, url: req.url }, 'request');
-  next();
+// ------- Masters
+app.get(['/public/api/masters', '/api/masters'], async (_req, res) => {
+  res.json({ items: await listMasters() });
 });
 
-// health
-app.get(['/health','/public/health'], (_req, res) => {
-  res.json({ ok: true, ts: new Date().toISOString() });
-});
-
-// static admin
-const publicDir = path.join(process.cwd(), 'public');
-app.use('/public', express.static(publicDir, { fallthrough: true }));
-app.get(['/admin','/admin/'], (_req, res) => {
-  res.sendFile(path.join(publicDir, 'admin', 'index.html'));
-});
-
-// API: masters
-app.get(['/api/masters','/public/api/masters'], async (_req, res) => {
-  const items = await db.listMasters();
-  res.json({ items });
-});
-
-app.post(['/api/masters','/public/api/masters'], async (req, res) => {
+app.post(['/public/api/masters', '/api/masters'], async (req, res) => {
   try {
-    const m = await db.createMaster(req.body || {});
-    res.status(201).json(m);
-  } catch (e) {
-    log.error({ e }, 'create master failed');
-    res.status(500).json({ error: 'failed_to_create_master' });
+    const { name, phone, avatarUrl, isActive = true, description, specialties, schedule } = req.body || {};
+    if (!name || !phone) return res.status(400).json({ error: 'name and phone required' });
+    const created = await createMaster({ name, phone, avatarUrl, isActive, description, specialties, schedule, createdAt: '', updatedAt: '', id: '' } as any);
+    res.status(201).json(created);
+  } catch (e: any) {
+    req.log?.error(e);
+    res.status(500).json({ error: 'failed to create master' });
   }
 });
 
-// placeholder services (front expects this)
-app.get(['/api/services','/public/api/services'], async (_req, res) => {
-  // read full DB and return flattened services
-  const { serviceGroups } = await (await import('./db.js')).readDb?.() ?? { serviceGroups: [] };
-  const items = [];
-  for (const g of serviceGroups || []) {
-    for (const s of g.services) {
-      items.push({ ...s, groupName: g.name });
-    }
+app.patch(['/public/api/masters/:id', '/api/masters/:id'], async (req, res) => {
+  const { id } = req.params as { id: string };
+  const updated = await updateMaster(id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'not found' });
+  res.json(updated);
+});
+
+app.delete(['/public/api/masters/:id', '/api/masters/:id'], async (req, res) => {
+  const { id } = req.params as { id: string };
+  const ok = await deleteMaster(id);
+  res.json({ ok });
+});
+
+// ------- Service Groups
+app.get(['/public/api/service-groups', '/api/service-groups'], async (_req, res) => {
+  res.json({ items: await listServiceGroups() });
+});
+
+app.post(['/public/api/service-groups', '/api/service-groups'], async (req, res) => {
+  const { id, name, order } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const item = await upsertServiceGroup({ id, name, order });
+  res.status(201).json(item);
+});
+
+app.delete(['/public/api/service-groups/:id', '/api/service-groups/:id'], async (req, res) => {
+  const { id } = req.params as { id: string };
+  const ok = await deleteServiceGroup(id);
+  res.json({ ok });
+});
+
+// ------- Services
+app.get(['/public/api/services', '/api/services'], async (_req, res) => {
+  res.json({ items: await listServices() });
+});
+
+app.post(['/public/api/services', '/api/services'], async (req, res) => {
+  const { groupId, title, description, price, durationMin } = req.body || {};
+  if (!groupId || !title || typeof price !== 'number' || typeof durationMin !== 'number') {
+    return res.status(400).json({ error: 'groupId, title, price(number), durationMin(number) required' });
   }
-  res.json({ items });
+  const created = await createService({ groupId, title, description, price, durationMin, createdAt: '', updatedAt: '', id: '' } as any);
+  res.status(201).json(created);
+});
+
+app.patch(['/public/api/services/:id', '/api/services/:id'], async (req, res) => {
+  const { id } = req.params as { id: string };
+  const updated = await updateService(id, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'not found' });
+  res.json(updated);
+});
+
+app.delete(['/public/api/services/:id', '/api/services/:id'], async (req, res) => {
+  const { id } = req.params as { id: string };
+  const ok = await deleteService(id);
+  res.json({ ok });
+});
+
+// Admin (inline v4)
+app.get(['/admin', '/admin/'], (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'admin', 'index.html'));
 });
 
 app.listen(PORT, () => {
-  log.info(`Server started on :${PORT}`);
+  logger.info(`Server started on :${PORT}`);
 });
