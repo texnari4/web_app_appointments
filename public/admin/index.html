@@ -1,51 +1,286 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <title>Админка — Beauty App</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/public/admin/styles.css" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Админка — inline v4</title>
+
+<style>
+:root{
+  --bg:#0b0f14; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#22c55e; --accent-2:#38bdf8;
+  --danger:#ef4444; --warn:#f59e0b; --border:#1f2937;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial; background:linear-gradient(180deg,#0b0f14,#0b0f14 240px,#0e1620); color:var(--text)}
+.container{max-width:1100px; margin:24px auto; padding:0 16px}
+
+.header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px}
+.brand{display:flex; align-items:center; gap:12px}
+.logo{width:34px;height:34px;border-radius:10px; background:linear-gradient(135deg,var(--accent-2),var(--accent)); box-shadow:0 6px 20px rgba(56,189,248,.35)}
+h1{font-size:20px; margin:0}
+
+.tabs{display:flex; gap:8px; background:rgba(31,41,55,.6); padding:6px; border-radius:12px; border:1px solid var(--border)}
+.tab{border:none; background:transparent; color:var(--muted); padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600}
+.tab.active{background:linear-gradient(180deg,rgba(34,197,94,.15),transparent); color:#d1fae5; border:1px solid rgba(34,197,94,.25)}
+.main{margin-top:16px; display:grid; grid-template-columns: 1.1fr .9fr; gap:16px}
+@media (max-width: 900px){ .main{grid-template-columns:1fr} }
+
+.card{background:rgba(17,24,39,.72); border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow:0 8px 28px rgba(0,0,0,.25)}
+.card h2{margin:0 0 10px; font-size:16px; color:#e2e8f0}
+.card .muted{color:var(--muted); font-size:13px; margin-top:4px}
+
+.list{display:flex; flex-direction:column; gap:10px; max-height:62vh; overflow:auto}
+.row{display:flex; align-items:center; gap:12px; padding:10px; border:1px solid var(--border); border-radius:12px; background:rgba(30,41,59,.6)}
+.avatar{width:40px; height:40px; border-radius:10px; background:#0b0f14; object-fit:cover; border:1px solid var(--border)}
+.row .name{font-weight:700}
+.badge{font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:#9ca3af}
+.badge.active{color:#22c55e; border-color:rgba(34,197,94,.35); background:rgba(34,197,94,.1)}
+
+.form{display:grid; gap:10px}
+label{font-size:12px; color:#94a3b8}
+input, textarea, select{width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:#0b0f14; color:var(--text)}
+.actions{display:flex; gap:10px; justify-content:flex-end}
+.btn{padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:#0e1620; color:var(--text); cursor:pointer}
+.btn.primary{background:linear-gradient(180deg,rgba(34,197,94,.2),rgba(34,197,94,.05)); border-color:rgba(34,197,94,.35)}
+.btn.secondary{background:linear-gradient(180deg,rgba(56,189,248,.2),rgba(56,189,248,.05)); border-color:rgba(56,189,248,.35)}
+.btn:disabled{opacity:.6; cursor:not-allowed}
+
+.toast{position:fixed; right:16px; bottom:16px; background:#0b0f14; border:1px solid var(--border); border-radius:12px; padding:10px 14px; color:#e5e7eb; box-shadow:0 8px 24px rgba(0,0,0,.35); opacity:0; transform:translateY(8px); transition:all .2s}
+.toast.show{opacity:1; transform:translateY(0)}
+hr.sep{border:0; border-top:1px dashed var(--border); margin:12px 0}
+.small{font-size:12px; color:#9aa4b2}
+</style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">Beauty Admin</div>
-    <nav class="tabs">
-      <button data-tab="masters" class="tab active">Мастера</button>
-      <button data-tab="services" class="tab">Услуги</button>
-      <button data-tab="bookings" class="tab">Записи</button>
-      <button data-tab="clients" class="tab">Клиенты</button>
-      <button data-tab="reports" class="tab">Отчеты</button>
-      <button data-tab="settings" class="tab">Настройки</button>
-    </nav>
-  </header>
+<div class="container">
+  <div class="header">
+    <div class="brand">
+      <div class="logo"></div>
+      <div>
+        <h1>Панель администратора</h1>
+        <div class="small">inline v4 • без внешних CSS/JS</div>
+      </div>
+    </div>
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="masters">Мастера</button>
+      <button class="tab" data-tab="services">Услуги</button>
+    </div>
+  </div>
 
-  <main class="container">
-    <section id="tab-masters" class="panel active">
-      <h2>Мастера</h2>
-      <form id="form-master" class="card">
-        <div class="grid">
-          <label>Имя <input name="name" placeholder="Имя мастера" required></label>
-          <label>Телефон <input name="phone" placeholder="+375..." ></label>
-          <label>Фото (URL) <input name="avatarUrl" placeholder="https://..."></label>
+  <div id="view-masters" class="main">
+    <div class="card">
+      <h2>Список мастеров</h2>
+      <div id="masters-list" class="list"></div>
+    </div>
+    <div class="card">
+      <h2>Добавить мастера</h2>
+      <form id="master-form" class="form">
+        <div>
+          <label>Имя</label>
+          <input name="name" placeholder="Напр. Юлия" required/>
         </div>
-        <button type="submit" class="btn primary">Создать</button>
-        <span id="status-master" class="status"></span>
+        <div>
+          <label>Телефон</label>
+          <input name="phone" placeholder="+375..." required/>
+        </div>
+        <div>
+          <label>URL аватара</label>
+          <input name="avatarUrl" placeholder="https://..."/>
+        </div>
+        <div>
+          <label>Активен</label>
+          <select name="isActive">
+            <option value="true" selected>Да</option>
+            <option value="false">Нет</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button class="btn" type="reset">Сброс</button>
+          <button class="btn primary" type="submit">Сохранить</button>
+        </div>
       </form>
+      <hr class="sep"/>
+      <div class="small">После сохранения список обновится автоматически.</div>
+    </div>
+  </div>
 
-      <div class="list" id="masters-list"></div>
-    </section>
-
-    <section id="tab-services" class="panel">
-      <h2>Услуги</h2>
+  <div id="view-services" class="main" style="display:none">
+    <div class="card">
+      <h2>Группы и услуги</h2>
       <div id="services-list" class="list"></div>
-    </section>
+    </div>
+    <div class="card">
+      <h2>Справка</h2>
+      <div class="muted">Раздел «Услуги» пока только отображает данные. CRUD добавим позже.</div>
+    </div>
+  </div>
+</div>
 
-    <section id="tab-bookings" class="panel"><h2>Записи</h2></section>
-    <section id="tab-clients" class="panel"><h2>Клиенты</h2></section>
-    <section id="tab-reports" class="panel"><h2>Отчеты</h2></section>
-    <section id="tab-settings" class="panel"><h2>Настройки</h2></section>
-  </main>
+<div id="toast" class="toast"></div>
 
-  <script src="/public/admin/admin.js" type="module"></script>
+<script>
+const API = {
+  masters: '/public/api/masters',
+  services: '/public/api/services'
+};
+
+function toast(msg, type='info'){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show';
+  setTimeout(()=> el.className='toast', 2200);
+}
+
+async function jsonGET(url){
+  const r = await fetch(url, {headers:{'accept':'application/json'}});
+  if(!r.ok) throw new Error(`GET ${url}`);
+  return r.json();
+}
+async function jsonPOST(url, body){
+  const r = await fetch(url, {
+    method:'POST',
+    headers:{'content-type':'application/json','accept':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if(!r.ok){
+    const text = await r.text().catch(()=>'');
+    throw new Error(`POST ${url}: ${r.status} ${text}`);
+  }
+  return r.json();
+}
+
+function renderMasterRow(m){
+  const div = document.createElement('div');
+  div.className = 'row';
+  const img = document.createElement('img');
+  img.className = 'avatar';
+  img.src = m.avatarUrl || 'https://via.placeholder.com/80x80.png?text=%F0%9F%A4%97';
+  img.alt = m.name || 'avatar';
+  const box = document.createElement('div');
+  const name = document.createElement('div');
+  name.className = 'name';
+  name.textContent = m.name || '—';
+  const meta = document.createElement('div');
+  meta.className = 'small';
+  meta.textContent = `${m.phone || '—'} • ID: ${m.id?.slice(0,8) || '—'}`;
+  box.appendChild(name);
+  box.appendChild(meta);
+  const badge = document.createElement('div');
+  badge.className = 'badge ' + (m.isActive ? 'active' : '');
+  badge.textContent = m.isActive ? 'Активен' : 'Не активен';
+  div.appendChild(img);
+  div.appendChild(box);
+  div.appendChild(badge);
+  return div;
+}
+
+async function loadMasters(){
+  const list = document.getElementById('masters-list');
+  list.innerHTML = '<div class="small">Загрузка...</div>';
+  try{
+    const data = await jsonGET(API.masters);
+    const items = data.items || [];
+    list.innerHTML = '';
+    if(items.length === 0){
+      list.innerHTML = '<div class="small">Записей пока нет</div>';
+      return;
+    }
+    items.forEach(m=> list.appendChild(renderMasterRow(m)));
+  }catch(e){
+    list.innerHTML = '<div class="small" style="color:#fca5a5">Ошибка загрузки мастеров</div>';
+    console.error(e);
+  }
+}
+
+async function loadServices(){
+  const list = document.getElementById('services-list');
+  list.innerHTML = '<div class="small">Загрузка...</div>';
+  try{
+    const data = await jsonGET(API.services);
+    const groups = data.items || [];
+    list.innerHTML = '';
+    if(groups.length === 0){
+      list.innerHTML = '<div class="small">Услуги не найдены</div>';
+      return;
+    }
+    groups.forEach(g=>{
+      const wrap = document.createElement('div');
+      wrap.className = 'row';
+      const box = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 'name';
+      title.textContent = g.name || 'Группа';
+      const meta = document.createElement('div');
+      meta.className = 'small';
+      meta.textContent = (g.services?.length || 0) + ' услуг(и)';
+      box.appendChild(title); box.appendChild(meta);
+      wrap.appendChild(box);
+      list.appendChild(wrap);
+      if(g.services && g.services.length){
+        g.services.forEach(s=>{
+          const r = document.createElement('div');
+          r.className = 'row'; r.style.marginLeft = '44px';
+          const b = document.createElement('div');
+          const t = document.createElement('div'); t.className='name'; t.textContent = s.title || 'Услуга';
+          const m = document.createElement('div'); m.className='small'; m.textContent = `${s.price || 0} • ${s.durationMin || 0} мин`;
+          b.appendChild(t); b.appendChild(m);
+          r.appendChild(b);
+          list.appendChild(r);
+        });
+      }
+    });
+  }catch(e){
+    list.innerHTML = '<div class="small" style="color:#fca5a5">Ошибка загрузки услуг</div>';
+    console.error(e);
+  }
+}
+
+function bindForm(){
+  const form = document.getElementById('master-form');
+  form.addEventListener('submit', async (ev)=>{
+    ev.preventDefault();
+    const fd = new FormData(form);
+    const payload = {
+      name: (fd.get('name')||'').toString().trim(),
+      phone: (fd.get('phone')||'').toString().trim(),
+      avatarUrl: (fd.get('avatarUrl')||'').toString().trim(),
+      isActive: (fd.get('isActive')||'true') === 'true'
+    };
+    if(!payload.name){ toast('Введите имя'); return; }
+    try{
+      const res = await jsonPOST(API.masters, payload);
+      toast('Сохранено');
+      form.reset();
+      await loadMasters(); // refresh instantly
+    }catch(e){
+      console.error(e);
+      toast('Ошибка сохранения');
+    }
+  });
+}
+
+function setupTabs(){
+  const tabs = document.getElementById('tabs');
+  const views = {masters: document.getElementById('view-masters'), services: document.getElementById('view-services')};
+  tabs.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.tab'); if(!btn) return;
+    document.querySelectorAll('.tab').forEach(b=> b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    Object.values(views).forEach(v=> v.style.display='none');
+    views[tab].style.display = '';
+    if(tab==='masters') loadMasters();
+    if(tab==='services') loadServices();
+  });
+}
+
+async function init(){
+  setupTabs();
+  bindForm();
+  await loadMasters();
+}
+init();
+</script>
 </body>
 </html>
