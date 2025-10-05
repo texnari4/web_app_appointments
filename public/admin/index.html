@@ -4,153 +4,98 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin • Masters</title>
+  <title>Admin · Masters</title>
   <style>
-    :root{--bg:#0b0b0c;--card:#141416;--muted:#8a8a8a;--txt:#fff;--accent:#0a84ff;--ok:#30d158;--danger:#ff453a;}
-    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:16px -apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif}
-    header{padding:16px 20px;border-bottom:1px solid #222;position:sticky;top:0;background:rgba(11,11,12,.75);backdrop-filter:saturate(180%) blur(16px)}
-    h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.2px}
-    main{padding:20px;max-width:900px;margin:0 auto}
-    .card{background:var(--card);border:1px solid #222;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.35);overflow:hidden}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
-    input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #2a2a2a;background:#0f0f10;color:var(--txt);outline:none}
-    input:focus{border-color:var(--accent)}
-    .actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
-    button{border:0;border-radius:999px;padding:10px 16px;cursor:pointer;font-weight:600}
-    .primary{background:var(--accent);color:white}
-    .ghost{background:#1a1a1b;color:var(--txt)}
-    .danger{background:var(--danger);color:white}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:12px 14px;border-bottom:1px solid #232323;text-align:left}
-    tr:hover{background:#151516}
-    .pill{padding:4px 10px;border-radius:999px;border:1px solid #2a2a2a;background:#101011;color:#cfcfcf;font-size:12px}
-    .empty{padding:24px;color:#9a9a9a;text-align:center}
+    :root { --bg:#0b0b0c; --card:#141417; --muted:#a0a0aa; --text:#fff; --accent:#0a84ff; }
+    html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font:16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, Roboto, Arial, sans-serif; }
+    .wrap { max-width:960px; margin:40px auto; padding:0 16px; }
+    h1 { font-weight:700; letter-spacing:-0.02em; }
+    .row { display:grid; grid-template-columns: 1fr auto; gap:16px; align-items:end; }
+    .card { background:var(--card); border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+    label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+    input[type="text"], input[type="url"], input[type="tel"] { width:100%; padding:12px 14px; border-radius:12px; background:#0f0f12; color:var(--text); border:1px solid #1f1f26; outline:none; }
+    input[type="checkbox"] { transform: scale(1.2); }
+    .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:16px; }
+    .btn { background:var(--accent); color:#fff; border:none; padding:12px 16px; border-radius:12px; font-weight:600; cursor:pointer; }
+    .list { margin-top:24px; display:grid; gap:12px; }
+    .item { display:flex; gap:12px; align-items:center; padding:12px; border-radius:12px; background:#101014; border:1px solid #1f1f26; }
+    .item img { width:40px; height:40px; border-radius:10px; object-fit:cover; background:#222 }
+    .muted { color:var(--muted); font-size:12px; }
+    .actions { margin-left:auto; display:flex; gap:8px; }
+    .ghost { background:transparent; border:1px solid #2a2a33; color:#ddd; }
   </style>
 </head>
 <body>
-  <header>
+  <div class="wrap">
     <h1>Мастера</h1>
-  </header>
-  <main>
-    <section class="card" style="padding:16px 16px 8px">
-      <div class="row">
-        <div>
-          <label>Имя</label>
-          <input id="name" placeholder="Например, Аня" />
-        </div>
-        <div>
-          <label>Телефон</label>
-          <input id="phone" placeholder="+7 ..."/>
-        </div>
-        <div>
-          <label>Avatar URL</label>
-          <input id="avatarUrl" placeholder="https://..." />
-        </div>
-        <div>
-          <label>Статус</label>
-          <select id="isActive" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid #2a2a2a;background:#0f0f10;color:var(--txt)">
-            <option value="true">Активен</option>
-            <option value="false">Скрыт</option>
-          </select>
-        </div>
+    <div class="card">
+      <div class="grid">
+        <div><label>Имя</label><input id="name" type="text" placeholder="Имя мастера" /></div>
+        <div><label>Телефон</label><input id="phone" type="tel" placeholder="+7..." /></div>
+        <div><label>Аватар (URL)</label><input id="avatarUrl" type="url" placeholder="https://..." /></div>
+        <div><label>Активен</label><div><input id="isActive" type="checkbox" checked /></div></div>
+      </div>
+      <div style="margin-top:16px; display:flex; gap:8px;">
+        <button class="btn" id="save">Сохранить</button>
+        <span id="status" class="muted"></span>
+      </div>
+    </div>
+
+    <div class="list" id="list"></div>
+  </div>
+
+<script type="module">
+const api = (p) => fetch(p).then(r => r.json());
+
+async function load() {
+  const data = await api('/public/api/masters');
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  (data.items || []).forEach(m => {
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.innerHTML = \`
+      <img src="\${m.avatarUrl || ''}" alt="">
+      <div>
+        <div><strong>\${m.name}</strong></div>
+        <div class="muted">\${m.phone || ''}</div>
       </div>
       <div class="actions">
-        <button class="ghost" id="reset">Очистить</button>
-        <button class="primary" id="save">Сохранить</button>
-      </div>
-    </section>
+        <button class="btn ghost" data-act="toggle" data-id="\${m.id}">\${m.isActive ? 'Скрыть' : 'Активировать'}</button>
+        <button class="btn ghost" data-act="delete" data-id="\${m.id}">Удалить</button>
+      </div>\`;
+    list.appendChild(el);
+  });
+}
 
-    <section class="card" style="margin-top:16px">
-      <div style="padding:12px 16px;border-bottom:1px solid #232323;font-weight:600">Список</div>
-      <div id="list"></div>
-    </section>
-  </main>
+document.getElementById('save').addEventListener('click', async () => {
+  const body = {
+    name: (document.getElementById('name') as HTMLInputElement).value.trim(),
+    phone: (document.getElementById('phone') as HTMLInputElement).value.trim() || undefined,
+    avatarUrl: (document.getElementById('avatarUrl') as HTMLInputElement).value.trim() || undefined,
+    isActive: (document.getElementById('isActive') as HTMLInputElement).checked
+  };
+  const res = await fetch('/public/api/masters', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const t = document.getElementById('status');
+  if (res.ok) { t.textContent = 'Сохранено ✓'; await load(); }
+  else { const msg = await res.json().catch(()=>({error:'ERR'})); t.textContent = 'Ошибка: ' + (msg.error||res.status); }
+  setTimeout(()=>t.textContent='', 1500);
+});
 
-  <script type="module">
-    const API = '/public/api/masters';
+document.getElementById('list').addEventListener('click', async (e) => {
+  const btn = (e.target as HTMLElement).closest('button');
+  if (!btn) return;
+  const id = btn.getAttribute('data-id');
+  const act = btn.getAttribute('data-act');
+  if (act === 'delete') {
+    await fetch('/public/api/masters/' + id, { method:'DELETE' });
+  } else if (act === 'toggle') {
+    await fetch('/public/api/masters/' + id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ isActive: btn.textContent === 'Скрыть' ? false : true }) });
+  }
+  await load();
+});
 
-    function el(html){const t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstChild}
-
-    async function load() {
-      const wrap = document.getElementById('list');
-      wrap.innerHTML = '<div class="empty">Загрузка...</div>';
-      const res = await fetch(API);
-      const items = await res.json();
-
-      if (!Array.isArray(items) || !items.length) {
-        wrap.innerHTML = '<div class="empty">Пока пусто</div>';
-        return;
-      }
-
-      const table = el(`<table>
-        <thead><tr><th>Имя</th><th>Телефон</th><th>Статус</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>`);
-      const tb = table.querySelector('tbody');
-
-      for (const m of items) {
-        const tr = el(`<tr>
-          <td>${m.name ?? ''}</td>
-          <td>${m.phone ?? ''}</td>
-          <td><span class="pill">${m.isActive ? 'Активен' : 'Скрыт'}</span></td>
-          <td style="text-align:right">
-            <button class="ghost" data-id="${m.id}" data-act="${m.isActive ? 'deactivate' : 'activate'}">${m.isActive ? 'Скрыть' : 'Включить'}</button>
-            <button class="danger" data-id="${m.id}" data-act="delete">Удалить</button>
-          </td>
-        </tr>`);
-        tb.appendChild(tr);
-      }
-      wrap.innerHTML = '';
-      wrap.appendChild(table);
-
-      // actions
-      wrap.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-id');
-          const act = btn.getAttribute('data-act');
-          if (act === 'delete') {
-            await fetch(`${API}/${id}`, { method: 'DELETE' });
-          } else {
-            const isActive = act === 'activate';
-            await fetch(`${API}/${id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ isActive }),
-            });
-          }
-          await load();
-        });
-      });
-    }
-
-    document.getElementById('reset').addEventListener('click', () => {
-      ['name','phone','avatarUrl'].forEach(id => document.getElementById(id).value = '');
-      document.getElementById('isActive').value = 'true';
-    });
-
-    document.getElementById('save').addEventListener('click', async () => {
-      const payload = {
-        name: document.getElementById('name').value.trim(),
-        phone: document.getElementById('phone').value.trim() || undefined,
-        avatarUrl: document.getElementById('avatarUrl').value.trim() || undefined,
-        isActive: document.getElementById('isActive').value === 'true',
-      };
-      const res = await fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        document.getElementById('reset').click();
-        await load();
-      } else {
-        const err = await res.json().catch(()=>({error:'Ошибка'}));
-        alert('Ошибка: ' + (err.error || res.status));
-      }
-    });
-
-    load();
-  </script>
+load();
+</script>
 </body>
 </html>
