@@ -1,70 +1,83 @@
 import express, { Request, Response } from 'express';
 import path from 'node:path';
 import cors from 'cors';
+import pino from 'pino';
 import pinoHttp from 'pino-http';
-import { fileURLToPath } from 'node:url';
-import { addMaster, listMasters, addAppointment, listAppointments } from './db.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { listMasters, createMaster, listAppointments, createAppointment, ensureReady } from './db.js';
 
 const app = express();
+const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
+app.use(pinoHttp({ logger }));
+
+const PORT = Number(process.env.PORT ?? 8080);
+const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
+
 app.use(cors());
 app.use(express.json());
-app.use(pinoHttp());
+app.use('/public', express.static(PUBLIC_DIR));
 
-const PORT = Number(process.env.PORT || 8080);
-const DATA_DIR = process.env.DATA_DIR || '/app/data';
-
-// health
-app.get('/health', (_req: Request, res: Response) => res.json({ ok: true, ts: new Date().toISOString() }));
-
-// static admin
-app.use('/admin', express.static(path.join(__dirname, '..', 'public', 'admin')));
-
-// masters API (public)
-app.get('/public/api/masters', async (_req: Request, res: Response) => {
-  const items = await listMasters();
-  res.json({ items });
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-app.post('/public/api/masters', async (req: Request, res: Response) => {
+// API: Masters
+app.get(['/public/api/masters','/api/masters'], async (_req: Request, res: Response) => {
   try {
-    const { name, phone, avatarUrl } = req.body ?? {};
-    const m = await addMaster({ name, phone, avatarUrl, isActive: true });
-    res.status(201).json(m);
+    const items = await listMasters();
+    res.json({ items });
   } catch (e) {
-    res.status(400).json({ error: 'CREATE_FAILED' });
+    reqLog(res).error({ err: e }, 'masters.list failed');
+    res.status(500).json({ error: 'INTERNAL_ERROR' });
   }
 });
 
-// appointments API (public)
-app.get('/public/api/appointments', async (req: Request, res: Response) => {
-  const { masterId, from, to } = req.query as { masterId?: string; from?: string; to?: string };
-  const items = await listAppointments({ masterId, from, to });
-  res.json({ items });
-});
-
-app.post('/public/api/appointments', async (req: Request, res: Response) => {
+app.post(['/public/api/masters','/api/masters'], async (req: Request, res: Response) => {
   try {
-    const { masterId, clientName, clientPhone, start, end, note } = req.body ?? {};
-    const created = await addAppointment({
-      masterId, clientName, clientPhone, start, end, note, status: 'scheduled'
-    });
-    res.status(201).json(created);
-  } catch (e: any) {
-    if (e && e.message === 'TIME_CONFLICT') {
-      res.status(409).json({ error: 'TIME_CONFLICT' });
-    } else {
-      res.status(400).json({ error: 'CREATE_FAILED' });
-    }
+    const { name, phone, avatarUrl, isActive } = req.body ?? {};
+    if (!name || !phone) return res.status(400).json({ error: 'NAME_AND_PHONE_REQUIRED' });
+    const item = await createMaster({ name, phone, avatarUrl: avatarUrl ?? '', isActive: isActive ?? true });
+    res.status(201).json(item);
+  } catch (e) {
+    reqLog(res).error({ err: e }, 'masters.create failed');
+    res.status(500).json({ error: 'INTERNAL_ERROR' });
   }
 });
 
-// serve index redirect
-app.get('/', (_req: Request, res: Response) => res.redirect('/admin/'));
-
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Server started on :${PORT} (DATA_DIR=${DATA_DIR})`);
+// API: Appointments (sprint base)
+app.get(['/public/api/appointments','/api/appointments'], async (_req: Request, res: Response) => {
+  try {
+    const items = await listAppointments();
+    res.json({ items });
+  } catch (e) {
+    reqLog(res).error({ err: e }, 'appointments.list failed');
+    res.status(500).json({ error: 'INTERNAL_ERROR' });
+  }
 });
+
+app.post(['/public/api/appointments','/api/appointments'], async (req: Request, res: Response) => {
+  try {
+    const { masterId, clientName, phone, from, to, note } = req.body ?? {};
+    if (!masterId || !clientName || !phone || !from || !to) return res.status(400).json({ error: 'REQUIRED_FIELDS' });
+    const item = await createAppointment({ masterId, clientName, phone, from, to, note });
+    res.status(201).json(item);
+  } catch (e:any) {
+    const msg = e?.message ?? 'INTERNAL_ERROR';
+    reqLog(res).error({ err: e }, 'appointments.create failed');
+    res.status(msg === 'TIME_CONFLICT' ? 409 : 500).json({ error: msg });
+  }
+});
+
+// Admin panel
+app.get('/', (_req: Request, res: Response) => res.redirect('/admin/'));
+app.get('/admin/', (_req: Request, res: Response) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'admin', 'index.html'));
+});
+
+function reqLog(res: Response) {
+  // pino-http attaches logger to res
+  // @ts-ignore
+  return res.log ?? logger;
+}
+
+await ensureReady();
+app.listen(PORT, () => logger.info(`Server started on :${PORT}`));
