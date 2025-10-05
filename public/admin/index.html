@@ -3,141 +3,231 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Админка — Мастера</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <title>Админка · Beauty App</title>
+  <style>
+    :root{
+      --bg:#0b0c0e;
+      --panel:#111317;
+      --card:#151820;
+      --stroke:#232733;
+      --text:#e9edf1;
+      --muted:#a5adbb;
+      --accent:#0ea5e9;
+      --accent-2:#22d3ee;
+      --ok:#10b981;
+      --err:#ef4444;
+      --warn:#f59e0b;
+      --focus-shadow: 0 0 0 3px rgba(14,165,233,.25);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;background:linear-gradient(180deg,#0b0c0e, #0c111b) fixed;
+      color:var(--text);font:500 15px/1.5 system-ui,-apple-system,Segoe UI,Roboto;
+      -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+    }
+    .wrap{max-width:1100px;margin:0 auto;padding:28px}
+    header{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+    .logo{width:34px;height:34px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:white;font-weight:900}
+    h1{font-size:20px;margin:0}
+    .panel{
+      display:grid;grid-template-columns: 400px 1fr;gap:22px;
+    }
+    @media (max-width: 940px){ .panel{grid-template-columns:1fr; } }
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.02));
+      border:1px solid var(--stroke);border-radius:var(--radius);padding:18px;backdrop-filter: blur(6px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .card h2{font-size:16px;margin:0 0 12px 0;color:#dfe5ee}
+    label{display:block;color:var(--muted);font-size:12px;margin:12px 0 6px}
+    input[type="text"],input[type="tel"],input[type="url"]{
+      width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--stroke);background:#0f131a;color:var(--text);
+      outline:none;transition:border .2s, box-shadow .2s;
+    }
+    input:focus{border-color:var(--accent);box-shadow:var(--focus-shadow)}
+    .row{display:flex;gap:10px;align-items:center}
+    .row .grow{flex:1}
+    .switch{display:flex;align-items:center;gap:8px;margin-top:10px}
+    .switch input{accent-color:var(--accent)}
+    button.primary{
+      margin-top:14px;width:100%;padding:12px 16px;border:0;border-radius:14px;
+      background:linear-gradient(180deg,var(--accent),#1977bd);
+      color:white;font-weight:700;cursor:pointer;transition:transform .05s ease, filter .2s;
+    }
+    button.primary:active{transform:translateY(1px)}
+    button.primary:disabled{filter:grayscale(1);opacity:.6;cursor:not-allowed}
+    .hint{font-size:12px;color:var(--muted);margin-top:8px}
+    .status{margin-top:10px;font-size:13px}
+    .status.ok{color:var(--ok)} .status.err{color:var(--err)} .status.warn{color:var(--warn)}
+    .list{display:grid;grid-template-columns: repeat(auto-fill,minmax(240px,1fr));gap:14px}
+    .item{background:linear-gradient(180deg,#0f131a,#0f141b); border:1px solid var(--stroke);border-radius:16px;padding:14px;display:grid;gap:8px}
+    .item .top{display:flex;gap:10px;align-items:center}
+    .avatar{width:40px;height:40px;border-radius:12px;background:#0b0f16;border:1px solid var(--stroke);overflow:hidden;display:grid;place-items:center;color:#8aa4c7;font-weight:800}
+    .avatar img{width:100%;height:100%;object-fit:cover}
+    .name{font-weight:700}
+    .meta{font-size:12px;color:var(--muted)}
+    .pill{font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--stroke);color:#a9f1d1;background:rgba(16,185,129,.12)}
+    .toolbar{display:flex;gap:8px;justify-content:flex-end}
+    .btn{padding:8px 10px;border-radius:10px;border:1px solid var(--stroke);background:#10141a;color:var(--text);cursor:pointer}
+    .empty{border:1px dashed var(--stroke);border-radius:16px;padding:24px;text-align:center;color:var(--muted)}
+    .footer{margin-top:18px;color:var(--muted);font-size:12px;text-align:center}
+  </style>
 </head>
 <body>
-  <header class="topbar">
-    <h1>Мастера</h1>
-    <div class="status" id="status">—</div>
-  </header>
+  <div class="wrap">
+    <header>
+      <div class="logo">B</div>
+      <h1>Админка · Мастера</h1>
+    </header>
 
-  <main class="container">
-    <section class="card">
-      <h2>Список</h2>
-      <div id="list-empty" class="muted" hidden>Пока пусто…</div>
-      <ul id="masters-list" class="list"></ul>
-    </section>
+    <div class="panel">
+      <section class="card">
+        <h2>Новый мастер</h2>
+        <form id="form">
+          <label>Имя</label>
+          <input id="name" type="text" placeholder="Напр. Юлия" required />
 
-    <section class="card">
-      <h2>Создать</h2>
-      <form id="create-form" class="form">
-        <label>Имя <input name="name" required placeholder="Имя мастера" /></label>
-        <label>Телефон <input name="phone" required placeholder="+375..." /></label>
-        <label>Аватар (URL) <input name="avatarUrl" placeholder="https://..." /></label>
-        <label class="row">
-          <input type="checkbox" name="isActive" checked /> Активен
-        </label>
-        <div class="actions">
-          <button type="submit">Сохранить</button>
-          <span id="form-msg" class="muted"></span>
-        </div>
-      </form>
-    </section>
-  </main>
+          <label>Телефон</label>
+          <input id="phone" type="tel" placeholder="+375..." required />
+
+          <label>Аватар (URL)</label>
+          <input id="avatarUrl" type="url" placeholder="https://..." />
+
+          <div class="switch">
+            <input id="isActive" type="checkbox" checked />
+            <span class="hint">Активен</span>
+          </div>
+
+          <button class="primary" id="submit" type="submit">Сохранить</button>
+          <div id="status" class="status"></div>
+          <div class="hint">После сохранения запись сразу появится справа в списке.</div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Список мастеров</h2>
+        <div id="list" class="list"></div>
+        <div id="empty" class="empty" style="display:none">Пока нет записей</div>
+      </section>
+    </div>
+
+    <div class="footer">UI в стиле Apple‑ish: мягкие градиенты, большие радиусы, лаконично ✨</div>
+  </div>
 
   <script>
-    // API base. We know сервер отдает JSON по /public/api/masters
+    // --- Конфиг API: всегда используем публичный префикс, который у тебя уже работает
     const API_BASE = "/public/api";
 
-    function setStatus(text) {
-      const el = document.getElementById("status");
-      el.textContent = text;
-    }
-
-    function fmt(ts) {
-      try { return new Date(ts).toLocaleString(); } catch { return ts; }
-    }
-
-    function liFor(m) {
-      const li = document.createElement("li");
-      li.className = "item";
-      li.innerHTML = \`
-        <div class="title">
-          <strong>\${m.name}</strong>
-          <span class="badge \${m.isActive ? 'ok' : 'muted'}">\${m.isActive ? 'активен' : 'неактивен'}</span>
-        </div>
-        <div class="meta">
-          <span>📱 \${m.phone || '—'}</span>
-          <span>🕒 \${fmt(m.updatedAt || m.createdAt)}</span>
-          <span class="id">id: \${m.id}</span>
-        </div>
-      \`;
-      return li;
-    }
-
-    async function loadMasters() {
-      setStatus("Загрузка…");
-      try {
-        const res = await fetch(\`\${API_BASE}/masters\`, { headers: { "accept": "application/json" } });
-        if (!res.ok) throw new Error(\`HTTP \${res.status}\`);
-        const data = await res.json();
-        const items = Array.isArray(data?.items) ? data.items : [];
-        const list = document.getElementById("masters-list");
-        list.innerHTML = "";
-        if (items.length === 0) {
-          document.getElementById("list-empty").hidden = false;
-        } else {
-          document.getElementById("list-empty").hidden = true;
-          for (const m of items) list.appendChild(liFor(m));
-        }
-        setStatus(\`Загружено: \${items.length}\`);
-      } catch (e) {
-        console.error(e);
-        setStatus("Ошибка загрузки");
-      }
-    }
-
-    async function createMaster(payload) {
-      // Бэкенд может возвращать 200 или 201 — поддержим оба
-      const res = await fetch(\`\${API_BASE}/masters\`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "accept": "application/json" },
-        body: JSON.stringify(payload),
+    // Универсальный фетчер с обработкой ошибок
+    async function api(path, options={}){
+      const res = await fetch(API_BASE + path, {
+        headers: { "Content-Type":"application/json" },
+        ...options
       });
       const text = await res.text();
-      let data = {};
-      try { data = text ? JSON.parse(text) : {}; } catch {}
-      if (!res.ok) {
-        const msg = data?.error || data?.message || \`HTTP \${res.status}\`;
+      let data = null;
+      try{ data = text ? JSON.parse(text) : null; }catch(e){ /* not json */ }
+      if(!res.ok){
+        const msg = (data && (data.error || data.message)) || res.status + " " + res.statusText;
         throw new Error(msg);
       }
-      return data?.item || data; // поддержим {item} или плоский объект
+      return data;
     }
 
-    function hookForm() {
-      const form = document.getElementById("create-form");
-      const msg = document.getElementById("form-msg");
-      form.addEventListener("submit", async (ev) => {
-        ev.preventDefault();
-        msg.textContent = "Сохраняю…";
-        const fd = new FormData(form);
-        const payload = {
-          name: String(fd.get("name") || "").trim(),
-          phone: String(fd.get("phone") || "").trim(),
-          avatarUrl: String(fd.get("avatarUrl") || "").trim() || null,
-          isActive: !!fd.get("isActive"),
-        };
-        try {
-          const item = await createMaster(payload);
-          msg.textContent = "Сохранено ✔";
-          // Оптимистично добавим в список
-          const list = document.getElementById("masters-list");
-          list.prepend(liFor(item));
-          document.getElementById("list-empty").hidden = true;
-          form.reset();
-          form.elements["isActive"].checked = true;
-          setStatus("ОК");
-        } catch (e) {
-          console.error(e);
-          msg.textContent = "Ошибка сохранения";
-          setStatus("Ошибка сохранения");
-        }
-      });
+    // Рендер карточки
+    function card(m){
+      const phone = m.phone || "";
+      const au = m.avatarUrl || "";
+      const avatar = au ? '<img alt=""/>' : (m.name ? m.name[0].toUpperCase() : "M");
+      return \`
+      <div class="item" data-id="\${m.id}">
+        <div class="top">
+          <div class="avatar">\${au ? '<img src="'+au+'" alt=""/>' : avatar}</div>
+          <div class="grow">
+            <div class="name">\${m.name || "Без имени"}</div>
+            <div class="meta">\${phone}</div>
+          </div>
+          <span class="pill">\${m.isActive ? "active" : "disabled"}</span>
+        </div>
+        <div class="toolbar">
+          <button class="btn" data-del="\${m.id}">Удалить</button>
+        </div>
+      </div>\`;
     }
 
-    hookForm();
-    loadMasters();
+    // Рендер списка
+    function renderList(items){
+      const list = document.getElementById("list");
+      const empty = document.getElementById("empty");
+      list.innerHTML = items.map(card).join("");
+      empty.style.display = items.length ? "none" : "block";
+    }
+
+    // Загрузка
+    async function load(){
+      setStatus("Загрузка...", "warn");
+      try{
+        const data = await api("/masters");
+        const items = (data && data.items) || [];
+        renderList(items);
+        setStatus("Готово", "ok");
+      }catch(e){
+        setStatus("Ошибка загрузки: " + e.message, "err");
+      }
+    }
+
+    // Статус
+    function setStatus(msg, type){
+      const el = document.getElementById("status");
+      el.className = "status " + (type || "");
+      el.textContent = msg || "";
+    }
+
+    // Сабмит
+    document.getElementById("form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const btn = document.getElementById("submit");
+      btn.disabled = true; setStatus("Сохраняю...", "warn");
+      const payload = {
+        name: document.getElementById("name").value.trim(),
+        phone: document.getElementById("phone").value.trim(),
+        avatarUrl: document.getElementById("avatarUrl").value.trim(),
+        isActive: document.getElementById("isActive").checked
+      };
+      try{
+        const res = await api("/masters", {
+          method:"POST",
+          body: JSON.stringify(payload)
+        });
+        // принимаем оба формата {item} или просто объект
+        const created = (res && (res.item || res)) || null;
+        await load();
+        setStatus("Сохранено", "ok");
+        ev.target.reset();
+        document.getElementById("isActive").checked = true;
+      }catch(e){
+        setStatus("Ошибка сохранения: " + e.message, "err");
+      }finally{
+        btn.disabled = false;
+      }
+    });
+
+    // Удаление (опционально — если эндпоинт есть)
+    document.getElementById("list").addEventListener("click", async (ev)=>{
+      const id = ev.target?.dataset?.del;
+      if(!id) return;
+      if(!confirm("Удалить мастера?")) return;
+      try{
+        await api("/masters/" + encodeURIComponent(id), { method:"DELETE" });
+        await load();
+        setStatus("Удалено", "ok");
+      }catch(e){
+        setStatus("Ошибка удаления: " + e.message, "err");
+      }
+    });
+
+    load();
   </script>
 </body>
 </html>
