@@ -1,218 +1,191 @@
 #!/bin/bash
+set -e
+
 echo ">>> Развёртывание мини-приложения (сервер + админка)..."
 
-# Создаём структуру каталогов
-mkdir -p app/{data,public}
+mkdir -p app/data
+mkdir -p app/public
 
-# ==== data/services.json ====
-cat <<'EOF' > app/data/services.json
+# --- Тестовые данные ---
+cat <<EOF > app/data/services.json
 [
-  {
-    "id": 1,
-    "name": "Маникюр классический",
-    "group": "Ногтевой сервис",
-    "price": 1500,
-    "duration": 60
-  },
-  {
-    "id": 2,
-    "name": "Педикюр SPA",
-    "group": "Ногтевой сервис",
-    "price": 2500,
-    "duration": 90
-  },
-  {
-    "id": 3,
-    "name": "Окрашивание волос",
-    "group": "Парикмахерские услуги",
-    "price": 3500,
-    "duration": 120
-  }
+  {"id": 1, "name": "Стрижка женская", "price": 1200, "group": "Парикмахерские услуги"},
+  {"id": 2, "name": "Стрижка мужская", "price": 800, "group": "Парикмахерские услуги"},
+  {"id": 3, "name": "Маникюр классический", "price": 1000, "group": "Ногтевой сервис"}
 ]
 EOF
 
-# ==== public/admin.html ====
+cat <<EOF > app/data/groups.json
+[
+  {"id": 1, "name": "Парикмахерские услуги"},
+  {"id": 2, "name": "Ногтевой сервис"},
+  {"id": 3, "name": "Косметология"}
+]
+EOF
+
+# --- package.json ---
+cat <<EOF > app/package.json
+{
+  "name": "beauty-miniapp",
+  "version": "3.0.0",
+  "type": "module",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
+EOF
+
+# --- Сервер ---
+cat <<'EOF' > app/server.js
+import express from "express";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const app = express();
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
+
+const dataDir = path.join(__dirname, "data");
+const servicesFile = path.join(dataDir, "services.json");
+const groupsFile = path.join(dataDir, "groups.json");
+
+const readJSON = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+const writeJSON = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
+
+app.get("/api/services", (req, res) => {
+  res.json(readJSON(servicesFile));
+});
+
+app.post("/api/services", (req, res) => {
+  const services = readJSON(servicesFile);
+  const newService = { id: Date.now(), ...req.body };
+  services.push(newService);
+  writeJSON(servicesFile, services);
+  res.json(newService);
+});
+
+app.put("/api/services/:id", (req, res) => {
+  const services = readJSON(servicesFile);
+  const id = parseInt(req.params.id);
+  const idx = services.findIndex(s => s.id === id);
+  if (idx === -1) return res.status(404).send("Услуга не найдена");
+  services[idx] = { ...services[idx], ...req.body };
+  writeJSON(servicesFile, services);
+  res.json(services[idx]);
+});
+
+app.delete("/api/services/:id", (req, res) => {
+  const services = readJSON(servicesFile);
+  const id = parseInt(req.params.id);
+  const updated = services.filter(s => s.id !== id);
+  writeJSON(servicesFile, updated);
+  res.json({ ok: true });
+});
+
+app.get("/api/groups", (req, res) => {
+  res.json(readJSON(groupsFile));
+});
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => console.log(`✅ Сервер запущен на порту ${PORT}`));
+EOF
+
+# --- Минималистичная админка ---
 cat <<'EOF' > app/public/admin.html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Админка — Beauty Admin</title>
-  <style>
-    body { font-family: system-ui; background: #f8f8f8; margin: 0; padding: 20px; }
-    h1 { color: #333; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #fafafa; }
-    button { margin: 2px; padding: 6px 10px; cursor: pointer; }
-    #form-container { margin-top: 30px; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    input, select { margin: 5px 0; padding: 6px; width: 100%; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Админка услуг</title>
+<style>
+body { font-family: sans-serif; background: #fafafa; color: #333; margin: 2em; }
+h1 { text-align: center; color: #444; }
+table { width: 100%; border-collapse: collapse; margin-top: 1em; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+input, select { padding: 5px; }
+button { padding: 6px 10px; border: none; border-radius: 4px; background: #1976d2; color: white; cursor: pointer; }
+button:hover { background: #125aa3; }
+.container { max-width: 800px; margin: auto; }
+</style>
 </head>
 <body>
-  <h1>Админка услуг</h1>
-  <table id="services">
-    <thead>
-      <tr><th>ID</th><th>Название</th><th>Группа</th><th>Цена</th><th>Длительность (мин)</th><th>Действия</th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<div class="container">
+<h1>Услуги салона</h1>
 
-  <div id="form-container">
-    <h2 id="form-title">Добавить услугу</h2>
-    <form id="service-form">
-      <input type="hidden" id="id">
-      <label>Название: <input type="text" id="name" required></label><br>
-      <label>Группа: <input type="text" id="group" required></label><br>
-      <label>Цена (₽): <input type="number" id="price" required></label><br>
-      <label>Длительность (мин): <input type="number" id="duration" required></label><br>
-      <button type="submit">Сохранить</button>
-      <button type="button" id="cancel">Отмена</button>
-    </form>
-  </div>
+<div>
+  <input id="name" placeholder="Название услуги">
+  <input id="price" type="number" placeholder="Цена">
+  <select id="group"></select>
+  <button onclick="addService()">Добавить</button>
+</div>
 
-  <script>
-    async function loadServices() {
-      const res = await fetch('/api/services');
-      const data = await res.json();
-      const tbody = document.querySelector('#services tbody');
-      tbody.innerHTML = '';
-      data.forEach(s => {
-        tbody.innerHTML += \`
-          <tr>
-            <td>\${s.id}</td>
-            <td>\${s.name}</td>
-            <td>\${s.group}</td>
-            <td>\${s.price}</td>
-            <td>\${s.duration}</td>
-            <td>
-              <button onclick="editService(\${s.id})">✏️</button>
-              <button onclick="deleteService(\${s.id})">🗑️</button>
-            </td>
-          </tr>
-        \`;
-      });
-    }
+<table id="services">
+  <thead>
+    <tr><th>Название</th><th>Группа</th><th>Цена</th><th>Действия</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+</div>
 
-    async function editService(id) {
-      const res = await fetch('/api/services/' + id);
-      const s = await res.json();
-      document.getElementById('id').value = s.id;
-      document.getElementById('name').value = s.name;
-      document.getElementById('group').value = s.group;
-      document.getElementById('price').value = s.price;
-      document.getElementById('duration').value = s.duration;
-      document.getElementById('form-title').innerText = 'Редактировать услугу';
-    }
-
-    async function deleteService(id) {
-      await fetch('/api/services/' + id, { method: 'DELETE' });
-      loadServices();
-    }
-
-    document.getElementById('service-form').onsubmit = async e => {
-      e.preventDefault();
-      const body = {
-        id: document.getElementById('id').value || undefined,
-        name: document.getElementById('name').value,
-        group: document.getElementById('group').value,
-        price: +document.getElementById('price').value,
-        duration: +document.getElementById('duration').value
-      };
-      await fetch('/api/services', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      e.target.reset();
-      document.getElementById('form-title').innerText = 'Добавить услугу';
-      loadServices();
-    };
-
-    document.getElementById('cancel').onclick = e => {
-      document.getElementById('service-form').reset();
-      document.getElementById('form-title').innerText = 'Добавить услугу';
-    };
-
-    loadServices();
-  </script>
+<script>
+async function loadGroups() {
+  const groups = await fetch('/api/groups').then(r => r.json());
+  const sel = document.getElementById('group');
+  groups.forEach(g => {
+    const o = document.createElement('option');
+    o.value = g.name; o.textContent = g.name;
+    sel.appendChild(o);
+  });
+}
+async function loadServices() {
+  const data = await fetch('/api/services').then(r => r.json());
+  const tbody = document.querySelector('#services tbody');
+  tbody.innerHTML = '';
+  data.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = \`
+      <td><input value="\${s.name}" onchange="editService(\${s.id}, 'name', this.value)"></td>
+      <td><input value="\${s.group}" onchange="editService(\${s.id}, 'group', this.value)"></td>
+      <td><input type='number' value="\${s.price}" onchange="editService(\${s.id}, 'price', this.value)"></td>
+      <td><button onclick="delService(\${s.id})">Удалить</button></td>\`;
+    tbody.appendChild(tr);
+  });
+}
+async function addService() {
+  const name = nameEl.value;
+  const price = parseFloat(priceEl.value);
+  const group = groupEl.value;
+  if (!name || !price) return alert('Введите название и цену');
+  await fetch('/api/services', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, price, group})});
+  loadServices();
+}
+async function editService(id, key, value) {
+  await fetch('/api/services/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({[key]: value})});
+}
+async function delService(id) {
+  await fetch('/api/services/'+id, {method:'DELETE'});
+  loadServices();
+}
+const nameEl = document.getElementById('name');
+const priceEl = document.getElementById('price');
+const groupEl = document.getElementById('group');
+loadGroups().then(loadServices);
+</script>
 </body>
 </html>
 EOF
 
-# ==== server.mjs ====
-cat <<'EOF' > app/server.mjs
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import express from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const app = express();
-const PORT = process.env.PORT || 8080;
-const dataFile = path.join(__dirname, 'data', 'services.json');
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-function loadServices() {
-  if (!existsSync(dataFile)) return [];
-  return JSON.parse(readFileSync(dataFile, 'utf-8'));
-}
-
-function saveServices(data) {
-  writeFileSync(dataFile, JSON.stringify(data, null, 2), 'utf-8');
-}
-
-app.get('/api/services', (req, res) => {
-  res.json(loadServices());
-});
-
-app.get('/api/services/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const item = loadServices().find(s => s.id === id);
-  res.json(item || {});
-});
-
-app.post('/api/services', (req, res) => {
-  let data = loadServices();
-  const body = req.body;
-  if (body.id) {
-    const idx = data.findIndex(s => s.id == body.id);
-    data[idx] = body;
-  } else {
-    body.id = Date.now();
-    data.push(body);
-  }
-  saveServices(data);
-  res.json({ success: true });
-});
-
-app.delete('/api/services/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  let data = loadServices().filter(s => s.id !== id);
-  saveServices(data);
-  res.json({ success: true });
-});
-
-app.get('/health', (_, res) => res.send('OK'));
-
-app.listen(PORT, () => console.log(`✅ Сервер запущен на порту ${PORT}`));
-EOF
-
-# ==== package.json ====
-cat <<'EOF' > app/package.json
-{
-  "type": "module",
-  "dependencies": {
-    "express": "^4.19.2"
-  },
-  "scripts": {
-    "start": "node server.mjs"
-  }
-}
-EOF
+# --- Проверка Node.js ---
+if ! command -v node >/dev/null 2>&1; then
+  echo ">>> Node.js не найден, устанавливаю..."
+  apt-get update -y && apt-get install -y curl
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y nodejs
+fi
 
 cd app
 npm install
-node server.mjs
+node server.js
