@@ -3,6 +3,16 @@ set -e
 
 echo ">>> Развёртывание мини-приложения (сервер + админка)..."
 
+# --- Установка Node.js, если его нет ---
+if ! command -v node >/dev/null 2>&1; then
+  echo ">>> Node.js не найден, устанавливаю..."
+  apt-get update -y
+  apt-get install -y curl
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y nodejs
+  echo "✅ Node.js установлен: $(node -v)"
+fi
+
 # === 1. Создаём структуру ===
 mkdir -p /app
 cd /app
