@@ -187,75 +187,62 @@ document.addEventListener('DOMContentLoaded', () => {
   let services = [];
   let groups = [];
 
-  async function loadData() {
-    const sResp = await fetch(apiBase + '/services');
-    const gResp = await fetch(apiBase + '/groups');
-    services = await sResp.json();
-    groups = await gResp.json();
-    renderGroups();
-    renderTable();
-  }
+async function loadData() {
+  const res = await fetch('/api/services');
+  const services = await res.json();
+  const tbody = document.querySelector('#services tbody');
+  tbody.innerHTML = '';
+  services.forEach((s) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td contenteditable="true" onblur="updateService('${s.id}', 'name', this.innerText)">${s.name}</td>
+      <td contenteditable="true" onblur="updateService('${s.id}', 'price', this.innerText)">${s.price}</td>
+      <td>
+        <button onclick="deleteService('${s.id}')">🗑️</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
 
-  function renderGroups() {
-    const filter = document.getElementById('groupFilter');
-    let html = '<option value="">Все</option>';
-    for (const g of groups) html += '<option value="' + g.name + '">' + g.name + '</option>';
-    filter.innerHTML = html;
-    filter.onchange = renderTable;
-  }
-
-  function renderTable() {
-    const tbody = document.querySelector('#servicesTable tbody');
-    const groupFilter = document.getElementById('groupFilter').value;
-    tbody.innerHTML = '';
-    for (const s of services) {
-      if (groupFilter && s.group !== groupFilter) continue;
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td contenteditable="true" onblur="updateService(' + s.id + ', \\'name\\', this.innerText)">' + s.name + '</td>' +
-        '<td contenteditable="true" onblur="updateService(' + s.id + ', \\'price\\', this.innerText)">' + s.price + '</td>' +
-        '<td contenteditable="true" onblur="updateService(' + s.id + ', \\'group\\', this.innerText)">' + s.group + '</td>' +
-        '<td><button class="del-btn" onclick="deleteService(' + s.id + ')">Удалить</button></td>';
-      tbody.appendChild(tr);
-    }
-  }
-
-  window.addService = async function () {
-    const newService = { name: "Новая услуга", price: 0, group: groups[0]?.name || "" };
-    await fetch(apiBase + '/services', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newService)
-    });
-    showBanner("Услуга добавлена");
-    await loadData();
-  }
-
-  window.updateService = async function (id, field, value) {
-    await fetch(apiBase + '/services/' + id, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value })
-    });
-    showBanner("Изменения сохранены");
-  }
-
-  window.deleteService = async function (id) {
-    await fetch(apiBase + '/services/' + id, { method: 'DELETE' });
-    showBanner("Услуга удалена");
-    await loadData();
-  }
-
-  function showBanner(text) {
-    const banner = document.getElementById('banner');
-    banner.textContent = text;
-    banner.style.display = 'block';
-    setTimeout(() => banner.style.display = 'none', 2000);
-  }
-
-  document.getElementById('addBtn').onclick = addService;
+async function addService() {
+  const name = prompt('Введите название услуги:');
+  const price = prompt('Введите цену:');
+  if (!name || !price) return;
+  await fetch('/api/services', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, price })
+  });
   loadData();
-});
+}
+
+async function updateService(id, field, value) {
+  await fetch(`/api/services/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [field]: value })
+  });
+  showBanner('Изменения сохранены');
+}
+
+async function deleteService(id) {
+  await fetch(`/api/services/${id}`, { method: 'DELETE' });
+  loadData();
+}
+
+function showBanner(msg) {
+  const banner = document.createElement('div');
+  banner.textContent = msg;
+  banner.style = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#4caf50;color:#fff;padding:10px 20px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.2);z-index:9999;';
+  document.body.appendChild(banner);
+  setTimeout(() => banner.remove(), 2000);
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+window.addService = addService;
+window.deleteService = deleteService;
+window.updateService = updateService;
 </script>
 </body>
 </html>
