@@ -114,7 +114,10 @@ cat <<'EOF' > "$APP_DIR/public/admin.html"
 </html>
 EOF
 
+
+
 echo ">>> Создаю сервер..."
+mkdir -p "$APP_DIR/app"
 cat <<'EOF' > "$APP_DIR/app/server.mjs"
 import http from 'http';
 import fs from 'fs';
