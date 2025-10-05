@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+apt-get update -y
+apt-get install -y curl ca-certificates gnupg
+
 echo ">>> Развёртывание мини-приложения (сервер + админка)..."
 
 mkdir -p app/data app/public
