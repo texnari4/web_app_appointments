@@ -1,30 +1,33 @@
-# Beauty Mini App Appointments — v2.5.0 (filesystem)
+# Pino-HTTP build fix (3.0.3)
 
-**Что внутри**
-- Node.js 22 + TypeScript → Express API
-- Файловая БД (JSON) в каталоге `DATA_DIR` (по умолчанию `/app/data`)
-- Админка на `/admin` для CRUD мастеров
-- Без Prisma/Redis/pino-http
+Ошибка сборки:
+> Type 'typeof import(".../pino-http/index")' has no call signatures.
 
-## Запуск локально
-```bash
-npm install
-npm run build
-npm start
+## Что поменять
+
+1) Замените импорт `pino-http` в `src/index.ts` на default-импорт **и** вызов без аргументов:
+
+```ts
+// ПЛОХО:
+// import * as pinoHttp from 'pino-http'
+// import { pinoHttp } from 'pino-http'
+
+// ПРАВИЛЬНО:
+import pinoHttp from 'pino-http'
+app.use(pinoHttp())
 ```
-Открой `http://localhost:8080/admin`
 
-## Эндпоинты
-- `GET /health` → `{ ok: true, ts }`
-- `GET /api/masters` → список
-- `POST /api/masters` → создать (`{name, phone, specialty?, photoUrl?}`)
-- `PATCH /api/masters/:id` → обновить
-- `DELETE /api/masters/:id` → удалить
+2) Замените ваш `tsconfig.json` на этот (NodeNext + esModuleInterop).
 
-## Персистентность
-- Укажи `DATA_DIR` через переменную окружения или примонтируй volume на `/app/data`.
-- Railway: создай Volume и примонтируй в `/app/data`.
+3) Пересоберите:
+```bash
+npm ci
+npm run build
+```
 
-## Dockerfile
-Мультистейдж: сборка → рантайм (node:22-bookworm-slim). 
-Приложение запускается командой `node dist/index.js`.
+## Примечание по ESM
+Так как используется `module: "NodeNext"`, в относительных импортах внутри `.ts` файлов указывайте **расширение `.js`**, например:
+```ts
+import { db } from './db.js'
+```
+(TypeScript перепишет его в runtime-корректный импорт в `dist`)
