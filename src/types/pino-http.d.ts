@@ -1,7 +1,8 @@
-// Local shim to make pino-http callable under NodeNext in strict TS builds
-declare module 'pino-http' {
-  interface Options { [k: string]: any }
-  type PinoHttp = (opts?: Options) => any
-  const pinoHttp: PinoHttp
-  export = pinoHttp
+declare module "pino-http" {
+  import type { IncomingMessage, ServerResponse } from "node:http";
+  import type { LoggerOptions } from "pino";
+  export interface PinoHttpOptions extends LoggerOptions {}
+  function pinoHttp(opts?: PinoHttpOptions):
+    (req: IncomingMessage, res: ServerResponse, next: (err?: any) => void) => void;
+  export = pinoHttp;
 }
