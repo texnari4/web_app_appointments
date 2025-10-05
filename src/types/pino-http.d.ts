@@ -1,6 +1,7 @@
-// Minimal local typings to avoid “no call signatures” on pino-http under NodeNext
+// Local shim to make pino-http callable under NodeNext in strict TS builds
 declare module 'pino-http' {
-  const pinoHttp: any;
-  export default pinoHttp;
-  export = pinoHttp;
+  interface Options { [k: string]: any }
+  type PinoHttp = (opts?: Options) => any
+  const pinoHttp: PinoHttp
+  export = pinoHttp
 }

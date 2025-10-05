@@ -2,12 +2,12 @@
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 
-# Install deps (use lockfile if present for reproducible builds)
+# Install deps first to leverage Docker layer cache
 COPY package.json package-lock.json* ./
 RUN npm ci || npm i
 
-# Copy config & sources
-COPY tsconfig.json ./
+# Project files
+COPY tsconfig.json ./tsconfig.json
 COPY src ./src
 COPY public ./public
 
@@ -17,19 +17,16 @@ RUN npm run build && test -d dist || (echo "ERROR: dist/ not found after build" 
 # --- Runtime stage ---
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
-ENV NODE_ENV=production
 
-# App files
+# Copy built app and runtime files
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
 
-# Install only production deps (uses package.json copied above)
-RUN npm i --omit=dev --no-audit --no-fund
-
-# Data dir & permissions for Railway volume at /app/data
-RUN adduser --system --uid 1001 appuser         && mkdir -p /app/data         && chown -R appuser:appuser /app
-USER appuser
+# Data dir (Railway volume should be mounted to /app/data)
+RUN mkdir -p /app/data && chown -R node:node /app
+USER node
 
 EXPOSE 8080
 CMD ["node", "dist/index.js"]
