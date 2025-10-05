@@ -1,71 +1,126 @@
-import express, { Request, Response } from 'express';
+import http from 'http';
+import { readFile } from 'fs/promises';
+import path from 'path';
+import url from 'url';
+import pino from 'pino';
 import pinoHttp from 'pino-http';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import crypto from 'node:crypto';
-import { masterCreateSchema, type MasterCreateInput } from './validators.js';
-import { readDb, writeDb } from './storage.js';
+import { fileURLToPath } from 'url';
+import { masterCreateSchema, MasterCreateInput } from './validators.js';
+import { listMasters, addMaster, removeMaster } from './storage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
-const PORT = Number(process.env.PORT || 8080);
+const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+const httpLogger = pinoHttp({ logger });
 
-app.use(pinoHttp());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const PORT = Number(process.env.PORT) || 8080;
 
-// health
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ ok: true, ts: new Date().toISOString() });
-});
+function sendJSON(res: http.ServerResponse, code: number, data: any) {
+  const body = Buffer.from(JSON.stringify(data));
+  res.statusCode = code;
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.setHeader('content-length', String(body.length));
+  res.end(body);
+}
 
-// static admin
-app.use('/admin', express.static(path.join(__dirname, '../public/admin'), { extensions: ['html'] }));
-app.use('/', express.static(path.join(__dirname, '../public'), { extensions: ['html'] }));
+function sendText(res: http.ServerResponse, code: number, text: string) {
+  const body = Buffer.from(text, 'utf-8');
+  res.statusCode = code;
+  res.setHeader('content-type', 'text/plain; charset=utf-8');
+  res.setHeader('content-length', String(body.length));
+  res.end(body);
+}
 
-// API - admin
-app.get('/admin/api/masters', async (_req, res) => {
-  const db = await readDb();
-  res.json({ items: db.masters });
-});
+async function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
+  const reqUrl = (req.url || '/');
+  if (!reqUrl.startsWith('/public/') && reqUrl !== '/' && reqUrl !== '/admin/' && !reqUrl.startsWith('/admin/')) return false;
 
-app.post('/admin/api/masters', async (req, res) => {
-  const parsed = masterCreateSchema.safeParse(req.body as MasterCreateInput);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'VALIDATION_ERROR', details: parsed.error.flatten() });
+  let filePath: string;
+  if (reqUrl === '/' ) filePath = path.join(PUBLIC_DIR, 'index.html');
+  else if (reqUrl === '/admin/' || reqUrl === '/admin') filePath = path.join(PUBLIC_DIR, 'admin', 'index.html');
+  else filePath = path.join(PUBLIC_DIR, reqUrl.replace(/^\/+/, ''));
+
+  try {
+    const data = await readFile(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const ctype = ext === '.html' ? 'text/html; charset=utf-8'
+      : ext === '.css' ? 'text/css; charset=utf-8'
+      : ext === '.js' ? 'text/javascript; charset=utf-8'
+      : 'application/octet-stream';
+    res.statusCode = 200;
+    res.setHeader('content-type', ctype);
+    res.end(data);
+    return true;
+  } catch {
+    return false;
   }
-  const input = parsed.data;
-  const db = await readDb();
-  const master = {
-    id: crypto.randomUUID(),
-    name: input.name,
-    phone: input.phone && input.phone.length ? input.phone : undefined,
-    createdAt: new Date().toISOString(),
-  };
-  db.masters.unshift(master);
-  await writeDb(db);
-  res.status(201).json(master);
-});
+}
 
-app.delete('/admin/api/masters/:id', async (req, res) => {
-  const id = req.params.id;
-  const db = await readDb();
-  const before = db.masters.length;
-  db.masters = db.masters.filter(m => m.id !== id);
-  if (db.masters.length === before) {
-    return res.status(404).json({ error: 'NOT_FOUND' });
+async function parseJsonBody(req: http.IncomingMessage): Promise<any> {
+  return await new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (d) => chunks.push(d));
+    req.on('end', () => {
+      try {
+        const raw = Buffer.concat(chunks).toString('utf-8');
+        if (!raw) return resolve({});
+        resolve(JSON.parse(raw));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  httpLogger(req, res);
+
+  const method = req.method || 'GET';
+  const parsed = url.parse(req.url || '/', true);
+  const pathname = parsed.pathname || '/';
+
+  try {
+    // Health
+    if (method === 'GET' && pathname === '/health') {
+      return sendJSON(res, 200, { ok: true, ts: new Date().toISOString() });
+    }
+
+    // API (admin)
+    if (pathname.startsWith('/admin/api/masters')) {
+      if (method === 'GET') {
+        const items = await listMasters();
+        return sendJSON(res, 200, { items });
+      }
+      if (method === 'POST') {
+        const body = await parseJsonBody(req);
+        const parsedBody = masterCreateSchema.parse(body as MasterCreateInput);
+        const created = await addMaster(parsedBody);
+        return sendJSON(res, 201, created);
+      }
+      if (method === 'DELETE') {
+        const id = String(parsed.query?.id || '');
+        if (!id) return sendJSON(res, 400, { error: 'id is required' });
+        const ok = await removeMaster(id);
+        return sendJSON(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'not found' });
+      }
+      return sendJSON(res, 405, { error: 'method not allowed' });
+    }
+
+    // Public + admin static
+    const served = await serveStatic(req, res);
+    if (served) return;
+
+    // Fallback
+    return sendJSON(res, 404, { error: 'NOT_FOUND' });
+  } catch (e: any) {
+    logger.error({ err: e }, 'request error');
+    return sendJSON(res, 500, { error: 'INTERNAL_ERROR' });
   }
-  await writeDb(db);
-  res.json({ ok: true });
 });
 
-// fallback 404 for API
-app.use((_req, res) => {
-  res.status(404).json({ error: 'NOT_FOUND' });
-});
-
-app.listen(PORT, () => {
-  console.log(`Server started on :${PORT}`);
+server.listen(PORT, () => {
+  logger.info(`Server started on :${PORT}`);
 });
