@@ -1,57 +1,23 @@
+
 <!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Админка — Мастера</title>
+  <title>Админка — Beauty</title>
   <link rel="stylesheet" href="/public/admin/styles.css">
 </head>
 <body>
-  <div class="container">
+  <div class="wrap">
     <h1>Мастера</h1>
-    <form id="create-form">
+    <form id="f">
       <input name="name" placeholder="Имя" required />
       <input name="phone" placeholder="Телефон" required />
-      <input name="avatarUrl" placeholder="Фото URL" />
-      <button type="submit">Сохранить</button>
+      <input name="avatarUrl" placeholder="Ссылка на фото" />
+      <button type="submit">Добавить</button>
     </form>
-
-    <h2>Список</h2>
     <ul id="list"></ul>
   </div>
-
-  <script>
-    async function refresh() {
-      const res = await fetch('/public/api/masters');
-      const { items } = await res.json();
-      const ul = document.getElementById('list');
-      ul.innerHTML = '';
-      items.forEach(m => {
-        const li = document.createElement('li');
-        li.textContent = m.name + ' — ' + m.phone;
-        ul.appendChild(li);
-      });
-    }
-
-    document.getElementById('create-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const form = e.target;
-      const payload = Object.fromEntries(new FormData(form).entries());
-      payload.isActive = true;
-      const res = await fetch('/public/api/masters', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) {
-        alert('Ошибка сохранения');
-        return;
-      }
-      form.reset();
-      await refresh();
-    });
-
-    refresh();
-  </script>
+  <script src="/public/admin/main.js"></script>
 </body>
 </html>
