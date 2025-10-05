@@ -47,6 +47,8 @@ const groupsFile = join(DATA_DIR, 'groups.json');
 const bookingsFile = join(DATA_DIR, 'bookings.json');
 
 const SLOT_STEP_MIN = Number(process.env.SLOT_STEP_MIN || 30);
+const BUSINESS_OPEN_TIME = process.env.BUSINESS_OPEN_TIME || '09:00';
+const BUSINESS_CLOSE_TIME = process.env.BUSINESS_CLOSE_TIME || '21:00';
 
 function parseKeyList(value = '') {
   return value
@@ -296,6 +298,57 @@ function minutesToTime(value) {
     .padStart(2, '0');
   const minutes = (value % 60).toString().padStart(2, '0');
   return `${hours}:${minutes}`;
+}
+
+function getWorkdayBounds() {
+  const open = timeToMinutes(BUSINESS_OPEN_TIME);
+  const close = timeToMinutes(BUSINESS_CLOSE_TIME);
+  if (!Number.isFinite(open) || !Number.isFinite(close) || open >= close) {
+    console.warn(
+      '⚠️  BUSINESS_OPEN_TIME/BUSINESS_CLOSE_TIME заданы некорректно. Использую диапазон 09:00-21:00.'
+    );
+    return { open: 9 * 60, close: 21 * 60 };
+  }
+  return { open, close };
+}
+
+function buildDailySlots({ date, duration, masterId, bookings }) {
+  const { open, close } = getWorkdayBounds();
+  const normalizedDuration = Number(duration ?? SLOT_STEP_MIN);
+  if (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0) {
+    return [];
+  }
+
+  const normalizedMasterId = masterId == null || masterId === '' ? '' : String(masterId);
+  const relevantBookings = bookings.filter(
+    (booking) => booking.date === date && String(booking.masterId ?? '') === normalizedMasterId
+  );
+
+  const busyRanges = relevantBookings
+    .map((booking) => {
+      const start = timeToMinutes(booking.startTime);
+      const durationMinutes = Number(booking.duration ?? SLOT_STEP_MIN);
+      if (!Number.isFinite(start) || !Number.isFinite(durationMinutes)) {
+        return null;
+      }
+      return [start, start + durationMinutes];
+    })
+    .filter((range) => Array.isArray(range));
+
+  const slots = [];
+  for (let start = open; start + normalizedDuration <= close; start += SLOT_STEP_MIN) {
+    const end = start + normalizedDuration;
+    const conflict = busyRanges.some(([busyStart, busyEnd]) => {
+      return Math.max(busyStart, start) < Math.min(busyEnd, end);
+    });
+    slots.push({
+      startTime: minutesToTime(start),
+      endTime: minutesToTime(end),
+      available: !conflict
+    });
+  }
+
+  return slots;
 }
 
 function validateBookingPayload(payload, services) {
@@ -562,6 +615,52 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (pathname === '/api/availability' && req.method === 'GET') {
+      const date = String(query.date ?? '').trim();
+      if (!DATE_REGEX.test(date)) {
+        sendJSON(res, 400, { error: 'Укажите дату в формате ГГГГ-ММ-ДД' });
+        return;
+      }
+
+      const services = readJSON(servicesFile, []);
+      const serviceId = query.serviceId ? Number(query.serviceId) : null;
+      let duration = query.duration ? Number(query.duration) : null;
+      let service = null;
+
+      if (serviceId != null && !Number.isNaN(serviceId)) {
+        service = services.find((item) => item.id === serviceId);
+        if (!service) {
+          sendJSON(res, 404, { error: 'Услуга не найдена' });
+          return;
+        }
+        duration = duration ?? Number(service.duration ?? SLOT_STEP_MIN);
+      }
+
+      duration = duration ?? SLOT_STEP_MIN;
+      if (!Number.isFinite(duration) || duration <= 0) {
+        sendJSON(res, 400, { error: 'Укажите корректную длительность услуги' });
+        return;
+      }
+
+      const masterId = query.masterId != null && query.masterId !== '' ? String(query.masterId).trim() : null;
+      const bookings = readJSON(bookingsFile, []);
+      const slots = buildDailySlots({ date, duration, masterId, bookings });
+
+      sendJSON(res, 200, {
+        slots,
+        meta: {
+          slotStep: SLOT_STEP_MIN,
+          serviceId: service?.id ?? null,
+          serviceDuration: duration,
+          businessHours: {
+            open: BUSINESS_OPEN_TIME,
+            close: BUSINESS_CLOSE_TIME
+          }
+        }
+      });
+      return;
+    }
+
     if (pathname === '/api/bookings' && req.method === 'GET') {
       if (!ensureAuthorized(ctx, res, ['master', 'admin'])) {
         return;
@@ -763,7 +862,14 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (pathname === '/' || pathname === '/admin/' || pathname.startsWith('/admin')) {
+    if (pathname === '/' || pathname === '/client' || pathname === '/client/') {
+      const html = readFileSync(join(__dirname, 'public', 'client.html'), 'utf-8');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+      return;
+    }
+
+    if (pathname === '/admin' || pathname === '/admin/' || pathname.startsWith('/admin')) {
       const html = readFileSync(join(__dirname, 'public', 'admin.html'), 'utf-8');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
@@ -779,6 +885,601 @@ const server = createServer(async (req, res) => {
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => console.log(`✅ Сервер запущен на порту ${PORT}`));
+EOF
+
+# --- admin.html ---
+cat <<'EOF' > public/client.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Запись в салон — Beauty Appointments</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: 'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px 16px 48px;
+      background: linear-gradient(180deg, #f6f7fb 0%, #f0f3f8 45%, #eef1f7 100%);
+      color: #111827;
+      min-height: 100vh;
+    }
+
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      display: grid;
+      gap: 28px;
+    }
+
+    header {
+      text-align: center;
+      display: grid;
+      gap: 12px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 38px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin: 0 auto;
+      max-width: 520px;
+      color: #4b5563;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    section {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(14px);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 35px 60px -40px rgba(15, 23, 42, 0.35);
+      border: 1px solid rgba(209, 213, 219, 0.4);
+      display: grid;
+      gap: 18px;
+    }
+
+    section h2 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 14px;
+      color: #4b5563;
+    }
+
+    input,
+    select,
+    textarea {
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 15px;
+      font-family: inherit;
+      background: rgba(255, 255, 255, 0.95);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: rgba(99, 102, 241, 0.9);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .pill-select {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .pill-button {
+      padding: 10px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(255, 255, 255, 0.9);
+      cursor: pointer;
+      font-size: 14px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .pill-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.45);
+    }
+
+    .pill-button.active {
+      background: linear-gradient(130deg, #6366f1, #4338ca);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 20px 32px -20px rgba(99, 102, 241, 0.65);
+    }
+
+    .slot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+    }
+
+    .slot-button {
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(255, 255, 255, 0.92);
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 500;
+      display: grid;
+      gap: 4px;
+      justify-items: center;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .slot-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 34px -26px rgba(15, 23, 42, 0.38);
+    }
+
+    .slot-button.selected {
+      border-color: transparent;
+      background: linear-gradient(130deg, #10b981, #059669);
+      color: #fff;
+      box-shadow: 0 24px 34px -24px rgba(5, 150, 105, 0.55);
+    }
+
+    .slot-button[disabled] {
+      cursor: not-allowed;
+      opacity: 0.45;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .muted {
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .muted.error {
+      color: #ef4444;
+    }
+
+    .submit-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 22px;
+      border-radius: 16px;
+      border: none;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(135deg, #111827, #1f2937);
+      color: #fff;
+      box-shadow: 0 24px 44px -26px rgba(17, 24, 39, 0.7);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .submit-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 28px 46px -24px rgba(17, 24, 39, 0.65);
+    }
+
+    .summary-card {
+      border-radius: 18px;
+      border: 1px solid rgba(209, 213, 219, 0.5);
+      background: rgba(249, 250, 251, 0.9);
+      padding: 16px 18px;
+      display: grid;
+      gap: 6px;
+      font-size: 15px;
+      color: #374151;
+    }
+
+    .banner {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 14px 22px;
+      border-radius: 14px;
+      background: rgba(16, 185, 129, 0.95);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 32px 48px -32px rgba(16, 185, 129, 0.65);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .banner.show {
+      opacity: 1;
+      transform: translate(-50%, -6px);
+    }
+
+    .banner.error {
+      background: rgba(239, 68, 68, 0.95);
+      box-shadow: 0 32px 48px -32px rgba(239, 68, 68, 0.65);
+    }
+
+    @media (max-width: 600px) {
+      section {
+        padding: 20px;
+      }
+
+      .slot-grid {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      }
+
+      .submit-btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Запишитесь в любимый салон</h1>
+      <p>Выберите услугу, удобное время и подтвердите запись буквально за минуту. Мы напомним вам о визите в Telegram.</p>
+    </header>
+
+    <form id="bookingForm" class="form-grid">
+      <section>
+        <h2>Контакты</h2>
+        <div class="form-grid">
+          <label>
+            Как к вам обращаться
+            <input type="text" id="clientName" placeholder="Имя и фамилия" required />
+          </label>
+          <label>
+            Телефон
+            <input type="tel" id="clientPhone" placeholder="+7 (999) 123-45-67" required />
+          </label>
+          <label>
+            Комментарий для мастера (необязательно)
+            <textarea id="clientNotes" placeholder="Например: хочу нежный пастельный оттенок"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Выбор услуги</h2>
+        <label>
+          Услуга
+          <select id="serviceSelect" required>
+            <option value="" disabled selected>Загружаю список…</option>
+          </select>
+        </label>
+        <div class="summary-card" id="serviceSummary" hidden></div>
+      </section>
+
+      <section>
+        <h2>Дата и специалист</h2>
+        <div class="form-grid">
+          <label>
+            Дата визита
+            <input type="date" id="dateInput" required />
+          </label>
+          <label>
+            ID мастера (необязательно)
+            <input type="text" id="masterInput" placeholder="Если хотите записаться к конкретному мастеру" />
+          </label>
+        </div>
+        <p class="muted" id="availabilityHint">Выберите услугу и дату, чтобы увидеть свободные слоты.</p>
+      </section>
+
+      <section>
+        <h2>Свободные слоты</h2>
+        <div id="slotsContainer" class="slot-grid"></div>
+        <p class="muted" id="slotsEmpty" hidden>На выбранный день пока нет свободных окон. Попробуйте другую дату.</p>
+      </section>
+
+      <section>
+        <h2>Подтверждение</h2>
+        <div class="summary-card" id="selectionSummary" hidden></div>
+        <button type="submit" class="submit-btn">Подтвердить запись</button>
+      </section>
+    </form>
+  </main>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const bookingForm = document.getElementById('bookingForm');
+      const serviceSelect = document.getElementById('serviceSelect');
+      const serviceSummary = document.getElementById('serviceSummary');
+      const dateInput = document.getElementById('dateInput');
+      const masterInput = document.getElementById('masterInput');
+      const slotsContainer = document.getElementById('slotsContainer');
+      const slotsEmpty = document.getElementById('slotsEmpty');
+      const selectionSummary = document.getElementById('selectionSummary');
+      const banner = document.getElementById('banner');
+      const availabilityHint = document.getElementById('availabilityHint');
+
+      const clientNameInput = document.getElementById('clientName');
+      const clientPhoneInput = document.getElementById('clientPhone');
+      const clientNotesInput = document.getElementById('clientNotes');
+
+      const state = {
+        services: [],
+        selectedServiceId: null,
+        selectedSlot: null,
+        availability: [],
+        serviceDuration: null
+      };
+
+      const showBanner = (message, type = 'success') => {
+        banner.textContent = message;
+        banner.classList.toggle('error', type === 'error');
+        banner.classList.add('show');
+        banner.hidden = false;
+        setTimeout(() => {
+          banner.classList.remove('show');
+          setTimeout(() => {
+            banner.hidden = true;
+          }, 180);
+        }, 2400);
+      };
+
+      const formatCurrency = (value) =>
+        new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value);
+
+      const renderServiceSummary = () => {
+        const service = state.services.find((item) => item.id === state.selectedServiceId);
+        if (!service) {
+          serviceSummary.hidden = true;
+          serviceSummary.innerHTML = '';
+          return;
+        }
+
+        state.serviceDuration = service.duration;
+        serviceSummary.hidden = false;
+        serviceSummary.innerHTML = `
+          <strong>${service.name}</strong>
+          <span>${service.description}</span>
+          <span><strong>${formatCurrency(service.price)}</strong> · ${service.duration} мин</span>
+        `;
+      };
+
+      const renderSelectionSummary = () => {
+        const service = state.services.find((item) => item.id === state.selectedServiceId);
+        if (!service || !state.selectedSlot || !dateInput.value) {
+          selectionSummary.hidden = true;
+          selectionSummary.innerHTML = '';
+          return;
+        }
+
+        const date = new Date(dateInput.value);
+        const formattedDate = date.toLocaleDateString('ru-RU', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long'
+        });
+
+        selectionSummary.hidden = false;
+        selectionSummary.innerHTML = `
+          <div><strong>${service.name}</strong></div>
+          <div>${formattedDate}, ${state.selectedSlot.startTime}</div>
+          <div>${formatCurrency(service.price)}, длительность ${service.duration} мин</div>
+        `;
+      };
+
+      const clearSlots = () => {
+        slotsContainer.innerHTML = '';
+        slotsEmpty.hidden = true;
+        state.selectedSlot = null;
+        renderSelectionSummary();
+      };
+
+      const renderSlots = () => {
+        clearSlots();
+
+        const availableSlots = state.availability.filter((slot) => slot.available);
+        if (!availableSlots.length) {
+          slotsEmpty.hidden = false;
+          return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        availableSlots.forEach((slot) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'slot-button';
+          button.dataset.start = slot.startTime;
+          button.textContent = slot.startTime;
+
+          button.addEventListener('click', () => {
+            state.selectedSlot = slot;
+            document.querySelectorAll('.slot-button').forEach((el) => el.classList.remove('selected'));
+            button.classList.add('selected');
+            renderSelectionSummary();
+          });
+
+          fragment.appendChild(button);
+        });
+
+        slotsContainer.appendChild(fragment);
+      };
+
+      const fetchAvailability = async () => {
+        if (!state.selectedServiceId || !dateInput.value) {
+          availabilityHint.textContent = 'Выберите услугу и дату, чтобы увидеть свободные слоты.';
+          availabilityHint.classList.remove('error');
+          clearSlots();
+          return;
+        }
+
+        availabilityHint.textContent = 'Проверяю доступные окна…';
+        const params = new URLSearchParams({
+          serviceId: state.selectedServiceId,
+          date: dateInput.value
+        });
+
+        if (masterInput.value.trim()) {
+          params.set('masterId', masterInput.value.trim());
+        }
+
+        try {
+          const response = await fetch(`/api/availability?${params.toString()}`);
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({ error: 'Не удалось получить слоты' }));
+            availabilityHint.textContent = payload.error || 'Не удалось получить слоты';
+            availabilityHint.classList.add('error');
+            clearSlots();
+            return;
+          }
+
+          const data = await response.json();
+          state.availability = Array.isArray(data.slots) ? data.slots : [];
+          state.serviceDuration = data.meta?.serviceDuration ?? state.serviceDuration;
+          availabilityHint.textContent = `Доступно свободных окон: ${state.availability.filter((slot) => slot.available).length}`;
+          availabilityHint.classList.remove('error');
+          renderSlots();
+        } catch (error) {
+          console.error(error);
+          availabilityHint.textContent = 'Не удалось получить слоты';
+          availabilityHint.classList.add('error');
+          clearSlots();
+        }
+      };
+
+      const loadServices = async () => {
+        try {
+          const response = await fetch('/api/services');
+          if (!response.ok) {
+            throw new Error('services request failed');
+          }
+          const services = await response.json();
+          state.services = services;
+
+          if (!services.length) {
+            serviceSelect.innerHTML = '<option value="" disabled selected>Нет доступных услуг</option>';
+            serviceSelect.disabled = true;
+            return;
+          }
+
+          const options = ['<option value="" disabled selected>Выберите услугу</option>'];
+          services.forEach((service) => {
+            options.push(
+              `<option value="${service.id}">${service.name} · ${service.duration} мин · ${formatCurrency(service.price)}</option>`
+            );
+          });
+          serviceSelect.innerHTML = options.join('');
+          serviceSelect.disabled = false;
+        } catch (error) {
+          console.error(error);
+          serviceSelect.innerHTML = '<option value="" disabled selected>Не удалось загрузить услуги</option>';
+          serviceSelect.disabled = true;
+        }
+      };
+
+      const initDate = () => {
+        const today = new Date();
+        const iso = today.toISOString().split('T')[0];
+        dateInput.min = iso;
+        dateInput.value = iso;
+      };
+
+      serviceSelect.addEventListener('change', (event) => {
+        state.selectedServiceId = Number(event.target.value);
+        renderServiceSummary();
+        fetchAvailability();
+      });
+
+      dateInput.addEventListener('change', fetchAvailability);
+      masterInput.addEventListener('change', fetchAvailability);
+
+      bookingForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        if (!state.selectedServiceId) {
+          showBanner('Выберите услугу', 'error');
+          return;
+        }
+
+        if (!state.selectedSlot) {
+          showBanner('Выберите свободное время', 'error');
+          return;
+        }
+
+        const payload = {
+          clientName: clientNameInput.value.trim(),
+          clientPhone: clientPhoneInput.value.trim(),
+          notes: clientNotesInput.value.trim(),
+          serviceId: state.selectedServiceId,
+          date: dateInput.value,
+          startTime: state.selectedSlot.startTime,
+          duration: state.serviceDuration,
+          masterId: masterInput.value.trim() || null
+        };
+
+        if (!payload.clientName || !payload.clientPhone) {
+          showBanner('Заполните контакты', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/bookings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({ error: 'Не удалось создать запись' }));
+            showBanner(data.error || 'Не удалось создать запись', 'error');
+            await fetchAvailability();
+            return;
+          }
+
+          await response.json();
+          showBanner('Запись подтверждена!');
+          bookingForm.reset();
+          initDate();
+          state.selectedServiceId = null;
+          state.selectedSlot = null;
+          serviceSummary.hidden = true;
+          selectionSummary.hidden = true;
+          serviceSelect.selectedIndex = 0;
+          fetchAvailability();
+        } catch (error) {
+          console.error(error);
+          showBanner('Не удалось создать запись', 'error');
+        }
+      });
+
+      initDate();
+      loadServices().then(fetchAvailability);
+    });
+  </script>
+</body>
+</html>
 EOF
 
 # --- admin.html ---
