@@ -1,157 +1,215 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
-echo ">>> 🚀 Развёртывание мини-приложения (сервер + админка)..."
+echo ">>> Развёртывание мини-приложения (сервер + админка)..."
 
-# --- Подготовка окружения ---
-mkdir -p app/data
-mkdir -p app/public
+mkdir -p app/data app/public
 
-# --- Тестовые данные ---
-cat <<EOF > app/data/services.json
-{
-  "groups": [
-    {
-      "id": 1,
-      "name": "Ногтевой сервис",
-      "services": [
-        {"id": 1, "name": "Маникюр", "description": "Классический маникюр", "price": 1200, "duration": 60},
-        {"id": 2, "name": "Покрытие гель-лаком", "description": "Цветное покрытие", "price": 800, "duration": 45}
-      ]
-    },
-    {
-      "id": 2,
-      "name": "Массаж",
-      "services": [
-        {"id": 1, "name": "Классический массаж", "description": "Расслабляющий массаж спины", "price": 2500, "duration": 90}
-      ]
-    }
-  ]
-}
+# Тестовые данные
+cat <<'EOF' > app/data/services.json
+[
+  { "id": 1, "name": "Маникюр", "price": 1500 },
+  { "id": 2, "name": "Педикюр", "price": 2000 },
+  { "id": 3, "name": "Стрижка", "price": 1800 }
+]
 EOF
 
-# --- package.json (ESM) ---
-cat <<EOF > app/package.json
+# package.json
+cat <<'EOF' > app/package.json
 {
   "name": "beauty-miniapp",
   "version": "1.0.0",
   "type": "module",
-  "main": "server.js",
-  "dependencies": {
-    "express": "^4.19.2",
-    "body-parser": "^1.20.2"
-  },
-  "scripts": {
-    "start": "node server.js"
-  }
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "^4.19.2", "body-parser": "^1.20.2", "cors": "^2.8.5" }
 }
 EOF
 
-# --- Сервер ---
+# Сервер
 cat <<'EOF' > app/server.js
 import express from "express";
 import bodyParser from "body-parser";
 import fs from "fs";
 import path from "path";
+import cors from "cors";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 8080;
-const DATA_PATH = path.join(__dirname, "data", "services.json");
 
+app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- Health-check ---
-app.get("/health", (_, res) => res.json({ status: "ok" }));
+const dataFile = path.join(__dirname, "data", "services.json");
 
-// --- Получить все услуги ---
 app.get("/api/services", (req, res) => {
-  try {
-    const data = JSON.parse(fs.readFileSync(DATA_PATH, "utf-8"));
-    res.json(data);
-  } catch (e) {
-    res.status(500).json({ error: "Ошибка чтения данных" });
-  }
+  fs.readFile(dataFile, "utf8", (err, data) => {
+    if (err) return res.status(500).json({ error: "Ошибка чтения файла" });
+    res.json(JSON.parse(data));
+  });
 });
 
-// --- Сохранить услуги ---
+app.put("/api/services/:id", (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, price } = req.body;
+  fs.readFile(dataFile, "utf8", (err, data) => {
+    if (err) return res.status(500).json({ error: "Ошибка чтения" });
+    let services = JSON.parse(data);
+    const index = services.findIndex(s => s.id === id);
+    if (index === -1) return res.status(404).json({ error: "Не найдено" });
+    services[index] = { ...services[index], name, price };
+    fs.writeFile(dataFile, JSON.stringify(services, null, 2), err2 => {
+      if (err2) return res.status(500).json({ error: "Ошибка записи" });
+      res.json(services[index]);
+    });
+  });
+});
+
 app.post("/api/services", (req, res) => {
-  try {
-    fs.writeFileSync(DATA_PATH, JSON.stringify(req.body, null, 2), "utf-8");
-    res.json({ status: "ok" });
-  } catch (e) {
-    res.status(500).json({ error: "Ошибка записи файла" });
-  }
+  const { name, price } = req.body;
+  fs.readFile(dataFile, "utf8", (err, data) => {
+    if (err) return res.status(500).json({ error: "Ошибка чтения" });
+    const services = JSON.parse(data);
+    const newService = { id: Date.now(), name, price };
+    services.push(newService);
+    fs.writeFile(dataFile, JSON.stringify(services, null, 2), err2 => {
+      if (err2) return res.status(500).json({ error: "Ошибка записи" });
+      res.json(newService);
+    });
+  });
 });
 
-// --- Админка ---
-app.get("/admin", (_, res) => {
-  res.sendFile(path.join(__dirname, "public", "admin.html"));
+app.delete("/api/services/:id", (req, res) => {
+  const id = parseInt(req.params.id);
+  fs.readFile(dataFile, "utf8", (err, data) => {
+    if (err) return res.status(500).json({ error: "Ошибка чтения" });
+    let services = JSON.parse(data);
+    services = services.filter(s => s.id !== id);
+    fs.writeFile(dataFile, JSON.stringify(services, null, 2), err2 => {
+      if (err2) return res.status(500).json({ error: "Ошибка записи" });
+      res.json({ success: true });
+    });
+  });
 });
 
-// --- Запуск ---
-app.listen(PORT, () => {
-  console.log(`✅ Сервер запущен на порту ${PORT}`);
-});
+app.get("/health", (req, res) => res.send("OK"));
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
+
+app.listen(PORT, () => console.log(`✅ Сервер запущен на порту ${PORT}`));
 EOF
 
-# --- Простой интерфейс админки ---
+# Админ-панель с inline-редактированием
 cat <<'EOF' > app/public/admin.html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Админка — Beauty MiniApp</title>
+  <meta charset="UTF-8">
+  <title>Админка услуг</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #fafafa; color: #333; padding: 20px; }
-    h1 { color: #a84aff; }
-    .group { background: white; border-radius: 8px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-    .service { border-top: 1px solid #eee; padding: 8px 0; }
-    button { margin: 4px; padding: 6px 12px; background: #a84aff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    button:hover { background: #922be7; }
+    body { font-family: sans-serif; padding: 20px; background: #fafafa; }
+    table { border-collapse: collapse; width: 100%; background: white; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    td[contenteditable="true"] { background: #fffbe6; }
+    .banner { 
+      position: fixed; top: 10px; right: 10px; 
+      background: #4CAF50; color: white; padding: 10px 15px; border-radius: 6px;
+      opacity: 0; transition: opacity 0.3s ease;
+    }
+    .banner.show { opacity: 1; }
+    button { margin: 5px; }
   </style>
 </head>
 <body>
-  <h1>Панель управления услугами</h1>
-  <div id="content"></div>
+  <h1>Редактирование услуг</h1>
+  <table id="servicesTable">
+    <thead><tr><th>Название</th><th>Цена</th><th>Действия</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button id="addBtn">➕ Добавить услугу</button>
+
+  <div class="banner" id="banner">Сохранено ✅</div>
 
   <script>
-    async function load() {
+    async function loadServices() {
       const res = await fetch('/api/services');
       const data = await res.json();
-      const div = document.getElementById('content');
-      div.innerHTML = '';
-      data.groups.forEach(group => {
-        const gEl = document.createElement('div');
-        gEl.className = 'group';
-        gEl.innerHTML = \`<h2>\${group.name}</h2>\`;
-        group.services.forEach(s => {
-          const sEl = document.createElement('div');
-          sEl.className = 'service';
-          sEl.textContent = \`\${s.name} — \${s.price}₽ (\${s.duration} мин)\`;
-          gEl.appendChild(sEl);
-        });
-        div.appendChild(gEl);
+      const tbody = document.querySelector('#servicesTable tbody');
+      tbody.innerHTML = '';
+      data.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td contenteditable="true" data-field="name" data-id="\${s.id}">\${s.name}</td>
+          <td contenteditable="true" data-field="price" data-id="\${s.id}">\${s.price}</td>
+          <td><button data-id="\${s.id}" class="deleteBtn">🗑️</button></td>
+        \`;
+        tbody.appendChild(tr);
       });
     }
-    load();
+
+    async function updateService(id, field, value) {
+      const row = document.querySelector(\`[data-id="\${id}"][data-field="name"]\`);
+      const name = row.textContent.trim();
+      const price = document.querySelector(\`[data-id="\${id}"][data-field="price"]\`).textContent.trim();
+      await fetch(\`/api/services/\${id}\`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, price })
+      });
+      showBanner('Изменения сохранены ✅');
+    }
+
+    async function deleteService(id) {
+      await fetch(\`/api/services/\${id}\`, { method: 'DELETE' });
+      showBanner('Услуга удалена ❌');
+      loadServices();
+    }
+
+    async function addService() {
+      await fetch('/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Новая услуга', price: 0 })
+      });
+      showBanner('Услуга добавлена ✅');
+      loadServices();
+    }
+
+    function showBanner(msg) {
+      const banner = document.getElementById('banner');
+      banner.textContent = msg;
+      banner.classList.add('show');
+      setTimeout(() => banner.classList.remove('show'), 3000);
+    }
+
+    document.addEventListener('focusout', e => {
+      if (e.target.hasAttribute('contenteditable')) {
+        const id = e.target.dataset.id;
+        const field = e.target.dataset.field;
+        updateService(id, field, e.target.textContent.trim());
+      }
+    });
+
+    document.addEventListener('click', e => {
+      if (e.target.classList.contains('deleteBtn')) deleteService(e.target.dataset.id);
+      if (e.target.id === 'addBtn') addService();
+    });
+
+    loadServices();
   </script>
 </body>
 </html>
 EOF
 
-# --- Установка Node / npm при необходимости ---
-if ! command -v node &>/dev/null; then
-  echo ">>> Устанавливаю Node.js..."
-  apt-get update -y && apt-get install -y nodejs npm
+# Установка Node.js если нет
+if ! command -v node >/dev/null 2>&1; then
+  echo ">>> Node.js не найден, устанавливаю..."
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y nodejs
 fi
 
 cd app
 npm install
-echo ">>> Запуск сервера..."
 npm start
 EOF
