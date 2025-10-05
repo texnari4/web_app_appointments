@@ -5,12 +5,14 @@
     "moduleResolution": "NodeNext",
     "outDir": "./dist",
     "rootDir": "./src",
-    "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "strict": true,
     "resolveJsonModule": true,
-    "types": [],
+    "types": [
+      "node"
+    ],
     "typeRoots": [
       "./src/types",
       "./node_modules/@types"
