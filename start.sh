@@ -3,11 +3,12 @@ set -e
 
 echo ">>> Развёртывание мини-приложения (сервер + админка)..."
 
-# === 1. Создание структуры ===
-mkdir -p /app/{data,public}
+# === 1. Создаём структуру ===
+mkdir -p /app
 cd /app
+mkdir -p data public
 
-# === 2. Инициализация JSON-базы ===
+# === 2. JSON-база ===
 cat <<'EOF' > data/services.json
 {
   "groups": [
@@ -21,7 +22,7 @@ cat <<'EOF' > data/services.json
 }
 EOF
 
-# === 3. Сервер (чистый Node.js, ESM) ===
+# === 3. Сервер (чистый Node.js ESM) ===
 cat <<'EOF' > server.js
 import { createServer } from "http";
 import { readFileSync, writeFileSync, existsSync } from "fs";
@@ -35,7 +36,6 @@ function loadData() {
   if (!existsSync(DATA_FILE)) return { groups: [], services: [] };
   return JSON.parse(readFileSync(DATA_FILE, "utf8"));
 }
-
 function saveData(data) {
   writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
 }
@@ -48,35 +48,32 @@ const server = createServer((req, res) => {
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
-    res.end();
-    return;
+    return res.end();
   }
 
   if (pathname.startsWith("/api")) {
     let data = loadData();
 
     if (req.method === "GET" && pathname === "/api/groups") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(data.groups));
-      return;
+      res.writeHead(200, {"Content-Type": "application/json"});
+      return res.end(JSON.stringify(data.groups));
     }
 
     if (req.method === "GET" && pathname === "/api/services") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(data.services));
-      return;
+      res.writeHead(200, {"Content-Type": "application/json"});
+      return res.end(JSON.stringify(data.services));
     }
 
     if (req.method === "POST" && pathname === "/api/services") {
       let body = "";
-      req.on("data", chunk => (body += chunk));
+      req.on("data", c => body += c);
       req.on("end", () => {
-        const service = JSON.parse(body);
-        service.id = Date.now();
-        data.services.push(service);
+        const s = JSON.parse(body);
+        s.id = Date.now();
+        data.services.push(s);
         saveData(data);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(service));
+        res.writeHead(200, {"Content-Type": "application/json"});
+        res.end(JSON.stringify(s));
       });
       return;
     }
@@ -84,13 +81,13 @@ const server = createServer((req, res) => {
     if (req.method === "PUT" && pathname.startsWith("/api/services/")) {
       const id = parseInt(pathname.split("/").pop());
       let body = "";
-      req.on("data", chunk => (body += chunk));
+      req.on("data", c => body += c);
       req.on("end", () => {
-        const updated = JSON.parse(body);
-        data.services = data.services.map(s => (s.id === id ? updated : s));
+        const upd = JSON.parse(body);
+        data.services = data.services.map(s => s.id === id ? upd : s);
         saveData(data);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(updated));
+        res.writeHead(200, {"Content-Type": "application/json"});
+        res.end(JSON.stringify(upd));
       });
       return;
     }
@@ -99,19 +96,17 @@ const server = createServer((req, res) => {
       const id = parseInt(pathname.split("/").pop());
       data.services = data.services.filter(s => s.id !== id);
       saveData(data);
-      res.writeHead(200, { "Content-Type": "application/json" });
+      res.writeHead(200, {"Content-Type": "application/json"});
       res.end(JSON.stringify({ success: true }));
       return;
     }
 
     res.writeHead(404);
-    res.end("Not found");
-    return;
+    return res.end("Not found");
   }
 
-  // === Отдача админки ===
-  const filePath =
-    pathname === "/" ? "public/admin.html" : join("public", pathname);
+  // === Статика ===
+  const filePath = pathname === "/" ? "public/admin.html" : join("public", pathname);
   try {
     const content = readFileSync(filePath);
     res.writeHead(200);
@@ -122,12 +117,10 @@ const server = createServer((req, res) => {
   }
 });
 
-server.listen(PORT, () =>
-  console.log(`✅ Сервер запущен на порту ${PORT}`)
-);
+server.listen(PORT, () => console.log(`✅ Сервер запущен на порту ${PORT}`));
 EOF
 
-# === 4. Интерфейс админки (HTML + CSS + JS) ===
+# === 4. Интерфейс админки ===
 cat <<'EOF' > public/admin.html
 <!DOCTYPE html>
 <html lang="ru">
@@ -160,30 +153,20 @@ body {
   margin: 40px auto;
 }
 h1 { text-align: center; }
-.form {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 15px;
-}
+.form { display: flex; gap: 6px; margin-bottom: 15px; }
 input, select, button {
   padding: 8px;
   border-radius: 6px;
   border: 1px solid #ccc;
 }
 button {
-  background: #007bff;
-  color: #fff;
-  cursor: pointer;
+  background: #007bff; color: #fff; cursor: pointer;
 }
 button:hover { background: #0056b3; }
 .service {
-  display: flex;
-  justify-content: space-between;
-  background: #fff;
-  margin: 5px 0;
-  padding: 8px;
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex; justify-content: space-between;
+  background: #fff; margin: 5px 0; padding: 8px;
+  border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 EOF
 
@@ -204,9 +187,7 @@ async function loadServices() {
   const div = document.getElementById("services");
   div.innerHTML = data.map(s => `
     <div class="service">
-      <div>
-        <b>${s.name}</b> — ${s.price} ₽, ${s.duration} мин
-      </div>
+      <div><b>${s.name}</b> — ${s.price} ₽, ${s.duration} мин</div>
       <div>
         <button onclick="editService(${s.id})">✎</button>
         <button onclick="deleteService(${s.id})">🗑</button>
