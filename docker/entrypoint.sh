@@ -1,15 +1,21 @@
+
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[entrypoint] Node $(node -v) / npm $(npm -v)"
+: "${PORT:=8080}"
+: "${DATA_DIR:=/app/data}"
+: "${DB_FILE:=${DATA_DIR}/db.json}"
 
-# ensure db.json exists and is writable
-mkdir -p /app/data
-DB_FILE="/app/data/db.json"
-if [ ! -f "$DB_FILE" ]; then
-  echo '{"masters":[],"version":"2.4.4"}' > "$DB_FILE"
+echo "[entrypoint] Node $(node -v)"
+echo "[entrypoint] DATA_DIR=${DATA_DIR} DB_FILE=${DB_FILE}"
+
+mkdir -p "${DATA_DIR}"
+# Права достаточно открыть для записи владельцу/группе
+chmod 775 "${DATA_DIR}" || true
+
+if [ ! -f "${DB_FILE}" ]; then
+  echo "[]" > "${DB_FILE}"
+  chmod 664 "${DB_FILE}" || true
 fi
 
-# start app
-echo "[entrypoint] starting app"
 exec node dist/index.js
