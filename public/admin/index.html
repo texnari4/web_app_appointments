@@ -1,18 +1,51 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Админка</title>
-  <link rel="stylesheet" href="/public/admin/styles.css"/>
+  <meta charset="utf-8" />
+  <title>Админка — Beauty App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/public/admin/styles.css" />
 </head>
 <body>
-  <header><h1>Админка</h1></header>
-  <nav class="tabs">
-    <button data-tab="masters">Мастера</button>
-    <button data-tab="services">Услуги</button>
-  </nav>
-  <main id="app"></main>
+  <header class="topbar">
+    <div class="brand">Beauty Admin</div>
+    <nav class="tabs">
+      <button data-tab="masters" class="tab active">Мастера</button>
+      <button data-tab="services" class="tab">Услуги</button>
+      <button data-tab="bookings" class="tab">Записи</button>
+      <button data-tab="clients" class="tab">Клиенты</button>
+      <button data-tab="reports" class="tab">Отчеты</button>
+      <button data-tab="settings" class="tab">Настройки</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section id="tab-masters" class="panel active">
+      <h2>Мастера</h2>
+      <form id="form-master" class="card">
+        <div class="grid">
+          <label>Имя <input name="name" placeholder="Имя мастера" required></label>
+          <label>Телефон <input name="phone" placeholder="+375..." ></label>
+          <label>Фото (URL) <input name="avatarUrl" placeholder="https://..."></label>
+        </div>
+        <button type="submit" class="btn primary">Создать</button>
+        <span id="status-master" class="status"></span>
+      </form>
+
+      <div class="list" id="masters-list"></div>
+    </section>
+
+    <section id="tab-services" class="panel">
+      <h2>Услуги</h2>
+      <div id="services-list" class="list"></div>
+    </section>
+
+    <section id="tab-bookings" class="panel"><h2>Записи</h2></section>
+    <section id="tab-clients" class="panel"><h2>Клиенты</h2></section>
+    <section id="tab-reports" class="panel"><h2>Отчеты</h2></section>
+    <section id="tab-settings" class="panel"><h2>Настройки</h2></section>
+  </main>
+
   <script src="/public/admin/admin.js" type="module"></script>
 </body>
 </html>

@@ -1,11 +1,5 @@
-#!/usr/bin/env bash
+#!/bin/sh
 set -e
-
-: "${PORT:=8080}"
-: "${DATA_DIR:=/data}"
-
-echo "Starting app with DATA_DIR=${DATA_DIR}"
-# Ensure directory exists (may be read-only for perms change; just mkdir -p and ignore failures)
-mkdir -p "${DATA_DIR}" || true
-
-exec node dist/index.js
+echo "Starting app with DATA_DIR=${DATA_DIR:-/data}"
+mkdir -p "${DATA_DIR:-/data}" || true
+node dist/index.js

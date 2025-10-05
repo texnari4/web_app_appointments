@@ -1,148 +1,94 @@
-const api = {
-  async jsonGET(url){ const r = await fetch(url); if(!r.ok) throw new Error(`GET ${url}`); return r.json(); },
-  async jsonPOST(url, body){ const r = await fetch(url,{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); if(!r.ok) throw new Error(`POST ${url}`); return r.json(); },
-  async jsonPUT(url, body){ const r = await fetch(url,{method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); if(!r.ok) throw new Error(`PUT ${url}`); return r.json(); },
-  async del(url){ const r = await fetch(url,{method:'DELETE'}); if(!r.ok) throw new Error(`DELETE ${url}`); return true; }
-};
+const $ = (q,root=document)=>root.querySelector(q);
+const $$ = (q,root=document)=>Array.from(root.querySelectorAll(q));
 
-function el(html){ const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstElementChild; }
-
-async function renderMasters(root){
-  const container = el(`<div class="container">
-    <div class="card">
-      <h2>Добавить мастера</h2>
-      <div class="grid">
-        <div><label>Имя</label><input id="m-name"/></div>
-        <div><label>Телефон</label><input id="m-phone"/></div>
-        <div><label>Аватар URL</label><input id="m-avatar"/></div>
-      </div>
-      <div style="margin-top:12px"><button class="btn" id="m-save">Сохранить</button></div>
-    </div>
-    <div class="card"><h2>Список мастеров</h2><div class="list" id="m-list"></div></div>
-  </div>`);
-  root.replaceChildren(container);
-
-  async function reload(){
-    const data = await api.jsonGET('/public/api/masters');
-    const list = container.querySelector('#m-list');
-    list.innerHTML = '';
-    data.items.forEach(it => {
-      list.appendChild(el(`<div class="item"><div>
-        <div><strong>${it.name}</strong></div>
-        <div class="small">${it.phone}</div></div>
-        <div class="row"><button class="btn secondary" data-del="${it.id}">Удалить</button></div>
-      </div>`));
-    });
-  }
-
-  container.querySelector('#m-save').addEventListener('click', async ()=>{
-    await api.jsonPOST('/public/api/masters', {
-      name: container.querySelector('#m-name').value,
-      phone: container.querySelector('#m-phone').value,
-      avatarUrl: container.querySelector('#m-avatar').value,
-      isActive: true
-    });
-    await reload();
-  });
-  container.addEventListener('click', async (e)=>{
-    const t = e.target;
-    if(t instanceof HTMLElement && t.dataset.del){
-      await api.del(`/public/api/masters/${t.dataset.del}`);
-      await reload();
-    }
-  });
-  await reload();
+async function jsonGET(url){
+  const r = await fetch(url);
+  if(!r.ok) throw new Error(`GET ${url}`);
+  return r.json();
+}
+async function jsonPOST(url, body){
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if(!r.ok) throw new Error(`POST ${url}`);
+  return r.json();
 }
 
-async function renderServices(root){
-  const container = el(`<div class="container">
-    <div class="card">
-      <h2>Группа услуг</h2>
+function activateTab(name){
+  $$('.tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  $$('.panel').forEach(p=>p.classList.toggle('active', p.id===`tab-${name}`));
+}
+
+async function renderMasters(){
+  const box = $('#masters-list');
+  box.innerHTML = '<div class="item">Загрузка...</div>';
+  const data = await jsonGET('/public/api/masters');
+  box.innerHTML = '';
+  for(const m of data.items){
+    const el = document.createElement('div');
+    el.className='item';
+    el.innerHTML = `
       <div class="row">
-        <input id="g-title" placeholder="Название группы"/>
-        <button class="btn" id="g-add">Добавить группу</button>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Добавить услугу</h2>
-      <div class="grid">
-        <div><label>Группа</label><select id="s-group"></select></div>
-        <div><label>Название</label><input id="s-title"/></div>
-        <div><label>Цена</label><input id="s-price" type="number" min="0"/></div>
-        <div><label>Длительность (мин)</label><input id="s-dur" type="number" min="5" step="5"/></div>
-        <div class="grid" style="grid-template-columns:1fr">
-          <label>Описание</label><textarea id="s-desc" rows="3"></textarea>
-        </div>
-      </div>
-      <div style="margin-top:12px"><button class="btn" id="s-save">Сохранить услугу</button></div>
-    </div>
-    <div class="card"><h2>Список услуг</h2><div class="list" id="s-list"></div></div>
-  </div>`);
-  root.replaceChildren(container);
-
-  async function loadGroups(){
-    const {items} = await api.jsonGET('/public/api/service-groups');
-    const sel = container.querySelector('#s-group');
-    sel.innerHTML = items.map((g)=>`<option value="${g.id}">${g.title}</option>`).join('');
-  }
-  async function reloadServices(){
-    const {items} = await api.jsonGET('/public/api/services');
-    const list = container.querySelector('#s-list');
-    const groups = (await api.jsonGET('/public/api/service-groups')).items;
-    const gMap = Object.fromEntries(groups.map(g=>[g.id,g.title]));
-    list.innerHTML = '';
-    items.forEach(s=>{
-      list.appendChild(el(`<div class="item">
+        <img class="avatar" src="${m.avatarUrl||'https://placehold.co/96x96'}" alt="">
         <div>
-          <div><strong>${s.title}</strong> <span class="small">/ ${gMap[s.groupId]||'—'}</span></div>
-          <div class="small">${s.durationMin} мин • ${s.price} BYN</div>
+          <h3>${m.name}</h3>
+          <div class="muted">${m.phone||''}</div>
         </div>
-        <div class="row">
-          <button class="btn secondary" data-del="${s.id}">Удалить</button>
-        </div>
-      </div>`));
-    });
+      </div>`;
+    box.appendChild(el);
   }
+}
 
-  container.querySelector('#g-add').addEventListener('click', async ()=>{
-    const title = container.querySelector('#g-title').value.trim();
-    if(!title) return;
-    await api.jsonPOST('/public/api/service-groups', { title });
-    container.querySelector('#g-title').value='';
-    await loadGroups();
-  });
+async function renderServices(){
+  const box = $('#services-list');
+  box.innerHTML = '<div class="item">Загрузка...</div>';
+  try{
+    const data = await jsonGET('/public/api/services');
+    box.innerHTML = '';
+    if(!data.items?.length){
+      box.innerHTML = '<div class="item">Пока нет услуг</div>';
+      return;
+    }
+    for(const s of data.items){
+      const el = document.createElement('div');
+      el.className='item';
+      el.innerHTML = `
+        <h3>${s.name}</h3>
+        <div class="muted">${s.groupName||''}</div>
+        <div>${s.description||''}</div>
+        <div class="muted">${s.durationMinutes} мин · ${s.price} BYN</div>`;
+      box.appendChild(el);
+    }
+  }catch(e){
+    box.innerHTML = `<div class="item">Ошибка загрузки услуг</div>`;
+  }
+}
 
-  container.querySelector('#s-save').addEventListener('click', async ()=>{
-    const groupId = container.querySelector('#s-group').value;
-    const title = container.querySelector('#s-title').value;
-    const price = Number(container.querySelector('#s-price').value);
-    const durationMin = Number(container.querySelector('#s-dur').value);
-    const description = container.querySelector('#s-desc').value;
-    await api.jsonPOST('/public/api/services', { groupId, title, price, durationMin, description });
-    await reloadServices();
-  });
+async function loadTab(name){
+  activateTab(name);
+  if(name==='masters') await renderMasters();
+  if(name==='services') await renderServices();
+}
 
-  container.addEventListener('click', async (e)=>{
-    const t = e.target;
-    if(t instanceof HTMLElement && t.dataset.del){
-      await api.del(`/public/api/services/${t.dataset.del}`);
-      await reloadServices();
+async function init(){
+  // tabs
+  $$('.tab').forEach(b=>b.addEventListener('click',()=>loadTab(b.dataset.tab)));
+
+  // create master
+  $('#form-master').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const body = Object.fromEntries(fd.entries());
+    body.isActive = true;
+    try{
+      await jsonPOST('/public/api/masters', body);
+      $('#status-master').textContent = 'Сохранено';
+      await renderMasters();
+      e.currentTarget.reset();
+      setTimeout(()=>$('#status-master').textContent='', 1500);
+    }catch(err){
+      $('#status-master').textContent = 'Ошибка сохранения';
     }
   });
 
-  await loadGroups();
-  await reloadServices();
+  await loadTab('masters');
 }
-
-async function loadTab(tab){
-  const root = document.getElementById('app');
-  if(tab==='services') return renderServices(root);
-  return renderMasters(root);
-}
-
-document.addEventListener('DOMContentLoaded', ()=>{
-  document.querySelectorAll('.tabs button').forEach(btn=>{
-    btn.addEventListener('click', ()=> loadTab(btn.dataset.tab));
-  });
-  loadTab('masters');
-});
+init();
