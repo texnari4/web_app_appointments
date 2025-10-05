@@ -1,49 +1,45 @@
-
-import { promises as fs } from 'fs';
-import { join } from 'path';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
-const DB_FILE = join(DATA_DIR, 'db.json');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-export type Master = { id: string; name: string; phone?: string|null; about?: string|null; avatarUrl?: string|null };
-type Db = { masters: Master[] };
+type Master = {
+  id: string;
+  name: string;
+  phone?: string;
+  createdAt: string;
+};
 
-async function readDb(): Promise<Db> {
+type DB = {
+  masters: Master[];
+};
+
+async function ensureDb(): Promise<void> {
+  await fs.mkdir(DATA_DIR, { recursive: true });
   try {
-    const raw = await fs.readFile(DB_FILE, 'utf-8');
-    return JSON.parse(raw);
+    await fs.access(DB_FILE);
   } catch {
-    return { masters: [] };
+    const init: DB = { masters: [] };
+    await fs.writeFile(DB_FILE, JSON.stringify(init, null, 2), 'utf-8');
   }
 }
 
-async function writeDb(db: Db) {
+export async function readDb(): Promise<DB> {
+  await ensureDb();
+  const raw = await fs.readFile(DB_FILE, 'utf-8');
+  try {
+    return JSON.parse(raw) as DB;
+  } catch {
+    const init: DB = { masters: [] };
+    await fs.writeFile(DB_FILE, JSON.stringify(init, null, 2), 'utf-8');
+    return init;
+  }
+}
+
+export async function writeDb(db: DB): Promise<void> {
   const tmp = DB_FILE + '.tmp';
-  await fs.writeFile(tmp, JSON.stringify(db, null, 2));
+  await ensureDb();
+  await fs.writeFile(tmp, JSON.stringify(db, null, 2), 'utf-8');
   await fs.rename(tmp, DB_FILE);
 }
-
-function uid() { return Math.random().toString(36).slice(2, 10); }
-
-export const storage = {
-  masters: {
-    async all() {
-      const db = await readDb();
-      return db.masters;
-    },
-    async create(input: Omit<Master, 'id'>) {
-      const db = await readDb();
-      const item: Master = { id: uid(), ...input };
-      db.masters.push(item);
-      await writeDb(db);
-      return item;
-    },
-    async remove(id: string) {
-      const db = await readDb();
-      const before = db.masters.length;
-      db.masters = db.masters.filter(m => m.id !== id);
-      if (db.masters.length !== before) await writeDb(db);
-      return before !== db.masters.length;
-    }
-  }
-};

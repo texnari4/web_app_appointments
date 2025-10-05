@@ -1,107 +1,127 @@
-
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Админка — Masters</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Admin · Masters</title>
   <style>
-    :root { color-scheme: dark; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial; margin:0; padding:24px; background:#0b0b0f; color:#fff; }
-    .grid { display:grid; grid-template-columns: 1.2fr 1fr; gap:24px; max-width: 1100px; margin:0 auto; }
-    .card { background:#11131a; border:1px solid #1f2230; border-radius:16px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
-    h1,h2 { margin:0 0 16px; letter-spacing:-0.02em; }
-    label { display:block; font-size:14px; color:#b7beca; margin:10px 0 6px; }
-    input, textarea { width:100%; background:#0f1117; color:#fff; border:1px solid #24283a; border-radius:12px; padding:10px 12px; outline:none; }
-    textarea { min-height:88px; resize:vertical; }
-    button { margin-top:14px; padding:10px 16px; border-radius:12px; background:#2a6df4; color:#fff; border:none; font-weight:700; cursor:pointer; }
-    ul { list-style:none; padding:0; margin:0; }
-    li { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid #1f2230; }
-    .muted { color:#a3adbd; font-size:14px; }
-    .row { display:flex; gap:12px; }
-    .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; color:#8b93a7; }
-    .empty { color:#8b93a7; padding:8px 0; }
+    :root { color-scheme: dark light; }
+    body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, Roboto, "Helvetica Neue", Arial, sans-serif; background:#0b0b0c; color:#f5f5f7; }
+    header { position:sticky; top:0; backdrop-filter:saturate(180%) blur(20px); background:rgba(15,15,17,.7); border-bottom:1px solid rgba(255,255,255,.06); padding:14px 20px; }
+    h1 { margin:0; font-size:18px; letter-spacing:.2px; }
+    main { max-width:840px; margin:24px auto; padding:0 16px; }
+    .card { background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.08); border-radius:20px; padding:16px; box-shadow: 0 5px 25px rgba(0,0,0,.25); }
+    label { display:block; font-size:12px; opacity:.8; margin-bottom:6px; }
+    input { width:100%; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:#fff; outline:none; }
+    input:focus { border-color:#7eb6ff; box-shadow:0 0 0 4px rgba(126,182,255,.12); }
+    .row { display:grid; gap:12px; grid-template-columns: 1fr 1fr; }
+    .actions { display:flex; gap:10px; margin-top:12px; }
+    button { appearance:none; border:0; padding:10px 14px; border-radius:12px; background:#2f81f7; color:#fff; font-weight:600; cursor:pointer; transition:transform .08s ease; }
+    button:hover { transform: translateY(-1px); }
+    table { width:100%; border-collapse: collapse; margin-top:16px; font-size:14px; }
+    th, td { padding:10px 8px; border-bottom:1px solid rgba(255,255,255,.06); }
+    th { text-align:left; opacity:.7; font-weight:500; }
+    td .del { color:#ff7b7b; background:transparent; border:1px solid rgba(255,255,255,.12); }
+    .empty { opacity:.7; padding:16px 4px; }
+    .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background:#16161a; border:1px solid rgba(255,255,255,.1); color:#fff; padding:10px 14px; border-radius:12px; box-shadow:0 5px 20px rgba(0,0,0,.25); display:none;}
+    .toast.show { display:block; }
   </style>
 </head>
 <body>
-  <div class="grid">
-    <div class="card">
-      <h1>Мастера</h1>
-      <ul id="list"></ul>
-      <div class="empty" id="empty">Нет мастеров</div>
-    </div>
-    <div class="card">
-      <h2>Создать мастера</h2>
-      <label>Имя</label>
-      <input id="name" placeholder="Имя и фамилия" />
-      <label>Телефон</label>
-      <input id="phone" placeholder="+7 ..." />
-      <label>Описание</label>
-      <textarea id="about" placeholder="О специализации, опыте..."></textarea>
-      <label>Аватар (URL)</label>
-      <input id="avatar" placeholder="https://..." />
-      <button id="create">Сохранить</button>
-      <div class="muted" id="msg" aria-live="polite" style="margin-top:8px;"></div>
-    </div>
-  </div>
-  <script type="module">
-    const listEl = document.getElementById('list');
-    const emptyEl = document.getElementById('empty');
-    const msgEl = document.getElementById('msg');
+  <header><h1>Управление мастерами</h1></header>
+  <main>
+    <section class="card">
+      <div class="row">
+        <div>
+          <label>Имя мастера</label>
+          <input id="name" placeholder="Например, Анна"/>
+        </div>
+        <div>
+          <label>Телефон (опционально)</label>
+          <input id="phone" placeholder="+7 999 000-00-00"/>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="create">Сохранить</button>
+      </div>
+    </section>
 
-    async function refresh() {
-      msg('');
-      const res = await fetch('/admin/api/masters');
-      const data = await res.json();
-      listEl.innerHTML = '';
-      if (!data.length) {
-        emptyEl.style.display = 'block';
-        return;
-      }
-      emptyEl.style.display = 'none';
-      for (const m of data) {
-        const li = document.createElement('li');
-        const left = document.createElement('div');
-        left.innerHTML = '<strong>' + escapeHtml(m.name) + '</strong><div class="id">' + m.id + '</div>';
-        const right = document.createElement('div');
-        right.className = 'row';
-        const del = document.createElement('button');
-        del.textContent = 'Удалить';
-        del.style.background = '#d43c3c';
-        del.onclick = async () => {
-          const r = await fetch('/admin/api/masters/' + encodeURIComponent(m.id), { method: 'DELETE' });
-          await r.json();
-          await refresh();
-        };
-        right.appendChild(del);
-        li.appendChild(left);
-        li.appendChild(right);
-        listEl.appendChild(li);
-      }
+    <section class="card" style="margin-top:16px">
+      <table>
+        <thead>
+          <tr><th>Имя</th><th>Телефон</th><th>Создан</th><th></th></tr>
+        </thead>
+        <tbody id="list"></tbody>
+      </table>
+      <div class="empty" id="empty" style="display:none">Нет записей</div>
+    </section>
+  </main>
+  <div class="toast" id="toast"></div>
+  <script>
+    const $ = sel => document.querySelector(sel);
+    const list = $('#list');
+    const empty = $('#empty');
+    const toast = $('#toast');
+
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1800);
     }
 
-    function msg(t){ msgEl.textContent = t; }
-    function val(id){ return (document.getElementById(id).value || '').trim(); }
-    function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-    document.getElementById('create').onclick = async () => {
-      const payload = { name: val('name'), phone: val('phone') || null, about: val('about') || null, avatarUrl: val('avatar') || null };
-      if(!payload.name){ msg('Введите имя'); return; }
-      const res = await fetch('/admin/api/masters', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      const body = await res.json();
-      if (res.ok) {
-        msg('Создано');
-        document.getElementById('name').value = '';
-        document.getElementById('phone').value = '';
-        document.getElementById('about').value = '';
-        document.getElementById('avatar').value = '';
-        await refresh();
-      } else {
-        msg('Ошибка: ' + (body?.error || res.status));
+    async function fetchList() {
+      const res = await fetch('/admin/api/masters');
+      const data = await res.json();
+      list.innerHTML = '';
+      if (!data.items || data.items.length === 0) {
+        empty.style.display = 'block';
+        return;
       }
-    };
+      empty.style.display = 'none';
+      for (const m of data.items) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>\${m.name}</td>
+          <td>\${m.phone ?? ''}</td>
+          <td>\${new Date(m.createdAt).toLocaleString()}</td>
+          <td style="text-align:right"><button class="del" data-id="\${m.id}">Удалить</button></td>
+        `;
+        list.appendChild(tr);
+      }
+      list.querySelectorAll('.del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          const res = await fetch('/admin/api/masters/' + id, { method:'DELETE' });
+          if (res.ok) {
+            showToast('Удалено');
+            fetchList();
+          } else {
+            showToast('Ошибка удаления');
+          }
+        });
+      });
+    }
 
-    refresh();
+    $('#create').addEventListener('click', async () => {
+      const name = $('#name').value.trim();
+      const phone = $('#phone').value.trim();
+      const res = await fetch('/admin/api/masters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone })
+      });
+      if (res.ok) {
+        $('#name').value = '';
+        $('#phone').value = '';
+        showToast('Сохранено');
+        fetchList();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast('Ошибка: ' + (err.error || res.status));
+      }
+    });
+
+    fetchList();
   </script>
 </body>
 </html>

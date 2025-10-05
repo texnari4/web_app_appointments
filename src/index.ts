@@ -1,69 +1,71 @@
-
-import express from 'express';
+import express, { Request, Response } from 'express';
 import pinoHttp from 'pino-http';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { storage } from './storage.js';
-import { masterCreateSchema, MasterCreateInput } from './validators.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
+import { masterCreateSchema, type MasterCreateInput } from './validators.js';
+import { readDb, writeDb } from './storage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
-const DATA_DIR = process.env.DATA_DIR || '/app/data';
 
-app.use(express.json());
 app.use(pinoHttp());
-app.use('/public', express.static(path.join(__dirname, '..', 'public')));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Health
-app.get('/health', (_req, res) => {
+// health
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-// Admin static
-app.get('/admin/', (_req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'admin', 'index.html'));
-});
+// static admin
+app.use('/admin', express.static(path.join(__dirname, '../public/admin'), { extensions: ['html'] }));
+app.use('/', express.static(path.join(__dirname, '../public'), { extensions: ['html'] }));
 
-// Admin API
+// API - admin
 app.get('/admin/api/masters', async (_req, res) => {
-  const list = await storage.masters.all();
-  res.json(list);
+  const db = await readDb();
+  res.json({ items: db.masters });
 });
 
 app.post('/admin/api/masters', async (req, res) => {
-  try {
-    const dto = masterCreateSchema.parse(req.body) as MasterCreateInput;
-    const created = await storage.masters.create({
-      name: dto.name.trim(),
-      phone: dto.phone ?? null,
-      about: dto.about ?? null,
-      avatarUrl: dto.avatarUrl ?? null
-    });
-    res.status(201).json(created);
-  } catch (e: any) {
-    req.log?.error?.(e);
-    res.status(400).json({ error: e?.message || 'BAD_REQUEST' });
+  const parsed = masterCreateSchema.safeParse(req.body as MasterCreateInput);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'VALIDATION_ERROR', details: parsed.error.flatten() });
   }
+  const input = parsed.data;
+  const db = await readDb();
+  const master = {
+    id: crypto.randomUUID(),
+    name: input.name,
+    phone: input.phone && input.phone.length ? input.phone : undefined,
+    createdAt: new Date().toISOString(),
+  };
+  db.masters.unshift(master);
+  await writeDb(db);
+  res.status(201).json(master);
 });
 
 app.delete('/admin/api/masters/:id', async (req, res) => {
-  const ok = await storage.masters.remove(req.params.id);
-  res.json({ ok });
+  const id = req.params.id;
+  const db = await readDb();
+  const before = db.masters.length;
+  db.masters = db.masters.filter(m => m.id !== id);
+  if (db.masters.length === before) {
+    return res.status(404).json({ error: 'NOT_FOUND' });
+  }
+  await writeDb(db);
+  res.json({ ok: true });
 });
 
-// Root -> serve index.html
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
-
-// 404 JSON for unknown API
-app.use((req, res) => {
+// fallback 404 for API
+app.use((_req, res) => {
   res.status(404).json({ error: 'NOT_FOUND' });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server started on :${PORT} (DATA_DIR=${DATA_DIR})`);
+  console.log(`Server started on :${PORT}`);
 });

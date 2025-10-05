@@ -1,11 +1,9 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
-echo "[entrypoint] DATA_DIR=${DATA_DIR:-/app/data}"
-mkdir -p "${DATA_DIR:-/app/data}"
-DB="${DATA_DIR:-/app/data}/db.json"
-if [ ! -f "$DB" ]; then
-  echo '{ "masters": [] }' > "$DB"
-  echo "[entrypoint] seeded $DB"
+: "${DATA_DIR:=/app/data}"
+mkdir -p "$DATA_DIR"
+if [ ! -f "$DATA_DIR/db.json" ]; then
+  echo '{"masters":[]}' > "$DATA_DIR/db.json"
 fi
-node dist/index.js
+echo "[entrypoint] starting app"
+exec node dist/index.js
