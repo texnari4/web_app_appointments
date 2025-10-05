@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo ">>> 🚀 Развёртывание мини-приложения (сервер + админка v13)..."
 
 # --- Подготовка директорий ---
@@ -45,32 +47,11 @@ mkdirSync(DATA_DIR, { recursive: true });
 const servicesFile = join(DATA_DIR, 'services.json');
 const groupsFile = join(DATA_DIR, 'groups.json');
 const bookingsFile = join(DATA_DIR, 'bookings.json');
+const adminsFile = join(DATA_DIR, 'admins.json');
 
 const SLOT_STEP_MIN = Number(process.env.SLOT_STEP_MIN || 30);
 const BUSINESS_OPEN_TIME = process.env.BUSINESS_OPEN_TIME || '09:00';
 const BUSINESS_CLOSE_TIME = process.env.BUSINESS_CLOSE_TIME || '21:00';
-
-function parseKeyList(value = '') {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-const ADMIN_API_KEYS = new Set(
-  parseKeyList(process.env.ADMIN_API_KEYS || process.env.ADMIN_API_KEY)
-);
-const MASTER_API_KEYS = new Set(
-  parseKeyList(process.env.MASTER_API_KEYS || process.env.MASTER_API_KEY)
-);
-
-if (ADMIN_API_KEYS.size === 0) {
-  const fallbackAdminToken = 'dev-admin-token';
-  ADMIN_API_KEYS.add(fallbackAdminToken);
-  console.warn(
-    '⚠️  ADMIN_API_KEYS не задан. Используется тестовый токен dev-admin-token. Задайте переменную окружения для продакшена.'
-  );
-}
 
 const DEFAULT_GROUPS = [
   { id: 1, name: 'Массаж' },
@@ -107,6 +88,15 @@ const DEFAULT_SERVICES = [
 
 const DEFAULT_BOOKINGS = [];
 
+const DEFAULT_ADMINS = [
+  {
+    id: 486778995,
+    username: 'mr_tenbit',
+    displayName: 'mr_tenbit',
+    role: 'owner'
+  }
+];
+
 function ensureDataFile(file, fallback) {
   if (!existsSync(file)) {
     writeFileSync(file, JSON.stringify(fallback, null, 2));
@@ -129,6 +119,7 @@ function ensureDataFile(file, fallback) {
 ensureDataFile(groupsFile, DEFAULT_GROUPS);
 ensureDataFile(servicesFile, DEFAULT_SERVICES);
 ensureDataFile(bookingsFile, DEFAULT_BOOKINGS);
+ensureDataFile(adminsFile, DEFAULT_ADMINS);
 
 function readJSON(file, fallback = []) {
   try {
@@ -153,41 +144,54 @@ function sendText(res, statusCode, payload) {
   res.end(payload);
 }
 
-function getTokenFromRequest(req) {
-  const authHeader = req.headers['authorization'];
-  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-    return authHeader.slice(7).trim();
+const ROLE_WEIGHT = {
+  unknown: -1,
+  guest: 0,
+  admin: 2,
+  owner: 3
+};
+
+function parseTelegramId(req) {
+  const headerId = req.headers['x-telegram-id'] ?? req.headers['x-telegram-user-id'];
+  if (headerId != null) {
+    const numeric = Number(headerId);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
   }
 
-  if (req.headers['x-access-token']) {
-    return String(req.headers['x-access-token']).trim();
+  const urlIdMatch = req.url && req.url.includes('?')
+    ? Number(new URL(`http://localhost${req.url}`).searchParams.get('tg_id'))
+    : NaN;
+  if (Number.isFinite(urlIdMatch)) {
+    return urlIdMatch;
   }
 
   return null;
 }
 
-const ROLE_WEIGHT = {
-  unknown: -1,
-  guest: 0,
-  master: 1,
-  admin: 2
-};
+function readAdmins() {
+  return readJSON(adminsFile, []);
+}
+
+function writeAdmins(admins) {
+  writeJSON(adminsFile, admins);
+}
 
 function authenticate(req) {
-  const token = getTokenFromRequest(req);
-  if (!token) {
-    return { token: null, role: 'guest', provided: false };
+  const telegramId = parseTelegramId(req);
+  if (!telegramId) {
+    return { role: 'guest', telegramId: null, provided: false };
   }
 
-  if (ADMIN_API_KEYS.has(token)) {
-    return { token, role: 'admin', provided: true };
+  const admins = readAdmins();
+  const adminEntry = admins.find((admin) => admin.id === telegramId);
+  if (!adminEntry) {
+    return { role: 'unknown', telegramId, provided: true };
   }
 
-  if (MASTER_API_KEYS.has(token)) {
-    return { token, role: 'master', provided: true };
-  }
-
-  return { token, role: 'unknown', provided: true };
+  const role = adminEntry.role === 'owner' ? 'owner' : 'admin';
+  return { role, telegramId, provided: true, admin: adminEntry };
 }
 
 function hasRequiredRole(currentRole, allowedRoles) {
@@ -201,12 +205,12 @@ function ensureAuthorized(ctx, res, allowedRoles = []) {
   }
 
   if (!ctx.provided) {
-    sendJSON(res, 401, { error: 'Требуется токен доступа' });
+    sendJSON(res, 401, { error: 'Требуется Telegram ID администратора' });
     return false;
   }
 
   if (ctx.role === 'unknown') {
-    sendJSON(res, 403, { error: 'Неверный или неактивный токен' });
+    sendJSON(res, 403, { error: 'Telegram ID не найден в списке администраторов' });
     return false;
   }
 
@@ -431,6 +435,92 @@ const server = createServer(async (req, res) => {
   try {
     if (pathname === '/health') {
       sendText(res, 200, 'OK');
+      return;
+    }
+
+    if (pathname === '/api/admins/me' && req.method === 'GET') {
+      const admins = readAdmins();
+      const isAdmin = admins.some((admin) => admin.id === ctx.telegramId);
+      sendJSON(res, 200, {
+        authenticated: isAdmin,
+        telegramId: ctx.telegramId,
+        admin:
+          admins.find((admin) => admin.id === ctx.telegramId) || null
+      });
+      return;
+    }
+
+    if (pathname === '/api/admins' && req.method === 'GET') {
+      if (!ensureAuthorized(ctx, res, ['admin'])) {
+        return;
+      }
+
+      const admins = readAdmins();
+      sendJSON(res, 200, admins);
+      return;
+    }
+
+    if (pathname === '/api/admins' && req.method === 'POST') {
+      if (!ensureAuthorized(ctx, res, ['owner'])) {
+        return;
+      }
+
+      const body = await readBody(req);
+      const payload = JSON.parse(body || '{}');
+
+      const admins = readAdmins();
+      const id = Number(payload.id);
+      const username = String(payload.username ?? '').trim();
+      const displayName = String(payload.displayName ?? username).trim();
+      const role = payload.role === 'owner' ? 'owner' : 'admin';
+
+      if (!Number.isFinite(id) || id <= 0) {
+        sendJSON(res, 400, { error: 'Укажите корректный Telegram ID' });
+        return;
+      }
+
+      if (!username) {
+        sendJSON(res, 400, { error: 'Укажите username администратора' });
+        return;
+      }
+
+      if (admins.some((admin) => admin.id === id)) {
+        sendJSON(res, 409, { error: 'Администратор с таким ID уже существует' });
+        return;
+      }
+
+      const newAdmin = { id, username, displayName, role };
+      admins.push(newAdmin);
+      writeAdmins(admins);
+      sendJSON(res, 201, newAdmin);
+      return;
+    }
+
+    if (pathname.startsWith('/api/admins/') && req.method === 'DELETE') {
+      if (!ensureAuthorized(ctx, res, ['owner'])) {
+        return;
+      }
+
+      const id = parseId(pathname);
+      if (!id) {
+        sendJSON(res, 400, { error: 'Некорректный идентификатор администратора' });
+        return;
+      }
+
+      const admins = readAdmins();
+      if (admins.length === 1 && admins[0].id === id) {
+        sendJSON(res, 400, { error: 'Нельзя удалить последнего администратора' });
+        return;
+      }
+
+      const remaining = admins.filter((admin) => admin.id !== id);
+      if (remaining.length === admins.length) {
+        sendJSON(res, 404, { error: 'Администратор не найден' });
+        return;
+      }
+
+      writeAdmins(remaining);
+      sendJSON(res, 200, { success: true });
       return;
     }
 
@@ -685,7 +775,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (pathname === '/api/bookings' && req.method === 'GET') {
-      if (!ensureAuthorized(ctx, res, ['master', 'admin'])) {
+      if (!ensureAuthorized(ctx, res, ['admin'])) {
         return;
       }
 
@@ -782,7 +872,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (pathname.startsWith('/api/bookings/') && req.method === 'PATCH') {
-      if (!ensureAuthorized(ctx, res, ['master', 'admin'])) {
+      if (!ensureAuthorized(ctx, res, ['admin'])) {
         return;
       }
 
@@ -1512,1215 +1602,8 @@ cat <<'EOF' > public/client.html
 EOF
 
 # --- admin.html ---
-cat <<'EOF' > public/admin.html
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <title>Админка — Управление услугами</title>
-  <style>
-    :root {
-      color-scheme: light dark;
-      font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-
-    body {
-      margin: 0;
-      padding: 32px;
-      background: #f5f7fa;
-      color: #1d2433;
-    }
-
-    h1 {
-      margin: 0 0 24px;
-      font-size: 28px;
-      font-weight: 600;
-    }
-
-    h2 {
-      margin: 0 0 16px;
-      font-size: 22px;
-      font-weight: 600;
-    }
-
-    main {
-      max-width: 1100px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 32px;
-    }
-
-    section {
-      background: #ffffff;
-      border-radius: 14px;
-      padding: 24px;
-      box-shadow: 0 12px 32px -24px rgba(0, 32, 85, 0.45);
-    }
-
-    .auth-panel {
-      display: grid;
-      gap: 18px;
-    }
-
-    .auth-form {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      align-items: flex-end;
-    }
-
-    .auth-form label {
-      display: grid;
-      gap: 6px;
-      font-size: 14px;
-      color: #4b5a6a;
-      flex: 1 1 260px;
-    }
-
-    .auth-actions {
-      display: flex;
-      gap: 10px;
-    }
-
-    .auth-status {
-      margin: 0;
-      font-size: 13px;
-      color: #64748b;
-    }
-
-    .forms {
-      display: grid;
-      gap: 24px;
-    }
-
-    .form-grid {
-      display: grid;
-      gap: 16px;
-    }
-
-    .form-grid label {
-      display: grid;
-      gap: 6px;
-      font-size: 14px;
-      color: #4b5a6a;
-    }
-
-    input,
-    textarea,
-    select {
-      border: 1px solid #ccd6e0;
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-size: 14px;
-      font-family: inherit;
-      resize: vertical;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    input:focus,
-    textarea:focus,
-    select:focus {
-      outline: none;
-      border-color: #4f46e5;
-      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-    }
-
-    textarea {
-      min-height: 80px;
-    }
-
-    button {
-      cursor: pointer;
-      border: none;
-      border-radius: 10px;
-      padding: 10px 18px;
-      font-size: 14px;
-      font-weight: 600;
-      transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.15s ease;
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 12px 20px -18px rgba(15, 23, 42, 0.55);
-    }
-
-    .primary-btn {
-      background: linear-gradient(135deg, #5ec5ff, #007aff);
-      color: #ffffff;
-      box-shadow: 0 18px 28px -20px rgba(0, 122, 255, 0.55);
-    }
-
-    .secondary-btn {
-      background: #f2f5fb;
-      color: #0f172a;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-    }
-
-    .danger-btn {
-      background: linear-gradient(135deg, #ff9eb5, #ff6b81);
-      color: #ffffff;
-      box-shadow: 0 16px 26px -22px rgba(255, 107, 129, 0.55);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 16px;
-      font-size: 14px;
-    }
-
-    th,
-    td {
-      border-bottom: 1px solid #e4e8ef;
-      padding: 12px 10px;
-      text-align: left;
-      vertical-align: top;
-    }
-
-    thead th {
-      background: #f8fafc;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-size: 12px;
-      font-weight: 600;
-      color: #758199;
-    }
-
-    tbody tr:hover {
-      background: rgba(99, 102, 241, 0.06);
-    }
-
-    td[contenteditable="true"] {
-      border-radius: 6px;
-      min-width: 120px;
-      outline: none;
-    }
-
-    td[contenteditable="true"]:focus {
-      background: rgba(99, 102, 241, 0.08);
-      box-shadow: inset 0 0 0 2px rgba(79, 70, 229, 0.35);
-    }
-
-    .table-actions {
-      width: 104px;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      background: #e2e8f0;
-      color: #0f172a;
-    }
-
-    .status-badge::before {
-      content: '';
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-
-    .status-pending {
-      background: rgba(59, 130, 246, 0.14);
-      color: #1d4ed8;
-    }
-
-    .status-confirmed {
-      background: rgba(34, 197, 94, 0.16);
-      color: #047857;
-    }
-
-    .status-cancelled {
-      background: rgba(248, 113, 113, 0.16);
-      color: #b91c1c;
-    }
-
-    .empty-row td {
-      text-align: center;
-      color: #97a6ba;
-      font-style: italic;
-    }
-
-    .section-header {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    .section-header label {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 14px;
-      color: #4b5a6a;
-    }
-
-    .banner {
-      position: fixed;
-      bottom: 22px;
-      right: 22px;
-      padding: 14px 20px;
-      border-radius: 12px;
-      font-weight: 600;
-      color: #fff;
-      background: linear-gradient(135deg, #34c759, #28b24a);
-      box-shadow: 0 22px 38px -26px rgba(40, 178, 74, 0.6);
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(18px);
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-    .banner.show {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .banner.error {
-      background: linear-gradient(135deg, #ff5f5f, #f43f5e);
-      box-shadow: 0 22px 38px -26px rgba(244, 63, 94, 0.55);
-    }
-
-    @media (max-width: 960px) {
-      body {
-        padding: 20px;
-      }
-
-      main {
-        gap: 20px;
-      }
-
-      section {
-        padding: 20px;
-      }
-
-      table,
-      thead,
-      tbody,
-      th,
-      td,
-      tr {
-        font-size: 13px;
-      }
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Управление услугами и группами</h1>
-
-    <section class="auth-panel">
-      <h2>Доступ</h2>
-      <form id="authForm" class="auth-form">
-        <label>
-          Токен администратора
-          <input type="password" id="authTokenInput" placeholder="Вставьте токен и нажмите Enter" />
-        </label>
-        <div class="auth-actions">
-          <button type="submit" class="secondary-btn">Сохранить</button>
-          <button type="button" id="authClearBtn" class="secondary-btn">Сбросить</button>
-        </div>
-      </form>
-      <p id="authStatus" class="auth-status">Токен не задан</p>
-    </section>
-
-    <section class="forms">
-      <div>
-        <h2>Добавить услугу</h2>
-        <form id="serviceForm" class="form-grid">
-          <label>
-            Название
-            <input type="text" name="name" placeholder="Например: SPA-массаж" required />
-          </label>
-          <label>
-            Описание
-            <textarea name="description" placeholder="Кратко опишите услугу" required></textarea>
-          </label>
-          <label>
-            Цена (₽)
-            <input type="number" name="price" min="0" step="1" required />
-          </label>
-          <label>
-            Длительность (мин)
-            <input type="number" name="duration" min="1" step="5" required />
-          </label>
-          <label>
-            Группа
-            <select name="groupId">
-              <option value="">Без группы</option>
-            </select>
-          </label>
-          <div>
-            <button type="submit" class="primary-btn">Добавить услугу</button>
-          </div>
-        </form>
-      </div>
-
-      <div>
-        <h2>Добавить группу</h2>
-        <form id="groupForm" class="form-grid">
-          <label>
-            Название группы
-            <input type="text" name="name" placeholder="Например: Косметология" required />
-          </label>
-          <div>
-            <button type="submit" class="secondary-btn">Создать группу</button>
-          </div>
-        </form>
-      </div>
-    </section>
-
-    <section>
-      <div class="section-header">
-        <h2>Услуги</h2>
-        <label>
-          Фильтр по группе
-          <select id="groupFilter">
-            <option value="">Все группы</option>
-          </select>
-        </label>
-      </div>
-
-      <table id="servicesTable">
-        <thead>
-          <tr>
-            <th>Название</th>
-            <th>Описание</th>
-            <th>Цена, ₽</th>
-            <th>Длительность, мин</th>
-            <th>Группа</th>
-            <th class="table-actions">Действия</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-
-    <section>
-      <div class="section-header">
-        <h2>Записи</h2>
-        <label>
-          Статус
-          <select id="bookingStatusFilter">
-            <option value="all">Все</option>
-            <option value="pending" selected>В ожидании</option>
-            <option value="confirmed">Подтверждённые</option>
-            <option value="cancelled">Отменённые</option>
-          </select>
-        </label>
-      </div>
-
-      <table id="bookingsTable">
-        <thead>
-          <tr>
-            <th>Время</th>
-            <th>Клиент</th>
-            <th>Услуга</th>
-            <th>Мастер</th>
-            <th>Статус</th>
-            <th class="table-actions">Действия</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-
-    <section>
-      <h2>Группы</h2>
-      <table id="groupsTable">
-        <thead>
-          <tr>
-            <th>Название</th>
-            <th class="table-actions">Действия</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-  </main>
-
-  <div class="banner" id="banner" hidden></div>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const state = {
-        services: [],
-        groups: [],
-        bookings: [],
-        filterGroupId: null,
-        bookingStatusFilter: 'pending'
-      };
-
-      const servicesTableBody = document.querySelector('#servicesTable tbody');
-      const groupsTableBody = document.querySelector('#groupsTable tbody');
-      const groupFilter = document.getElementById('groupFilter');
-      const bookingsTableBody = document.querySelector('#bookingsTable tbody');
-      const bookingStatusFilter = document.getElementById('bookingStatusFilter');
-      const banner = document.getElementById('banner');
-      const serviceForm = document.getElementById('serviceForm');
-      const serviceFormGroupSelect = serviceForm.querySelector('select[name="groupId"]');
-      const groupForm = document.getElementById('groupForm');
-      const authForm = document.getElementById('authForm');
-      const authTokenInput = document.getElementById('authTokenInput');
-      const authClearBtn = document.getElementById('authClearBtn');
-      const authStatus = document.getElementById('authStatus');
-
-      const AUTH_STORAGE_KEY = 'beauty_admin_token_v1';
-      const authState = {
-        token: localStorage.getItem(AUTH_STORAGE_KEY) || ''
-      };
-
-      const escapeHtml = (value = '') =>
-        String(value).replace(/[&<>"']/g, (char) => ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;'
-        })[char] || char);
-
-      const updateAuthStatus = () => {
-        if (authState.token) {
-          authStatus.textContent = 'Токен сохранён и будет добавляться к запросам';
-        } else {
-          authStatus.textContent = 'Токен не задан — операции редактирования недоступны';
-        }
-      };
-
-      const setAuthToken = (token) => {
-        authState.token = token;
-        if (token) {
-          localStorage.setItem(AUTH_STORAGE_KEY, token);
-        } else {
-          localStorage.removeItem(AUTH_STORAGE_KEY);
-        }
-        updateAuthStatus();
-        loadBookings();
-      };
-
-      const withAuthHeaders = (headers = {}) => {
-        const result = { ...headers };
-        if (authState.token) {
-          result.Authorization = `Bearer ${authState.token}`;
-        }
-        return result;
-      };
-
-      const apiFetch = async (input, options = {}) => {
-        const init = { ...options };
-        init.headers = withAuthHeaders(init.headers || {});
-        const response = await fetch(input, init);
-        if (response.status === 401) {
-          showBanner('Укажите токен администратора в блоке "Доступ"', 'error');
-          updateAuthStatus();
-        } else if (response.status === 403) {
-          showBanner('Недостаточно прав для выполнения действия', 'error');
-        }
-        return response;
-      };
-
-      updateAuthStatus();
-
-      authForm.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const token = authTokenInput.value.trim();
-        if (!token) {
-          showBanner('Введите токен администратора', 'error');
-          return;
-        }
-        setAuthToken(token);
-        authTokenInput.value = '';
-        showBanner('Токен обновлён');
-      });
-
-      authClearBtn.addEventListener('click', () => {
-        setAuthToken('');
-        authTokenInput.value = '';
-        showBanner('Токен очищен');
-      });
-
-      const showBanner = (message, type = 'success') => {
-        banner.textContent = message;
-        banner.classList.toggle('error', type === 'error');
-        banner.classList.add('show');
-        banner.hidden = false;
-        setTimeout(() => {
-          banner.classList.remove('show');
-          setTimeout(() => {
-            banner.hidden = true;
-          }, 180);
-        }, 2300);
-      };
-
-      const handleError = async (response) => {
-        if (response.status === 401 || response.status === 403) {
-          return;
-        }
-        let errorMessage = 'Что-то пошло не так';
-        try {
-          const payload = await response.json();
-          if (payload?.error) {
-            errorMessage = payload.error;
-          }
-        } catch (err) {
-          // no-op
-        }
-        showBanner(errorMessage, 'error');
-      };
-
-      const renderGroupOptions = () => {
-        const options = ['<option value="">Без группы</option>'];
-        state.groups.forEach((group) => {
-          options.push(`<option value="${group.id}">${escapeHtml(group.name)}</option>`);
-        });
-        serviceFormGroupSelect.innerHTML = options.join('');
-      };
-
-      const renderGroupFilter = () => {
-        const options = ['<option value="">Все группы</option>'];
-        state.groups.forEach((group) => {
-          options.push(`<option value="${group.id}">${escapeHtml(group.name)}</option>`);
-        });
-        groupFilter.innerHTML = options.join('');
-        groupFilter.value = state.filterGroupId ?? '';
-      };
-
-      const renderServicesTable = () => {
-        servicesTableBody.innerHTML = '';
-
-        const rows = state.filterGroupId
-          ? state.services.filter((service) => service.groupId === state.filterGroupId)
-          : state.services;
-
-        if (!rows.length) {
-          const emptyRow = document.createElement('tr');
-          emptyRow.className = 'empty-row';
-          const cell = document.createElement('td');
-          cell.colSpan = 6;
-          cell.textContent = 'Нет услуг для отображения';
-          emptyRow.appendChild(cell);
-          servicesTableBody.appendChild(emptyRow);
-          return;
-        }
-
-        rows.forEach((service) => {
-          const tr = document.createElement('tr');
-          tr.dataset.id = service.id;
-
-          const nameCell = document.createElement('td');
-          nameCell.dataset.field = 'name';
-          nameCell.contentEditable = 'true';
-          nameCell.textContent = service.name;
-
-          const descCell = document.createElement('td');
-          descCell.dataset.field = 'description';
-          descCell.contentEditable = 'true';
-          descCell.textContent = service.description;
-
-          const priceCell = document.createElement('td');
-          priceCell.dataset.field = 'price';
-          priceCell.contentEditable = 'true';
-          priceCell.textContent = service.price;
-
-          const durationCell = document.createElement('td');
-          durationCell.dataset.field = 'duration';
-          durationCell.contentEditable = 'true';
-          durationCell.textContent = service.duration;
-
-          const groupCell = document.createElement('td');
-          const select = document.createElement('select');
-          select.dataset.field = 'groupId';
-
-          const defaultOption = document.createElement('option');
-          defaultOption.value = '';
-          defaultOption.textContent = 'Без группы';
-          select.appendChild(defaultOption);
-
-          state.groups.forEach((group) => {
-            const option = document.createElement('option');
-            option.value = group.id;
-            option.textContent = group.name;
-            select.appendChild(option);
-          });
-
-          select.value = service.groupId ?? '';
-          groupCell.appendChild(select);
-
-          const actionsCell = document.createElement('td');
-          actionsCell.className = 'table-actions';
-          const deleteBtn = document.createElement('button');
-          deleteBtn.type = 'button';
-          deleteBtn.className = 'danger-btn';
-          deleteBtn.dataset.action = 'delete-service';
-          deleteBtn.dataset.id = service.id;
-          deleteBtn.textContent = 'Удалить';
-          actionsCell.appendChild(deleteBtn);
-
-          tr.appendChild(nameCell);
-          tr.appendChild(descCell);
-          tr.appendChild(priceCell);
-          tr.appendChild(durationCell);
-          tr.appendChild(groupCell);
-          tr.appendChild(actionsCell);
-
-          servicesTableBody.appendChild(tr);
-        });
-      };
-
-      const BOOKING_STATUS_LABELS = {
-        pending: 'В ожидании',
-        confirmed: 'Подтверждена',
-        cancelled: 'Отменена'
-      };
-
-      const formatRub = (value) =>
-        value == null
-          ? '—'
-          : new Intl.NumberFormat('ru-RU', {
-              style: 'currency',
-              currency: 'RUB',
-              maximumFractionDigits: 0
-            }).format(value);
-
-      const renderBookingsTable = () => {
-        bookingsTableBody.innerHTML = '';
-
-        if (!authState.token) {
-          const row = document.createElement('tr');
-          row.className = 'empty-row';
-          const cell = document.createElement('td');
-          cell.colSpan = 6;
-          cell.textContent = 'Введите токен администратора, чтобы просматривать и подтверждать записи.';
-          row.appendChild(cell);
-          bookingsTableBody.appendChild(row);
-          return;
-        }
-
-        const filtered = state.bookingStatusFilter === 'all'
-          ? state.bookings
-          : state.bookings.filter((booking) => booking.status === state.bookingStatusFilter);
-
-        if (!filtered.length) {
-          const row = document.createElement('tr');
-          row.className = 'empty-row';
-          const cell = document.createElement('td');
-          cell.colSpan = 6;
-          cell.textContent = 'Записей нет';
-          row.appendChild(cell);
-          bookingsTableBody.appendChild(row);
-          return;
-        }
-
-        filtered
-          .sort((a, b) => new Date(`${a.date}T${a.startTime}`) - new Date(`${b.date}T${b.startTime}`))
-          .forEach((booking) => {
-            const tr = document.createElement('tr');
-            tr.dataset.id = booking.id;
-
-            const startDate = new Date(`${booking.date}T${booking.startTime}:00`);
-            const formattedDate = startDate.toLocaleDateString('ru-RU', {
-              weekday: 'short',
-              day: '2-digit',
-              month: 'short'
-            });
-
-            const timeCell = document.createElement('td');
-            timeCell.innerHTML = `<strong>${booking.startTime}</strong><br><span class="muted">${formattedDate}</span>`;
-
-            const clientCell = document.createElement('td');
-            clientCell.innerHTML = `
-              <div><strong>${escapeHtml(booking.clientName)}</strong></div>
-              <div class="muted">${escapeHtml(booking.clientPhone)}</div>
-              ${booking.notes ? `<div class="muted">${escapeHtml(booking.notes)}</div>` : ''}
-            `;
-
-            const serviceCell = document.createElement('td');
-            serviceCell.innerHTML = `
-              <div>${escapeHtml(booking.serviceName || '—')}</div>
-              <div class="muted">${booking.duration} мин · ${formatRub(booking.servicePrice)}</div>
-            `;
-
-            const masterCell = document.createElement('td');
-            masterCell.textContent = booking.masterId ? `ID ${booking.masterId}` : 'Не выбран';
-
-            const statusCell = document.createElement('td');
-            const badge = document.createElement('span');
-            badge.className = `status-badge status-${booking.status}`;
-            badge.textContent = BOOKING_STATUS_LABELS[booking.status] || booking.status;
-            statusCell.appendChild(badge);
-
-            const actionsCell = document.createElement('td');
-            actionsCell.className = 'table-actions';
-
-            if (booking.status !== 'confirmed') {
-              const confirmBtn = document.createElement('button');
-              confirmBtn.type = 'button';
-              confirmBtn.className = 'primary-btn';
-              confirmBtn.dataset.action = 'confirm-booking';
-              confirmBtn.dataset.id = booking.id;
-              confirmBtn.textContent = 'Подтвердить';
-              actionsCell.appendChild(confirmBtn);
-            }
-
-            if (booking.status !== 'cancelled') {
-              const cancelBtn = document.createElement('button');
-              cancelBtn.type = 'button';
-              cancelBtn.className = 'secondary-btn';
-              cancelBtn.dataset.action = 'cancel-booking';
-              cancelBtn.dataset.id = booking.id;
-              cancelBtn.textContent = 'Отменить';
-              actionsCell.appendChild(cancelBtn);
-            }
-
-            tr.appendChild(timeCell);
-            tr.appendChild(clientCell);
-            tr.appendChild(serviceCell);
-            tr.appendChild(masterCell);
-            tr.appendChild(statusCell);
-            tr.appendChild(actionsCell);
-
-            bookingsTableBody.appendChild(tr);
-          });
-      };
-
-      const renderGroupsTable = () => {
-        groupsTableBody.innerHTML = '';
-
-        if (!state.groups.length) {
-          const emptyRow = document.createElement('tr');
-          emptyRow.className = 'empty-row';
-          const cell = document.createElement('td');
-          cell.colSpan = 2;
-          cell.textContent = 'Групп пока нет';
-          emptyRow.appendChild(cell);
-          groupsTableBody.appendChild(emptyRow);
-          return;
-        }
-
-        state.groups.forEach((group) => {
-          const tr = document.createElement('tr');
-          tr.dataset.id = group.id;
-
-          const nameCell = document.createElement('td');
-          nameCell.dataset.field = 'name';
-          nameCell.contentEditable = 'true';
-          nameCell.textContent = group.name;
-
-          const actionsCell = document.createElement('td');
-          actionsCell.className = 'table-actions';
-          const deleteBtn = document.createElement('button');
-          deleteBtn.type = 'button';
-          deleteBtn.className = 'danger-btn';
-          deleteBtn.dataset.action = 'delete-group';
-          deleteBtn.dataset.id = group.id;
-          deleteBtn.textContent = 'Удалить';
-          actionsCell.appendChild(deleteBtn);
-
-          tr.appendChild(nameCell);
-          tr.appendChild(actionsCell);
-          groupsTableBody.appendChild(tr);
-        });
-      };
-
-      const loadGroups = async () => {
-        const response = await apiFetch('/api/groups');
-        if (!response.ok) {
-          await handleError(response);
-          return;
-        }
-        state.groups = await response.json();
-        renderGroupOptions();
-        renderGroupFilter();
-        renderGroupsTable();
-      };
-
-      const loadServices = async () => {
-        const response = await apiFetch('/api/services');
-        if (!response.ok) {
-          await handleError(response);
-          return;
-        }
-        state.services = await response.json();
-        renderServicesTable();
-      };
-
-      const loadBookings = async () => {
-        if (!authState.token) {
-          state.bookings = [];
-          renderBookingsTable();
-          return;
-        }
-
-        const params = new URLSearchParams();
-        if (state.bookingStatusFilter !== 'all') {
-          params.set('status', state.bookingStatusFilter);
-        }
-
-        const url = params.toString() ? `/api/bookings?${params.toString()}` : '/api/bookings';
-        const response = await apiFetch(url);
-        if (!response.ok) {
-          await handleError(response);
-          if (response.status === 401 || response.status === 403) {
-            state.bookings = [];
-            renderBookingsTable();
-          }
-          return;
-        }
-
-        state.bookings = await response.json();
-        renderBookingsTable();
-      };
-
-      const refreshData = async () => {
-        await loadGroups();
-        await loadServices();
-        await loadBookings();
-      };
-
-      groupFilter.addEventListener('change', (event) => {
-        const value = event.target.value;
-        state.filterGroupId = value === '' ? null : Number(value);
-        renderServicesTable();
-      });
-
-      bookingStatusFilter.addEventListener('change', (event) => {
-        state.bookingStatusFilter = event.target.value;
-        loadBookings();
-      });
-
-      const updateBookingStatus = async (id, status) => {
-        if (!authState.token) {
-          showBanner('Сначала сохраните токен администратора', 'error');
-          return;
-        }
-
-        const response = await apiFetch(`/api/bookings/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status })
-        });
-
-        if (!response.ok) {
-          await handleError(response);
-          return;
-        }
-
-        await response.json();
-        showBanner(status === 'confirmed' ? 'Запись подтверждена' : 'Запись отменена');
-        loadBookings();
-      };
-
-      bookingsTableBody.addEventListener('click', (event) => {
-        const button = event.target.closest('button[data-action]');
-        if (!button) {
-          return;
-        }
-
-        const id = Number(button.dataset.id);
-        if (!id) {
-          return;
-        }
-
-        if (button.dataset.action === 'confirm-booking') {
-          updateBookingStatus(id, 'confirmed');
-          return;
-        }
-
-        if (button.dataset.action === 'cancel-booking') {
-          if (!confirm('Отменить запись? Клиент получит уведомление.')) {
-            return;
-          }
-          updateBookingStatus(id, 'cancelled');
-        }
-      });
-
-      serviceForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        if (!authState.token) {
-          showBanner('Сначала сохраните токен администратора', 'error');
-          return;
-        }
-        const formData = new FormData(serviceForm);
-        const payload = {
-          name: formData.get('name'),
-          description: formData.get('description'),
-          price: Number(formData.get('price')),
-          duration: Number(formData.get('duration')),
-          groupId: formData.get('groupId') ? Number(formData.get('groupId')) : null
-        };
-
-        const response = await apiFetch('/api/services', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          await handleError(response);
-          return;
-        }
-
-        const created = await response.json();
-        state.services.push(created);
-        serviceForm.reset();
-        renderServicesTable();
-        showBanner('Услуга создана');
-      });
-
-      groupForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        if (!authState.token) {
-          showBanner('Сначала сохраните токен администратора', 'error');
-          return;
-        }
-        const formData = new FormData(groupForm);
-        const payload = { name: formData.get('name') };
-
-        const response = await apiFetch('/api/groups', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          await handleError(response);
-          return;
-        }
-
-        const created = await response.json();
-        state.groups.push(created);
-        groupForm.reset();
-        renderGroupOptions();
-        renderGroupFilter();
-        renderGroupsTable();
-        showBanner('Группа создана');
-      });
-
-      const updateServiceField = async (id, field, value) => {
-        if (!authState.token) {
-          showBanner('Сначала сохраните токен администратора', 'error');
-          return null;
-        }
-
-        const response = await apiFetch(`/api/services/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ [field]: value })
-        });
-
-        if (!response.ok) {
-          await handleError(response);
-          return null;
-        }
-
-        const updated = await response.json();
-        const index = state.services.findIndex((service) => service.id === id);
-        if (index !== -1) {
-          state.services[index] = updated;
-        }
-        return updated;
-      };
-
-      servicesTableBody.addEventListener('blur', async (event) => {
-        const cell = event.target;
-        if (cell.dataset.field && cell.tagName === 'TD') {
-          const row = cell.closest('tr');
-          const id = Number(row?.dataset.id);
-          if (!id) {
-            return;
-          }
-
-          const service = state.services.find((item) => item.id === id);
-          if (!service) {
-            return;
-          }
-
-          const field = cell.dataset.field;
-          let value = cell.textContent.trim();
-
-          if (field === 'price' || field === 'duration') {
-            const numberValue = Number(value);
-            if (!Number.isFinite(numberValue) || (field === 'duration' && numberValue <= 0) || numberValue < 0) {
-              cell.textContent = service[field];
-              showBanner('Введите корректное число', 'error');
-              return;
-            }
-            value = numberValue;
-          }
-
-          if (!value && (field === 'name' || field === 'description')) {
-            cell.textContent = service[field];
-            showBanner('Поле не может быть пустым', 'error');
-            return;
-          }
-
-          const updated = await updateServiceField(id, field, value);
-          if (!updated) {
-            cell.textContent = service[field];
-            return;
-          }
-
-          showBanner('Услуга обновлена');
-          renderServicesTable();
-        }
-      }, true);
-
-      servicesTableBody.addEventListener('change', async (event) => {
-        const select = event.target;
-        if (select.dataset.field === 'groupId') {
-          const row = select.closest('tr');
-          const id = Number(row?.dataset.id);
-          if (!id) {
-            return;
-          }
-
-          const value = select.value === '' ? null : Number(select.value);
-          const updated = await updateServiceField(id, 'groupId', value);
-          if (!updated) {
-            const service = state.services.find((item) => item.id === id);
-            select.value = service?.groupId ?? '';
-            return;
-          }
-          showBanner('Услуга обновлена');
-        }
-      });
-
-      servicesTableBody.addEventListener('click', async (event) => {
-        const button = event.target.closest('button[data-action="delete-service"]');
-        if (!button) {
-          return;
-        }
-
-        const id = Number(button.dataset.id);
-        if (!id || !confirm('Удалить услугу?')) {
-          return;
-        }
-
-        if (!authState.token) {
-          showBanner('Сначала сохраните токен администратора', 'error');
-          return;
-        }
-
-        const response = await apiFetch(`/api/services/${id}`, { method: 'DELETE' });
-        if (!response.ok) {
-          await handleError(response);
-          return;
-        }
-
-        state.services = state.services.filter((service) => service.id !== id);
-        renderServicesTable();
-        showBanner('Услуга удалена');
-      });
-
-      const updateGroupField = async (id, value) => {
-        if (!authState.token) {
-          showBanner('Сначала сохраните токен администратора', 'error');
-          return null;
-        }
-
-        const response = await apiFetch(`/api/groups/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: value })
-        });
-
-        if (!response.ok) {
-          await handleError(response);
-          return null;
-        }
-
-        const updated = await response.json();
-        const index = state.groups.findIndex((group) => group.id === id);
-        if (index !== -1) {
-          state.groups[index] = updated;
-        }
-        return updated;
-      };
-
-      groupsTableBody.addEventListener('blur', async (event) => {
-        const cell = event.target;
-        if (cell.dataset.field === 'name') {
-          const row = cell.closest('tr');
-          const id = Number(row?.dataset.id);
-          if (!id) {
-            return;
-          }
-
-          const group = state.groups.find((item) => item.id === id);
-          if (!group) {
-            return;
-          }
-
-          const value = cell.textContent.trim();
-          if (!value) {
-            cell.textContent = group.name;
-            showBanner('Название группы не может быть пустым', 'error');
-            return;
-          }
-
-          const updated = await updateGroupField(id, value);
-          if (!updated) {
-            cell.textContent = group.name;
-            return;
-          }
-
-          renderGroupOptions();
-          renderGroupFilter();
-          renderServicesTable();
-          showBanner('Группа обновлена');
-        }
-      }, true);
-
-      groupsTableBody.addEventListener('click', async (event) => {
-        const button = event.target.closest('button[data-action="delete-group"]');
-        if (!button) {
-          return;
-        }
-
-        const id = Number(button.dataset.id);
-        if (!id || !confirm('Удалить группу? Связанные услуги останутся без группы.')) {
-          return;
-        }
-
-        if (!authState.token) {
-          showBanner('Сначала сохраните токен администратора', 'error');
-          return;
-        }
-
-        const response = await apiFetch(`/api/groups/${id}`, { method: 'DELETE' });
-        if (!response.ok) {
-          await handleError(response);
-          return;
-        }
-
-        state.groups = state.groups.filter((group) => group.id !== id);
-        state.services = state.services.map((service) =>
-          service.groupId === id ? { ...service, groupId: null } : service
-        );
-
-        renderGroupOptions();
-        renderGroupFilter();
-        renderGroupsTable();
-        renderServicesTable();
-        showBanner('Группа удалена');
-      });
-
-      refreshData();
-    });
-  </script>
-</body>
-</html>
-EOF
+# ADMIN UI template will be copied below
+cp "$SCRIPT_DIR/templates/admin.html" public/admin.html
 
 echo ">>> Установка зависимостей..."
 npm install --omit=dev
