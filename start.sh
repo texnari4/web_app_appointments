@@ -92,7 +92,7 @@ const DEFAULT_SERVICES = [
     name: 'Стрижка женская',
     description: 'Мытьё, укладка, стрижка с учётом особенностей волос',
     price: 1200,
-    duration: 45,
+    duration: 60,
     groupId: 2
   },
   {
@@ -100,7 +100,7 @@ const DEFAULT_SERVICES = [
     name: 'Классический маникюр',
     description: 'Комплексная обработка ногтей и кутикулы',
     price: 1000,
-    duration: 50,
+    duration: 60,
     groupId: 3
   }
 ];
@@ -258,6 +258,10 @@ function validateServicePayload(payload, groups) {
     return 'Длительность должна быть положительным числом (в минутах)';
   }
 
+  if (duration % SLOT_STEP_MIN !== 0) {
+    return `Длительность должна быть кратной ${SLOT_STEP_MIN} минутам`;
+  }
+
   if (groupId != null && !groups.some((g) => g.id === groupId)) {
     return 'Указанная группа не найдена';
   }
@@ -300,6 +304,13 @@ function minutesToTime(value) {
   return `${hours}:${minutes}`;
 }
 
+function alignDurationMinutes(value) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return NaN;
+  }
+  return Math.max(SLOT_STEP_MIN, Math.ceil(value / SLOT_STEP_MIN) * SLOT_STEP_MIN);
+}
+
 function getWorkdayBounds() {
   const open = timeToMinutes(BUSINESS_OPEN_TIME);
   const close = timeToMinutes(BUSINESS_CLOSE_TIME);
@@ -316,6 +327,11 @@ function buildDailySlots({ date, duration, masterId, bookings }) {
   const { open, close } = getWorkdayBounds();
   const normalizedDuration = Number(duration ?? SLOT_STEP_MIN);
   if (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0) {
+    return [];
+  }
+
+  const slotAlignedDuration = alignDurationMinutes(normalizedDuration);
+  if (!Number.isFinite(slotAlignedDuration)) {
     return [];
   }
 
@@ -336,8 +352,8 @@ function buildDailySlots({ date, duration, masterId, bookings }) {
     .filter((range) => Array.isArray(range));
 
   const slots = [];
-  for (let start = open; start + normalizedDuration <= close; start += SLOT_STEP_MIN) {
-    const end = start + normalizedDuration;
+  for (let start = open; start + slotAlignedDuration <= close; start += SLOT_STEP_MIN) {
+    const end = start + slotAlignedDuration;
     const conflict = busyRanges.some(([busyStart, busyEnd]) => {
       return Math.max(busyStart, start) < Math.min(busyEnd, end);
     });
@@ -397,10 +413,13 @@ function validateBookingPayload(payload, services) {
     return `Время начала должно соответствовать шагу ${SLOT_STEP_MIN} минут`;
   }
 
-  let durationMinutes = Number(payload.duration ?? service.duration ?? SLOT_STEP_MIN);
-  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0 || durationMinutes % SLOT_STEP_MIN !== 0) {
-    return `Длительность должна быть положительной и кратной ${SLOT_STEP_MIN} минутам`;
+  const rawDuration = Number(payload.duration ?? service.duration ?? SLOT_STEP_MIN);
+  const normalizedDuration = alignDurationMinutes(rawDuration);
+  if (!Number.isFinite(normalizedDuration)) {
+    return 'Длительность должна быть положительной';
   }
+
+  payload.duration = normalizedDuration;
 
   return null;
 }
@@ -644,14 +663,18 @@ const server = createServer(async (req, res) => {
 
       const masterId = query.masterId != null && query.masterId !== '' ? String(query.masterId).trim() : null;
       const bookings = readJSON(bookingsFile, []);
-      const slots = buildDailySlots({ date, duration, masterId, bookings });
+      const alignedDuration = Math.max(
+        SLOT_STEP_MIN,
+        Math.ceil(duration / SLOT_STEP_MIN) * SLOT_STEP_MIN
+      );
+      const slots = buildDailySlots({ date, duration: alignedDuration, masterId, bookings });
 
       sendJSON(res, 200, {
         slots,
         meta: {
           slotStep: SLOT_STEP_MIN,
           serviceId: service?.id ?? null,
-          serviceDuration: duration,
+          serviceDuration: alignedDuration,
           businessHours: {
             open: BUSINESS_OPEN_TIME,
             close: BUSINESS_CLOSE_TIME
@@ -703,7 +726,13 @@ const server = createServer(async (req, res) => {
       const bookings = readJSON(bookingsFile, []);
 
       const startMinutes = timeToMinutes(payload.startTime);
-      const durationMinutes = Number(payload.duration ?? service.duration ?? SLOT_STEP_MIN);
+      const durationMinutes = alignDurationMinutes(
+        Number(payload.duration ?? service.duration ?? SLOT_STEP_MIN)
+      );
+      if (!Number.isFinite(durationMinutes)) {
+        sendJSON(res, 400, { error: 'Длительность должна быть положительной' });
+        return;
+      }
       const endMinutes = startMinutes + durationMinutes;
 
       const overlap = bookings.some((booking) => {
@@ -714,7 +743,7 @@ const server = createServer(async (req, res) => {
           return false;
         }
         const existingStart = timeToMinutes(booking.startTime);
-        const existingDuration = Number(booking.duration ?? SLOT_STEP_MIN);
+        const existingDuration = alignDurationMinutes(Number(booking.duration ?? SLOT_STEP_MIN));
         const existingEnd = existingStart + existingDuration;
         return Math.max(existingStart, startMinutes) < Math.min(existingEnd, endMinutes);
       });
@@ -794,8 +823,8 @@ const server = createServer(async (req, res) => {
         const servicesData = readJSON(servicesFile, []);
         const service = servicesData.find((item) => item.id === draft.serviceId);
         const nextStart = payload.startTime ? timeToMinutes(payload.startTime) : timeToMinutes(draft.startTime);
-        const nextDuration = Number(
-          payload.duration ?? draft.duration ?? service?.duration ?? SLOT_STEP_MIN
+        const nextDuration = alignDurationMinutes(
+          Number(payload.duration ?? draft.duration ?? service?.duration ?? SLOT_STEP_MIN)
         );
 
         if (!Number.isFinite(nextStart) || nextStart % SLOT_STEP_MIN !== 0) {
@@ -803,8 +832,8 @@ const server = createServer(async (req, res) => {
           return;
         }
 
-        if (!Number.isFinite(nextDuration) || nextDuration <= 0 || nextDuration % SLOT_STEP_MIN !== 0) {
-          sendJSON(res, 400, { error: `Длительность должна быть кратной ${SLOT_STEP_MIN}` });
+        if (!Number.isFinite(nextDuration)) {
+          sendJSON(res, 400, { error: 'Длительность должна быть положительной' });
           return;
         }
 
@@ -818,7 +847,7 @@ const server = createServer(async (req, res) => {
             return false;
           }
           const existingStart = timeToMinutes(booking.startTime);
-          const existingDuration = Number(booking.duration ?? SLOT_STEP_MIN);
+          const existingDuration = alignDurationMinutes(Number(booking.duration ?? SLOT_STEP_MIN));
           const existingEnd = existingStart + existingDuration;
           return Math.max(existingStart, nextStart) < Math.min(existingEnd, nextEnd);
         });
@@ -1014,10 +1043,10 @@ cat <<'EOF' > public/client.html
     }
 
     .pill-button.active {
-      background: linear-gradient(130deg, #6366f1, #4338ca);
+      background: linear-gradient(130deg, #7cb9ff, #007aff);
       color: #fff;
       border-color: transparent;
-      box-shadow: 0 20px 32px -20px rgba(99, 102, 241, 0.65);
+      box-shadow: 0 20px 30px -22px rgba(0, 122, 255, 0.55);
     }
 
     .slot-grid {
@@ -1047,9 +1076,9 @@ cat <<'EOF' > public/client.html
 
     .slot-button.selected {
       border-color: transparent;
-      background: linear-gradient(130deg, #10b981, #059669);
+      background: linear-gradient(130deg, #4ade80, #34c759);
       color: #fff;
-      box-shadow: 0 24px 34px -24px rgba(5, 150, 105, 0.55);
+      box-shadow: 0 24px 32px -24px rgba(52, 199, 89, 0.55);
     }
 
     .slot-button[disabled] {
@@ -1078,15 +1107,15 @@ cat <<'EOF' > public/client.html
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      background: linear-gradient(135deg, #111827, #1f2937);
+      background: linear-gradient(135deg, #5ec5ff, #007aff);
       color: #fff;
-      box-shadow: 0 24px 44px -26px rgba(17, 24, 39, 0.7);
+      box-shadow: 0 24px 40px -28px rgba(0, 122, 255, 0.55);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .submit-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 28px 46px -24px rgba(17, 24, 39, 0.65);
+      box-shadow: 0 28px 46px -24px rgba(0, 122, 255, 0.55);
     }
 
     .summary-card {
@@ -1100,31 +1129,31 @@ cat <<'EOF' > public/client.html
       color: #374151;
     }
 
-    .banner {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 14px 22px;
-      border-radius: 14px;
-      background: rgba(16, 185, 129, 0.95);
-      color: #fff;
-      font-weight: 600;
-      box-shadow: 0 32px 48px -32px rgba(16, 185, 129, 0.65);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
+  .banner {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 14px 22px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(94, 197, 255, 0.95), rgba(0, 122, 255, 0.95));
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 32px 48px -32px rgba(0, 122, 255, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
 
     .banner.show {
       opacity: 1;
       transform: translate(-50%, -6px);
     }
 
-    .banner.error {
-      background: rgba(239, 68, 68, 0.95);
-      box-shadow: 0 32px 48px -32px rgba(239, 68, 68, 0.65);
-    }
+  .banner.error {
+    background: linear-gradient(135deg, rgba(255, 95, 95, 0.95), rgba(244, 63, 94, 0.95));
+    box-shadow: 0 32px 48px -32px rgba(244, 63, 94, 0.6);
+  }
 
     @media (max-width: 600px) {
       section {
@@ -1613,22 +1642,25 @@ cat <<'EOF' > public/admin.html
 
     button:hover {
       transform: translateY(-1px);
-      box-shadow: 0 10px 22px -16px rgba(15, 23, 42, 0.8);
+      box-shadow: 0 12px 20px -18px rgba(15, 23, 42, 0.55);
     }
 
     .primary-btn {
-      background: linear-gradient(135deg, #6366f1, #4338ca);
+      background: linear-gradient(135deg, #5ec5ff, #007aff);
       color: #ffffff;
+      box-shadow: 0 18px 28px -20px rgba(0, 122, 255, 0.55);
     }
 
     .secondary-btn {
-      background: #e2e8f0;
-      color: #1e293b;
+      background: #f2f5fb;
+      color: #0f172a;
+      border: 1px solid rgba(148, 163, 184, 0.35);
     }
 
     .danger-btn {
-      background: #ef4444;
+      background: linear-gradient(135deg, #ff9eb5, #ff6b81);
       color: #ffffff;
+      box-shadow: 0 16px 26px -22px rgba(255, 107, 129, 0.55);
     }
 
     table {
@@ -1674,6 +1706,43 @@ cat <<'EOF' > public/admin.html
       width: 104px;
     }
 
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .status-badge::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-pending {
+      background: rgba(59, 130, 246, 0.14);
+      color: #1d4ed8;
+    }
+
+    .status-confirmed {
+      background: rgba(34, 197, 94, 0.16);
+      color: #047857;
+    }
+
+    .status-cancelled {
+      background: rgba(248, 113, 113, 0.16);
+      color: #b91c1c;
+    }
+
     .empty-row td {
       text-align: center;
       color: #97a6ba;
@@ -1704,8 +1773,8 @@ cat <<'EOF' > public/admin.html
       border-radius: 12px;
       font-weight: 600;
       color: #fff;
-      background: #16a34a;
-      box-shadow: 0 24px 38px -26px rgba(4, 121, 67, 0.65);
+      background: linear-gradient(135deg, #34c759, #28b24a);
+      box-shadow: 0 22px 38px -26px rgba(40, 178, 74, 0.6);
       opacity: 0;
       pointer-events: none;
       transform: translateY(18px);
@@ -1718,8 +1787,8 @@ cat <<'EOF' > public/admin.html
     }
 
     .banner.error {
-      background: #dc2626;
-      box-shadow: 0 24px 38px -26px rgba(220, 38, 38, 0.65);
+      background: linear-gradient(135deg, #ff5f5f, #f43f5e);
+      box-shadow: 0 22px 38px -26px rgba(244, 63, 94, 0.55);
     }
 
     @media (max-width: 960px) {
@@ -1838,6 +1907,35 @@ cat <<'EOF' > public/admin.html
     </section>
 
     <section>
+      <div class="section-header">
+        <h2>Записи</h2>
+        <label>
+          Статус
+          <select id="bookingStatusFilter">
+            <option value="all">Все</option>
+            <option value="pending" selected>В ожидании</option>
+            <option value="confirmed">Подтверждённые</option>
+            <option value="cancelled">Отменённые</option>
+          </select>
+        </label>
+      </div>
+
+      <table id="bookingsTable">
+        <thead>
+          <tr>
+            <th>Время</th>
+            <th>Клиент</th>
+            <th>Услуга</th>
+            <th>Мастер</th>
+            <th>Статус</th>
+            <th class="table-actions">Действия</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section>
       <h2>Группы</h2>
       <table id="groupsTable">
         <thead>
@@ -1858,12 +1956,16 @@ cat <<'EOF' > public/admin.html
       const state = {
         services: [],
         groups: [],
-        filterGroupId: null
+        bookings: [],
+        filterGroupId: null,
+        bookingStatusFilter: 'pending'
       };
 
       const servicesTableBody = document.querySelector('#servicesTable tbody');
       const groupsTableBody = document.querySelector('#groupsTable tbody');
       const groupFilter = document.getElementById('groupFilter');
+      const bookingsTableBody = document.querySelector('#bookingsTable tbody');
+      const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const banner = document.getElementById('banner');
       const serviceForm = document.getElementById('serviceForm');
       const serviceFormGroupSelect = serviceForm.querySelector('select[name="groupId"]');
@@ -1903,6 +2005,7 @@ cat <<'EOF' > public/admin.html
           localStorage.removeItem(AUTH_STORAGE_KEY);
         }
         updateAuthStatus();
+        loadBookings();
       };
 
       const withAuthHeaders = (headers = {}) => {
@@ -2074,6 +2177,122 @@ cat <<'EOF' > public/admin.html
         });
       };
 
+      const BOOKING_STATUS_LABELS = {
+        pending: 'В ожидании',
+        confirmed: 'Подтверждена',
+        cancelled: 'Отменена'
+      };
+
+      const formatRub = (value) =>
+        value == null
+          ? '—'
+          : new Intl.NumberFormat('ru-RU', {
+              style: 'currency',
+              currency: 'RUB',
+              maximumFractionDigits: 0
+            }).format(value);
+
+      const renderBookingsTable = () => {
+        bookingsTableBody.innerHTML = '';
+
+        if (!authState.token) {
+          const row = document.createElement('tr');
+          row.className = 'empty-row';
+          const cell = document.createElement('td');
+          cell.colSpan = 6;
+          cell.textContent = 'Введите токен администратора, чтобы просматривать и подтверждать записи.';
+          row.appendChild(cell);
+          bookingsTableBody.appendChild(row);
+          return;
+        }
+
+        const filtered = state.bookingStatusFilter === 'all'
+          ? state.bookings
+          : state.bookings.filter((booking) => booking.status === state.bookingStatusFilter);
+
+        if (!filtered.length) {
+          const row = document.createElement('tr');
+          row.className = 'empty-row';
+          const cell = document.createElement('td');
+          cell.colSpan = 6;
+          cell.textContent = 'Записей нет';
+          row.appendChild(cell);
+          bookingsTableBody.appendChild(row);
+          return;
+        }
+
+        filtered
+          .sort((a, b) => new Date(`${a.date}T${a.startTime}`) - new Date(`${b.date}T${b.startTime}`))
+          .forEach((booking) => {
+            const tr = document.createElement('tr');
+            tr.dataset.id = booking.id;
+
+            const startDate = new Date(`${booking.date}T${booking.startTime}:00`);
+            const formattedDate = startDate.toLocaleDateString('ru-RU', {
+              weekday: 'short',
+              day: '2-digit',
+              month: 'short'
+            });
+
+            const timeCell = document.createElement('td');
+            timeCell.innerHTML = `<strong>${booking.startTime}</strong><br><span class="muted">${formattedDate}</span>`;
+
+            const clientCell = document.createElement('td');
+            clientCell.innerHTML = `
+              <div><strong>${escapeHtml(booking.clientName)}</strong></div>
+              <div class="muted">${escapeHtml(booking.clientPhone)}</div>
+              ${booking.notes ? `<div class="muted">${escapeHtml(booking.notes)}</div>` : ''}
+            `;
+
+            const serviceCell = document.createElement('td');
+            serviceCell.innerHTML = `
+              <div>${escapeHtml(booking.serviceName || '—')}</div>
+              <div class="muted">${booking.duration} мин · ${formatRub(booking.servicePrice)}</div>
+            `;
+
+            const masterCell = document.createElement('td');
+            masterCell.textContent = booking.masterId ? `ID ${booking.masterId}` : 'Не выбран';
+
+            const statusCell = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = `status-badge status-${booking.status}`;
+            badge.textContent = BOOKING_STATUS_LABELS[booking.status] || booking.status;
+            statusCell.appendChild(badge);
+
+            const actionsCell = document.createElement('td');
+            actionsCell.className = 'table-actions';
+
+            if (booking.status !== 'confirmed') {
+              const confirmBtn = document.createElement('button');
+              confirmBtn.type = 'button';
+              confirmBtn.className = 'primary-btn';
+              confirmBtn.dataset.action = 'confirm-booking';
+              confirmBtn.dataset.id = booking.id;
+              confirmBtn.textContent = 'Подтвердить';
+              actionsCell.appendChild(confirmBtn);
+            }
+
+            if (booking.status !== 'cancelled') {
+              const cancelBtn = document.createElement('button');
+              cancelBtn.type = 'button';
+              cancelBtn.className = 'secondary-btn';
+              cancelBtn.dataset.action = 'cancel-booking';
+              cancelBtn.dataset.id = booking.id;
+              cancelBtn.textContent = 'Отменить';
+              actionsCell.appendChild(cancelBtn);
+            }
+
+            tr.appendChild(timeCell);
+            tr.appendChild(clientCell);
+            tr.appendChild(serviceCell);
+            tr.appendChild(masterCell);
+            tr.appendChild(statusCell);
+            tr.appendChild(actionsCell);
+
+            bookingsTableBody.appendChild(tr);
+          });
+      };
+
       const renderGroupsTable = () => {
         groupsTableBody.innerHTML = '';
 
@@ -2135,15 +2354,94 @@ cat <<'EOF' > public/admin.html
         renderServicesTable();
       };
 
+      const loadBookings = async () => {
+        if (!authState.token) {
+          state.bookings = [];
+          renderBookingsTable();
+          return;
+        }
+
+        const params = new URLSearchParams();
+        if (state.bookingStatusFilter !== 'all') {
+          params.set('status', state.bookingStatusFilter);
+        }
+
+        const url = params.toString() ? `/api/bookings?${params.toString()}` : '/api/bookings';
+        const response = await apiFetch(url);
+        if (!response.ok) {
+          await handleError(response);
+          if (response.status === 401 || response.status === 403) {
+            state.bookings = [];
+            renderBookingsTable();
+          }
+          return;
+        }
+
+        state.bookings = await response.json();
+        renderBookingsTable();
+      };
+
       const refreshData = async () => {
         await loadGroups();
         await loadServices();
+        await loadBookings();
       };
 
       groupFilter.addEventListener('change', (event) => {
         const value = event.target.value;
         state.filterGroupId = value === '' ? null : Number(value);
         renderServicesTable();
+      });
+
+      bookingStatusFilter.addEventListener('change', (event) => {
+        state.bookingStatusFilter = event.target.value;
+        loadBookings();
+      });
+
+      const updateBookingStatus = async (id, status) => {
+        if (!authState.token) {
+          showBanner('Сначала сохраните токен администратора', 'error');
+          return;
+        }
+
+        const response = await apiFetch(`/api/bookings/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
+
+        if (!response.ok) {
+          await handleError(response);
+          return;
+        }
+
+        await response.json();
+        showBanner(status === 'confirmed' ? 'Запись подтверждена' : 'Запись отменена');
+        loadBookings();
+      };
+
+      bookingsTableBody.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) {
+          return;
+        }
+
+        const id = Number(button.dataset.id);
+        if (!id) {
+          return;
+        }
+
+        if (button.dataset.action === 'confirm-booking') {
+          updateBookingStatus(id, 'confirmed');
+          return;
+        }
+
+        if (button.dataset.action === 'cancel-booking') {
+          if (!confirm('Отменить запись? Клиент получит уведомление.')) {
+            return;
+          }
+          updateBookingStatus(id, 'cancelled');
+        }
       });
 
       serviceForm.addEventListener('submit', async (event) => {
