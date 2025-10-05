@@ -1,108 +1,34 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Админка — Beauty</title>
-  <link rel="stylesheet" href="/public/admin/styles.css" />
+  <link rel="stylesheet" href="/admin/styles.css"/>
 </head>
 <body>
-  <header class="topbar">
+<div class="layout">
+  <aside class="sidebar">
     <div class="brand">Beauty Admin</div>
-    <nav class="tabs" id="tabs">
+    <nav>
       <button data-tab="masters" class="active">Мастера</button>
       <button data-tab="services">Услуги</button>
       <button data-tab="appointments">Записи</button>
       <button data-tab="clients">Клиенты</button>
-      <button data-tab="reports">Отчеты</button>
+      <button data-tab="reports">Отчёты</button>
       <button data-tab="settings">Настройки</button>
     </nav>
-  </header>
-  <main id="content" class="content">
-    <!-- Masters -->
-    <section data-pane="masters" class="pane active">
-      <h2>Мастера</h2>
-      <form id="masterForm" class="card form-grid">
-        <input name="name" placeholder="Имя" required />
-        <input name="phone" placeholder="Телефон" />
-        <input name="avatarUrl" placeholder="Ссылка на фото" />
-        <input name="specialties" placeholder="Специальности (через запятую)" />
-        <textarea name="description" placeholder="Описание"></textarea>
-        <div class="row">
-          <label><input type="checkbox" name="isActive" checked /> Активен</label>
-          <button type="submit">Сохранить</button>
-        </div>
-      </form>
-      <div id="mastersList" class="grid"></div>
-    </section>
-
-    <!-- Services -->
-    <section data-pane="services" class="pane">
-      <h2>Услуги</h2>
-      <form id="serviceForm" class="card form-grid">
-        <input name="name" placeholder="Название" required />
-        <input name="price" type="number" step="0.01" placeholder="Цена" />
-        <input name="durationMin" type="number" step="5" placeholder="Длительность, мин" />
-        <textarea name="description" placeholder="Описание"></textarea>
-        <div class="row">
-          <label><input type="checkbox" name="isActive" checked /> Активна</label>
-          <button type="submit">Сохранить</button>
-        </div>
-      </form>
-      <div id="servicesList" class="grid"></div>
-    </section>
-
-    <!-- Appointments -->
-    <section data-pane="appointments" class="pane">
-      <h2>Записи</h2>
-      <div class="filters row" id="apptFilters">
-        <input type="date" id="fromDate" />
-        <input type="date" id="toDate" />
-        <select id="filterMaster"></select>
-        <select id="filterService"></select>
-        <select id="filterClient"></select>
-        <button id="reloadAppointments">Обновить</button>
+  </aside>
+  <main class="main">
+    <header class="toolbar">
+      <h1 id="section-title">Мастера</h1>
+      <div class="actions">
+        <button id="add-btn">Добавить</button>
       </div>
-      <div id="appointmentsList" class="grid"></div>
-    </section>
-
-    <!-- Clients -->
-    <section data-pane="clients" class="pane">
-      <h2>Клиенты</h2>
-      <form id="clientForm" class="card form-grid">
-        <input name="name" placeholder="Имя" required />
-        <input name="phone" placeholder="Телефон" />
-        <input name="tg" placeholder="Telegram @" />
-        <textarea name="notes" placeholder="Заметки"></textarea>
-        <div class="row">
-          <button type="submit">Сохранить</button>
-        </div>
-      </form>
-      <div class="row">
-        <input id="clientSearch" placeholder="Поиск по имени/телефону" />
-        <button id="searchClient">Найти</button>
-      </div>
-      <div id="clientsList" class="grid"></div>
-    </section>
-
-    <!-- Reports -->
-    <section data-pane="reports" class="pane">
-      <h2>Отчеты</h2>
-      <div class="row">
-        <input type="date" id="repFrom" />
-        <input type="date" id="repTo" />
-        <button id="makeReport">Сформировать</button>
-      </div>
-      <pre id="reportOut" class="card"></pre>
-    </section>
-
-    <!-- Settings -->
-    <section data-pane="settings" class="pane">
-      <h2>Настройки</h2>
-      <p>Пока тут базовые настройки. Позже добавим больше.</p>
-    </section>
+    </header>
+    <section id="content"></section>
   </main>
-
-  <script src="/public/admin/app.js" type="module"></script>
+</div>
+<script src="/admin/app.js" type="module"></script>
 </body>
 </html>

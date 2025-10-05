@@ -1,247 +1,137 @@
-const $ = (sel, root=document) => root.querySelector(sel);
-const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
+const TABS = ["masters","services","appointments","clients","reports","settings"];
+const content = document.getElementById("content");
+const title = document.getElementById("section-title");
+const addBtn = document.getElementById("add-btn");
+const navButtons = [...document.querySelectorAll("nav button")];
+let current = "masters";
 
-// Tabs
-const tabs = $('#tabs');
-const panes = $$('.pane');
-tabs.addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-tab]'); if(!btn) return;
-  $$('#tabs button').forEach(b=>b.classList.toggle('active', b===btn));
-  panes.forEach(p=>p.classList.toggle('active', p.dataset.pane===btn.dataset.tab));
-  if (btn.dataset.tab === 'masters') loadMasters();
-  if (btn.dataset.tab === 'services') loadServices();
-  if (btn.dataset.tab === 'appointments') { fillFilters(); loadAppointments(); }
-  if (btn.dataset.tab === 'clients') loadClients();
+function setTab(name){
+  current = name;
+  title.textContent = ({masters:"Мастера",services:"Услуги",appointments:"Записи",clients:"Клиенты",reports:"Отчёты",settings:"Настройки"})[name];
+  navButtons.forEach(b=>b.classList.toggle("active", b.dataset.tab===name));
+  render();
+}
+navButtons.forEach(b=>b.addEventListener("click", ()=>setTab(b.dataset.tab)));
+addBtn.addEventListener("click", ()=>{
+  if(current==="masters") openMasterForm();
+  if(current==="services") openServiceForm();
+  if(current==="clients") openClientForm();
+  if(current==="appointments") openAppointmentForm();
 });
 
-// ---- Masters ----
-const mastersList = $('#mastersList');
-const masterForm = $('#masterForm');
+// --- Helpers
+async function api(path, opts){
+  const r = await fetch(path, Object.assign({headers:{"Content-Type":"application/json"}}, opts||{}));
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+function el(html){ const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; }
 
-masterForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const fd = new FormData(masterForm);
-  const body = {
-    name: fd.get('name'),
-    phone: fd.get('phone') || undefined,
-    avatarUrl: fd.get('avatarUrl') || undefined,
-    description: fd.get('description') || undefined,
-    specialties: (fd.get('specialties') || '').toString().split(',').map(s=>s.trim()).filter(Boolean),
-    isActive: fd.get('isActive') === 'on',
-  };
-  const res = await fetch('/public/api/masters',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  if (!res.ok) return alert('Ошибка сохранения');
-  const created = await res.json();
-  masterForm.reset();
-  prependMaster(created);
-});
+// --- Masters
+async function loadMasters(){ return api('/public/api/masters'); }
+async function saveMaster(m){ return api('/public/api/masters', {method:'POST', body:JSON.stringify(m)}); }
+async function updateMaster(id,m){ return api(`/public/api/masters/${id}`, {method:'PUT', body:JSON.stringify(m)}); }
+async function deleteMaster(id){ return api(`/public/api/masters/${id}`, {method:'DELETE'}); }
 
+function openMasterForm(existing){
+  const data = existing || {name:"", phone:"", avatarUrl:"", isActive:true, description:"", specialties:[], schedule:{}};
+  const wrap = el(`<div class="card"></div>`);
+  wrap.innerHTML = `
+    <div class="row" style="gap:12px; flex-wrap:wrap">
+      <div style="flex:1 1 240px">
+        <label>Имя</label>
+        <input id="m-name" value="${data.name??""}"/>
+      </div>
+      <div style="flex:1 1 240px">
+        <label>Телефон</label>
+        <input id="m-phone" value="${data.phone??""}"/>
+      </div>
+      <div style="flex:1 1 240px">
+        <label>Фото (URL)</label>
+        <input id="m-avatar" value="${data.avatarUrl??""}"/>
+      </div>
+    </div>
+    <div class="row" style="gap:12px">
+      <div style="flex:1">
+        <label>Специальности (через запятую)</label>
+        <input id="m-spec" value="${(data.specialties||[]).join(', ')}"/>
+      </div>
+    </div>
+    <div class="row" style="gap:8px; justify-content:flex-end; margin-top:12px">
+      ${existing ? `<button class="btn" id="m-save">Сохранить</button>` : `<button class="btn" id="m-create">Создать</button>`}
+    </div>
+  `;
+  content.prepend(wrap);
+  wrap.querySelector('#m-create')?.addEventListener('click', async ()=>{
+    const payload = {
+      name: wrap.querySelector('#m-name').value.trim(),
+      phone: wrap.querySelector('#m-phone').value.trim(),
+      avatarUrl: wrap.querySelector('#m-avatar').value.trim(),
+      isActive: true,
+      specialties: wrap.querySelector('#m-spec').value.split(',').map(s=>s.trim()).filter(Boolean)
+    };
+    const {item} = await saveMaster(payload);
+    const card = masterCard(item);
+    content.querySelector('.grid')?.prepend(card);
+    wrap.remove();
+  });
+  wrap.querySelector('#m-save')?.addEventListener('click', async ()=>{
+    const payload = {
+      name: wrap.querySelector('#m-name').value.trim(),
+      phone: wrap.querySelector('#m-phone').value.trim(),
+      avatarUrl: wrap.querySelector('#m-avatar').value.trim(),
+      isActive: true,
+      specialties: wrap.querySelector('#m-spec').value.split(',').map(s=>s.trim()).filter(Boolean)
+    };
+    const {item} = await updateMaster(existing.id, payload);
+    const old = document.querySelector(`[data-id="${existing.id}"]`);
+    const fresh = masterCard(item);
+    old.replaceWith(fresh);
+    wrap.remove();
+  });
+}
 function masterCard(m){
-  const el = document.createElement('div');
-  el.className = 'card item';
-  el.innerHTML = `
-    <h4>${m.name}</h4>
-    <div class="muted">${m.phone ?? ''}</div>
-    <div class="row">
-      ${(m.specialties||[]).map(s=>`<span class="pill">${s}</span>`).join('')}
+  const node = el(`
+    <div class="card" data-id="${m.id}">
+      <div class="row" style="justify-content:space-between">
+        <div class="row" style="gap:12px">
+          <img src="${m.avatarUrl||'https://placehold.co/48x48'}" alt="" width="48" height="48" style="border-radius:12px; object-fit:cover"/>
+          <div>
+            <div style="font-weight:700">${m.name}</div>
+            <div class="muted">${m.phone||''}</div>
+          </div>
+        </div>
+        <div class="row" style="gap:6px">
+          <button class="btn" data-act="edit">Редактировать</button>
+          <button class="btn btn-danger" data-act="del">Удалить</button>
+        </div>
+      </div>
     </div>
-    <div class="actions">
-      <button class="ok" data-act="edit">Редактировать</button>
-      <button class="danger" data-act="del">Удалить</button>
-    </div>
-  `;
-  el.querySelector('[data-act="del"]').addEventListener('click', async ()=>{
+  `);
+  node.querySelector('[data-act="del"]').addEventListener('click', async ()=>{
     if(!confirm('Удалить мастера?')) return;
-    const res = await fetch(`/public/api/masters/${m.id}`,{ method:'DELETE' });
-    if (res.ok) el.remove(); else alert('Ошибка удаления');
+    await deleteMaster(m.id);
+    node.remove();
   });
-  el.querySelector('[data-act="edit"]').addEventListener('click', async ()=>{
-    const name = prompt('Имя', m.name); if(name==null) return;
-    const phone = prompt('Телефон', m.phone ?? '') ?? undefined;
-    const res = await fetch(`/public/api/masters/${m.id}`,{
-      method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ name, phone })
-    });
-    if(res.ok){ const updated = await res.json(); el.replaceWith(masterCard(updated)); } else alert('Ошибка сохранения');
-  });
-  return el;
-}
-function prependMaster(m){ mastersList.prepend(masterCard(m)); }
-async function loadMasters(){
-  const res = await fetch('/public/api/masters'); const {items} = await res.json();
-  mastersList.innerHTML = ''; items.forEach(m=>mastersList.appendChild(masterCard(m)));
-}
-loadMasters();
-
-// ---- Services ----
-const servicesList = $('#servicesList');
-const serviceForm = $('#serviceForm');
-serviceForm.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const fd = new FormData(serviceForm);
-  const body = {
-    name: fd.get('name'),
-    description: fd.get('description') || undefined,
-    price: Number(fd.get('price') || 0),
-    durationMin: Number(fd.get('durationMin') || 60),
-    isActive: fd.get('isActive') === 'on',
-  };
-  const res = await fetch('/public/api/services',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  if(!res.ok) return alert('Ошибка сохранения');
-  const created = await res.json();
-  serviceForm.reset();
-  prependService(created);
-});
-function serviceCard(s){
-  const el = document.createElement('div');
-  el.className = 'card item';
-  el.innerHTML = `
-    <h4>${s.name}</h4>
-    <div class="muted">${s.durationMin} мин — ${s.price}₽</div>
-    <div class="actions">
-      <button class="ok" data-act="edit">Редактировать</button>
-      <button class="danger" data-act="del">Удалить</button>
-    </div>
-  `;
-  el.querySelector('[data-act="del"]').addEventListener('click', async ()=>{
-    if(!confirm('Удалить услугу?')) return;
-    const res = await fetch(`/public/api/services/${s.id}`,{ method:'DELETE' });
-    if (res.ok) el.remove(); else alert('Ошибка удаления');
-  });
-  el.querySelector('[data-act="edit"]').addEventListener('click', async ()=>{
-    const name = prompt('Название', s.name); if(name==null) return;
-    const price = Number(prompt('Цена', String(s.price ?? 0)) ?? 0);
-    const durationMin = Number(prompt('Длительность (мин)', String(s.durationMin ?? 60)) ?? 60);
-    const res = await fetch(`/public/api/services/${s.id}`,{
-      method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ name, price, durationMin })
-    });
-    if(res.ok){ const updated = await res.json(); el.replaceWith(serviceCard(updated)); } else alert('Ошибка сохранения');
-  });
-  return el;
-}
-function prependService(s){ servicesList.prepend(serviceCard(s)); }
-async function loadServices(){
-  const res = await fetch('/public/api/services'); const {items} = await res.json();
-  servicesList.innerHTML=''; items.forEach(s=>servicesList.appendChild(serviceCard(s)));
+  node.querySelector('[data-act="edit"]').addEventListener('click', ()=> openMasterForm(m));
+  return node;
 }
 
-// ---- Clients ----
-const clientsList = $('#clientsList');
-const clientForm = $('#clientForm');
-const clientSearch = $('#clientSearch');
-$('#searchClient').addEventListener('click', ()=> loadClients(clientSearch.value || undefined));
-clientForm.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const fd = new FormData(clientForm);
-  const body = {
-    name: fd.get('name'),
-    phone: fd.get('phone') || undefined,
-    tg: fd.get('tg') || undefined,
-    notes: fd.get('notes') || undefined,
-  };
-  const res = await fetch('/public/api/clients',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  if(!res.ok) return alert('Ошибка сохранения');
-  const created = await res.json();
-  clientForm.reset();
-  prependClient(created);
-});
-function clientCard(c){
-  const el = document.createElement('div');
-  el.className = 'card item';
-  el.innerHTML = `
-    <h4>${c.name}</h4>
-    <div class="muted">${c.phone ?? ''} ${c.tg ? ' · '+c.tg : ''}</div>
-    <div class="actions">
-      <button class="ok" data-act="edit">Редактировать</button>
-      <button class="danger" data-act="del">Удалить</button>
-    </div>
-  `;
-  el.querySelector('[data-act="del"]').addEventListener('click', async ()=>{
-    if(!confirm('Удалить клиента?')) return;
-    const res = await fetch(`/public/api/clients/${c.id}`,{ method:'DELETE' });
-    if (res.ok) el.remove(); else alert('Ошибка удаления');
-  });
-  el.querySelector('[data-act="edit"]').addEventListener('click', async ()=>{
-    const name = prompt('Имя', c.name); if(name==null) return;
-    const phone = prompt('Телефон', c.phone ?? '') ?? undefined;
-    const res = await fetch(`/public/api/clients/${c.id}`,{
-      method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ name, phone })
-    });
-    if(res.ok){ const updated = await res.json(); el.replaceWith(clientCard(updated)); } else alert('Ошибка сохранения');
-  });
-  return el;
-}
-function prependClient(c){ clientsList.prepend(clientCard(c)); }
-async function loadClients(q){
-  const url = new URL('/public/api/clients', location.origin);
-  if (q) url.searchParams.set('q', q);
-  const res = await fetch(url); const {items} = await res.json();
-  clientsList.innerHTML=''; items.forEach(c=>clientsList.appendChild(clientCard(c)));
+// --- Services placeholder (UI only)
+function renderServices(){ content.innerHTML = `<div class="card">Секции «Услуги», «Записи», «Клиенты», «Отчёты» доступны в API, UI будет пополняться в следующих коммитах.</div>`; }
+
+async function renderMasters(){
+  content.innerHTML = `<div class="grid" id="masters-grid"></div>`;
+  const grid = document.getElementById('masters-grid');
+  const {items} = await loadMasters();
+  for(const m of items){
+    grid.appendChild(masterCard(m));
+  }
 }
 
-// ---- Appointments ----
-const appointmentsList = $('#appointmentsList');
-const filterMaster = $('#filterMaster');
-const filterService = $('#filterService');
-const filterClient = $('#filterClient');
-const reloadAppointments = $('#reloadAppointments');
-
-async function fillFilters(){
-  filterMaster.innerHTML = '<option value="">Все мастера</option>';
-  filterService.innerHTML = '<option value="">Все услуги</option>';
-  filterClient.innerHTML = '<option value="">Все клиенты</option>';
-  const [m,s,c] = await Promise.all([
-    fetch('/public/api/masters').then(r=>r.json()),
-    fetch('/public/api/services').then(r=>r.json()),
-    fetch('/public/api/clients').then(r=>r.json()),
-  ]);
-  m.items.forEach(x=>filterMaster.insertAdjacentHTML('beforeend', `<option value="${x.id}">${x.name}</option>`));
-  s.items.forEach(x=>filterService.insertAdjacentHTML('beforeend', `<option value="${x.id}">${x.name}</option>`));
-  c.items.forEach(x=>filterClient.insertAdjacentHTML('beforeend', `<option value="${x.id}">${x.name}</option>`));
+async function render(){
+  if(current==="masters") return renderMasters();
+  if(current==="services"||current==="appointments"||current==="clients"||current==="reports"||current==="settings") return renderServices();
 }
 
-function appointmentCard(a){
-  const el = document.createElement('div');
-  el.className = 'card item';
-  const start = new Date(a.start).toLocaleString();
-  el.innerHTML = `
-    <h4>Запись</h4>
-    <div class="muted">${start}</div>
-    <div class="row">
-      <span class="pill">${a.status}</span>
-    </div>
-    <div class="actions">
-      <button class="danger" data-act="del">Удалить</button>
-    </div>
-  `;
-  el.querySelector('[data-act="del"]').addEventListener('click', async ()=>{
-    if(!confirm('Удалить запись?')) return;
-    const res = await fetch(`/public/api/appointments/${a.id}`,{ method:'DELETE' });
-    if(res.ok) el.remove(); else alert('Ошибка удаления');
-  });
-  return el;
-}
-async function loadAppointments(){
-  const url = new URL('/public/api/appointments', location.origin);
-  const f = {
-    masterId: filterMaster.value || undefined,
-    serviceId: filterService.value || undefined,
-    clientId: filterClient.value || undefined,
-  };
-  Object.entries(f).forEach(([k,v])=>{ if(v) url.searchParams.set(k,v); });
-  const res = await fetch(url); const {items} = await res.json();
-  appointmentsList.innerHTML=''; items.forEach(a=>appointmentsList.appendChild(appointmentCard(a)));
-}
-reloadAppointments.addEventListener('click', loadAppointments);
-
-// ---- Reports ----
-const repFrom = $('#repFrom'); const repTo = $('#repTo'); const reportOut = $('#reportOut');
-$('#makeReport').addEventListener('click', async ()=>{
-  const url = new URL('/public/api/reports', location.origin);
-  if (repFrom.value) url.searchParams.set('from', new Date(repFrom.value).toISOString());
-  if (repTo.value) url.searchParams.set('to', new Date(repTo.value).toISOString());
-  const data = await fetch(url).then(r=>r.json());
-  reportOut.textContent = JSON.stringify(data, null, 2);
-});
+setTab("masters");
