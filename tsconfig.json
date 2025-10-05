@@ -13,12 +13,12 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
     "types": [
       "node"
     ]
   },
   "include": [
-    "src"
+    "src/**/*",
+    "public/**/*"
   ]
 }

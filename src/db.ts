@@ -1,15 +1,15 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-const DATA_DIR = process.env.DATA_DIR ?? '/app/data';
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 type Master = {
   id: string;
   name: string;
   phone: string;
-  avatarUrl: string;
+  avatarUrl?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -19,45 +19,41 @@ type Appointment = {
   id: string;
   masterId: string;
   clientName: string;
-  phone: string;
-  from: string; // ISO
-  to: string;   // ISO
-  note?: string;
+  clientPhone: string;
+  startsAt: string; // ISO
+  endsAt: string;   // ISO
   createdAt: string;
   updatedAt: string;
 };
 
-type DB = {
+type DBShape = {
   masters: Master[];
   appointments: Appointment[];
 };
 
 async function ensureFile() {
-  await mkdir(DATA_DIR, { recursive: True });
+  await fs.mkdir(DATA_DIR, { recursive: true });
   try {
-    await readFile(DB_FILE, 'utf8');
+    await fs.access(DB_FILE);
   } catch {
-    const empty: DB = { masters: [], appointments: [] };
-    await writeFile(DB_FILE, JSON.stringify(empty, null, 2), 'utf8');
+    const initial: DBShape = { masters: [], appointments: [] };
+    await fs.writeFile(DB_FILE, JSON.stringify(initial, null, 2), 'utf-8');
   }
 }
 
-export async function ensureReady() {
+async function readDb(): Promise<DBShape> {
   await ensureFile();
+  const raw = await fs.readFile(DB_FILE, 'utf-8');
+  try {
+    return JSON.parse(raw) as DBShape;
+  } catch {
+    return { masters: [], appointments: [] };
+  }
 }
 
-async function readDb(): Promise<DB> {
+async function writeDb(data: DBShape): Promise<void> {
   await ensureFile();
-  const raw = await readFile(DB_FILE, 'utf8');
-  return JSON.parse(raw) as DB;
-}
-
-async function writeDb(db: DB): Promise<void> {
-  await writeFile(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
-}
-
-function uuid() {
-  return crypto.randomUUID();
+  await fs.writeFile(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
 export async function listMasters(): Promise<Master[]> {
@@ -65,37 +61,60 @@ export async function listMasters(): Promise<Master[]> {
   return db.masters;
 }
 
-export async function createMaster(params: { name: string; phone: string; avatarUrl: string; isActive: boolean; }): Promise<Master> {
+export async function createMaster(payload: {name: string; phone: string; avatarUrl?: string; isActive?: boolean;}): Promise<Master> {
+  const db = await readDb();
   const now = new Date().toISOString();
-  const item: Master = { id: uuid(), createdAt: now, updatedAt: now, ...params };
-  const db = await readDb();
-  db.masters.push(item);
+  const master: Master = {
+    id: crypto.randomUUID(),
+    name: payload.name,
+    phone: payload.phone,
+    avatarUrl: payload.avatarUrl || '',
+    isActive: payload.isActive ?? true,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.masters.push(master);
   await writeDb(db);
-  return item;
+  return master;
 }
 
-export async function listAppointments(): Promise<Appointment[]> {
+export async function listAppointments(params?: { from?: string; to?: string; masterId?: string }): Promise<Appointment[]> {
   const db = await readDb();
-  return db.appointments;
+  let items = db.appointments;
+  if (params?.masterId) items = items.filter(a => a.masterId === params.masterId);
+  if (params?.from) items = items.filter(a => a.startsAt >= params.from!);
+  if (params?.to) items = items.filter(a => a.endsAt <= params.to!);
+  return items;
 }
 
-export async function createAppointment(params: { masterId: string; clientName: string; phone: string; from: string; to: string; note?: string; }): Promise<Appointment> {
+export async function createAppointment(payload: {
+  masterId: string;
+  clientName: string;
+  clientPhone: string;
+  startsAt: string;
+  endsAt: string;
+}): Promise<Appointment> {
   const db = await readDb();
-  // time conflict check
-  const from = new Date(params.from).getTime();
-  const to = new Date(params.to).getTime();
-  for (const a of db.appointments.filter(x => x.masterId === params.masterId)) {
-    const af = new Date(a.from).getTime();
-    const at = new Date(a.to).getTime();
-    const overlap = Math.max(af, from) < Math.min(at, to);
-    if (overlap) {
-      const err = new Error('TIME_CONFLICT');
-      throw err;
-    }
+  const now = new Date().toISOString();
+  // Simple overlap check
+  const overlap = db.appointments.find(a =>
+    a.masterId === payload.masterId &&
+    !(payload.endsAt <= a.startsAt || payload.startsAt >= a.endsAt)
+  );
+  if (overlap) {
+    throw new Error('Time slot overlaps existing appointment');
   }
-  const now = new Date().toISOString();
-  const item: Appointment = { id: uuid(), createdAt: now, updatedAt: now, ...params };
-  db.appointments.push(item);
+  const appt: Appointment = {
+    id: crypto.randomUUID(),
+    masterId: payload.masterId,
+    clientName: payload.clientName,
+    clientPhone: payload.clientPhone,
+    startsAt: payload.startsAt,
+    endsAt: payload.endsAt,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.appointments.push(appt);
   await writeDb(db);
-  return item;
+  return appt;
 }
