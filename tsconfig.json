@@ -8,14 +8,18 @@
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
     "strict": true,
+    "noImplicitAny": false,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "outDir": "dist",
     "types": [
       "node"
-    ],
-    "outDir": "dist",
-    "forceConsistentCasingInFileNames": true
+    ]
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "public/**/*.d.ts"
   ]
 }

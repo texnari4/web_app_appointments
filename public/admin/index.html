@@ -1,34 +1,57 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Админка — Beauty</title>
-  <link rel="stylesheet" href="/admin/styles.css"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Админка — Мастера</title>
+  <link rel="stylesheet" href="/public/admin/styles.css">
 </head>
 <body>
-<div class="layout">
-  <aside class="sidebar">
-    <div class="brand">Beauty Admin</div>
-    <nav>
-      <button data-tab="masters" class="active">Мастера</button>
-      <button data-tab="services">Услуги</button>
-      <button data-tab="appointments">Записи</button>
-      <button data-tab="clients">Клиенты</button>
-      <button data-tab="reports">Отчёты</button>
-      <button data-tab="settings">Настройки</button>
-    </nav>
-  </aside>
-  <main class="main">
-    <header class="toolbar">
-      <h1 id="section-title">Мастера</h1>
-      <div class="actions">
-        <button id="add-btn">Добавить</button>
-      </div>
-    </header>
-    <section id="content"></section>
-  </main>
-</div>
-<script src="/admin/app.js" type="module"></script>
+  <div class="container">
+    <h1>Мастера</h1>
+    <form id="create-form">
+      <input name="name" placeholder="Имя" required />
+      <input name="phone" placeholder="Телефон" required />
+      <input name="avatarUrl" placeholder="Фото URL" />
+      <button type="submit">Сохранить</button>
+    </form>
+
+    <h2>Список</h2>
+    <ul id="list"></ul>
+  </div>
+
+  <script>
+    async function refresh() {
+      const res = await fetch('/public/api/masters');
+      const { items } = await res.json();
+      const ul = document.getElementById('list');
+      ul.innerHTML = '';
+      items.forEach(m => {
+        const li = document.createElement('li');
+        li.textContent = m.name + ' — ' + m.phone;
+        ul.appendChild(li);
+      });
+    }
+
+    document.getElementById('create-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const payload = Object.fromEntries(new FormData(form).entries());
+      payload.isActive = true;
+      const res = await fetch('/public/api/masters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        alert('Ошибка сохранения');
+        return;
+      }
+      form.reset();
+      await refresh();
+    });
+
+    refresh();
+  </script>
 </body>
 </html>
