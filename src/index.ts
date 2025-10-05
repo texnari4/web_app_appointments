@@ -1,65 +1,73 @@
-import express from 'express';
-import path from 'node:path';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import pinoHttp from 'pino-http';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { listMasters, createMaster, updateMaster, deleteMaster } from './db.js';
+// Adjust imports from your db module as needed:
+// If your file is src/db.ts compiled to dist/db.js (ESM), use './db.js' at runtime.
+import {
+  listMasters,
+  createMaster,
+  updateMaster,
+  deleteMaster,
+  // optional: listServices, etc...
+} from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(pinoHttp());
+
 const PORT = Number(process.env.PORT || 8080);
 
-app.use(pinoHttp());
-app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+// Health
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
+});
 
-// health
-app.get('/health', (_req, res) => { res.json({ ok: true, ts: new Date().toISOString() }); });
-
-// static
+// Static admin (ensure you copy public at build stage)
+app.use('/admin', express.static(path.join(__dirname, '../public/admin'), { extensions: ['html'] }));
 app.use('/public', express.static(path.join(__dirname, '../public')));
 
-// admin html
-app.get(['/admin', '/admin/'], (_req, res) => {
-  res.sendFile(path.join(__dirname, '../public/admin/index.html'));
-});
-app.get('/admin/styles.css', (_req, res) => {
-  res.sendFile(path.join(__dirname, '../public/admin/styles.css'));
-});
-app.get('/admin/app.js', (_req, res) => {
-  res.sendFile(path.join(__dirname, '../public/admin/app.js'));
-});
-
-// API: masters
-app.get('/public/api/masters', async (_req, res) => {
+// Masters API (examples; align with your existing handlers)
+app.get(['/api/masters', '/public/api/masters'], async (_req: Request, res: Response) => {
   const items = await listMasters();
   res.json({ items });
 });
-app.post('/public/api/masters', async (req, res) => {
+
+app.post(['/api/masters', '/public/api/masters'], async (req: Request, res: Response) => {
   try {
-    const item = await createMaster(req.body || {});
-    res.json({ item });
-  } catch (e) {
-    res.status(400).json({ error: String(e) });
+    const created = await createMaster(req.body);
+    res.status(201).json(created);
+  } catch (e: any) {
+    req.log?.error({ err: e }, 'createMaster error');
+    res.status(400).json({ error: 'CREATE_FAILED', message: e?.message || String(e) });
   }
 });
-app.put('/public/api/masters/:id', async (req, res) => {
-  const id = req.params.id;
-  const item = await updateMaster(id, req.body || {});
-  if(!item) return res.status(404).json({ error: 'NOT_FOUND' });
-  res.json({ item });
-});
-app.delete('/public/api/masters/:id', async (req, res) => {
-  const id = req.params.id;
-  await deleteMaster(id);
-  res.json({ ok: true });
+
+app.put(['/api/masters/:id', '/public/api/masters/:id'], async (req: Request, res: Response) => {
+  try {
+    const updated = await updateMaster(req.params.id, req.body);
+    res.json(updated);
+  } catch (e: any) {
+    req.log?.error({ err: e }, 'updateMaster error');
+    res.status(400).json({ error: 'UPDATE_FAILED', message: e?.message || String(e) });
+  }
 });
 
-// root 404
-app.get('/', (_req, res)=> res.status(404).json({ error: 'NOT_FOUND' }));
+app.delete(['/api/masters/:id', '/public/api/masters/:id'], async (req: Request, res: Response) => {
+  try {
+    await deleteMaster(req.params.id);
+    res.status(204).end();
+  } catch (e: any) {
+    req.log?.error({ err: e }, 'deleteMaster error');
+    res.status(400).json({ error: 'DELETE_FAILED', message: e?.message || String(e) });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server started on :${PORT}`);
