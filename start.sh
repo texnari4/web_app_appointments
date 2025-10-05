@@ -1,193 +1,246 @@
 #!/bin/bash
 set -e
 
-echo ">>> Checking Node.js environment..."
+echo ">>> Развёртывание мини-приложения (сервер + админка)..."
 
-if ! command -v npm &> /dev/null; then
-  echo ">>> Node.js not found, installing..."
-  apt-get update -y
-  apt-get install -y curl
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  apt-get install -y nodejs
-  echo ">>> Node.js installed: $(node -v), npm: $(npm -v)"
-else
-  echo ">>> Node.js already installed: $(node -v)"
-fi
+# === 1. Создание структуры ===
+mkdir -p /app/{data,public}
+cd /app
 
-echo ">>> Setting up full project (server + admin)..."
-
-mkdir -p data public
-
-# --- package.json ---
-cat <<'EOF' > package.json
-{
-  "name": "beautyminiappappointments",
-  "version": "5.0.0",
-  "type": "module",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.21.2"
-  }
-}
-EOF
-
-# --- server.js ---
-cat <<'EOF' > server.js
-import express from "express";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
-
-const dataPath = path.join(__dirname, "data/services.json");
-
-// Load JSON data
-function loadData() {
-  try {
-    return JSON.parse(fs.readFileSync(dataPath, "utf8"));
-  } catch (err) {
-    console.error("Error loading data:", err);
-    return { groups: [] };
-  }
-}
-
-// Save JSON data
-function saveData(data) {
-  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf8");
-}
-
-// --- API ---
-app.get("/api/groups", (req, res) => {
-  const data = loadData();
-  res.json(data.groups);
-});
-
-app.get("/api/services", (req, res) => {
-  const data = loadData();
-  const allServices = data.groups.flatMap(g => g.services.map(s => ({ ...s, group: g.name })));
-  res.json(allServices);
-});
-
-app.post("/api/groups", (req, res) => {
-  const data = loadData();
-  data.groups.push({ name: req.body.name, services: [] });
-  saveData(data);
-  res.json({ ok: true });
-});
-
-app.post("/api/services", (req, res) => {
-  const data = loadData();
-  const group = data.groups.find(g => g.name === req.body.group);
-  if (!group) return res.status(404).json({ error: "Group not found" });
-  group.services.push({
-    name: req.body.name,
-    description: req.body.description,
-    price: req.body.price,
-    duration: req.body.duration
-  });
-  saveData(data);
-  res.json({ ok: true });
-});
-
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
-EOF
-
-# --- data/services.json ---
+# === 2. Инициализация JSON-базы ===
 cat <<'EOF' > data/services.json
 {
   "groups": [
-    {
-      "name": "Ногтевой сервис",
-      "services": [
-        { "name": "Маникюр", "description": "Классический маникюр", "price": 1000, "duration": 60 },
-        { "name": "Покрытие гель-лаком", "description": "Снятие и нанесение гель-лака", "price": 1500, "duration": 90 }
-      ]
-    },
-    {
-      "name": "Волосы",
-      "services": [
-        { "name": "Стрижка", "description": "Мужская/женская стрижка", "price": 1200, "duration": 45 },
-        { "name": "Окрашивание", "description": "Тонирование и окрашивание волос", "price": 2500, "duration": 120 }
-      ]
-    }
+    { "id": 1, "name": "Ногтевой сервис" },
+    { "id": 2, "name": "Волосы" }
+  ],
+  "services": [
+    { "id": 1, "groupId": 1, "name": "Маникюр", "price": 1000, "duration": 60 },
+    { "id": 2, "groupId": 2, "name": "Стрижка", "price": 1500, "duration": 45 }
   ]
 }
 EOF
 
-# --- public/admin.html ---
+# === 3. Сервер (чистый Node.js, ESM) ===
+cat <<'EOF' > server.js
+import { createServer } from "http";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { parse } from "url";
+import { join } from "path";
+
+const PORT = process.env.PORT || 8080;
+const DATA_FILE = "./data/services.json";
+
+function loadData() {
+  if (!existsSync(DATA_FILE)) return { groups: [], services: [] };
+  return JSON.parse(readFileSync(DATA_FILE, "utf8"));
+}
+
+function saveData(data) {
+  writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+}
+
+const server = createServer((req, res) => {
+  const { pathname } = parse(req.url, true);
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (pathname.startsWith("/api")) {
+    let data = loadData();
+
+    if (req.method === "GET" && pathname === "/api/groups") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(data.groups));
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/services") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(data.services));
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/services") {
+      let body = "";
+      req.on("data", chunk => (body += chunk));
+      req.on("end", () => {
+        const service = JSON.parse(body);
+        service.id = Date.now();
+        data.services.push(service);
+        saveData(data);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(service));
+      });
+      return;
+    }
+
+    if (req.method === "PUT" && pathname.startsWith("/api/services/")) {
+      const id = parseInt(pathname.split("/").pop());
+      let body = "";
+      req.on("data", chunk => (body += chunk));
+      req.on("end", () => {
+        const updated = JSON.parse(body);
+        data.services = data.services.map(s => (s.id === id ? updated : s));
+        saveData(data);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(updated));
+      });
+      return;
+    }
+
+    if (req.method === "DELETE" && pathname.startsWith("/api/services/")) {
+      const id = parseInt(pathname.split("/").pop());
+      data.services = data.services.filter(s => s.id !== id);
+      saveData(data);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+
+    res.writeHead(404);
+    res.end("Not found");
+    return;
+  }
+
+  // === Отдача админки ===
+  const filePath =
+    pathname === "/" ? "public/admin.html" : join("public", pathname);
+  try {
+    const content = readFileSync(filePath);
+    res.writeHead(200);
+    res.end(content);
+  } catch {
+    res.writeHead(404);
+    res.end("Файл не найден");
+  }
+});
+
+server.listen(PORT, () =>
+  console.log(`✅ Сервер запущен на порту ${PORT}`)
+);
+EOF
+
+# === 4. Интерфейс админки (HTML + CSS + JS) ===
 cat <<'EOF' > public/admin.html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Админка — Услуги</title>
-  <link rel="stylesheet" href="admin.css" />
+  <link rel="stylesheet" href="admin.css">
 </head>
 <body>
   <h1>Услуги и группы</h1>
-  <div id="groups"></div>
+  <div class="form">
+    <input id="name" placeholder="Название услуги">
+    <input id="price" type="number" placeholder="Цена">
+    <input id="duration" type="number" placeholder="Длительность (мин)">
+    <select id="group"></select>
+    <button onclick="addService()">Добавить</button>
+  </div>
+  <div id="services"></div>
   <script src="admin.js"></script>
 </body>
 </html>
 EOF
 
-# --- public/admin.css ---
 cat <<'EOF' > public/admin.css
 body {
-  font-family: sans-serif;
-  margin: 2em;
+  font-family: system-ui, sans-serif;
   background: #fafafa;
-}
-h1 {
   color: #333;
+  max-width: 700px;
+  margin: 40px auto;
 }
-.group {
-  background: #fff;
-  margin: 1em 0;
-  padding: 1em;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+h1 { text-align: center; }
+.form {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 15px;
 }
+input, select, button {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+button {
+  background: #007bff;
+  color: #fff;
+  cursor: pointer;
+}
+button:hover { background: #0056b3; }
 .service {
-  margin-left: 1em;
+  display: flex;
+  justify-content: space-between;
+  background: #fff;
+  margin: 5px 0;
+  padding: 8px;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 EOF
 
-# --- public/admin.js ---
 cat <<'EOF' > public/admin.js
-async function loadGroups() {
-  const res = await fetch('/api/groups');
-  const groups = await res.json();
-  const container = document.getElementById('groups');
-  container.innerHTML = '';
-  for (const g of groups) {
-    const div = document.createElement('div');
-    div.className = 'group';
-    div.innerHTML = `<h2>${g.name}</h2>`;
-    for (const s of g.services) {
-      const serv = document.createElement('div');
-      serv.className = 'service';
-      serv.textContent = \`\${s.name} — \${s.price}₽, \${s.duration} мин\`;
-      div.appendChild(serv);
-    }
-    container.appendChild(div);
-  }
+async function fetchJSON(url, options) {
+  const res = await fetch(url, options);
+  return res.json();
 }
+
+async function loadGroups() {
+  const groups = await fetchJSON("/api/groups");
+  const sel = document.getElementById("group");
+  sel.innerHTML = groups.map(g => `<option value="${g.id}">${g.name}</option>`).join("");
+}
+
+async function loadServices() {
+  const data = await fetchJSON("/api/services");
+  const div = document.getElementById("services");
+  div.innerHTML = data.map(s => `
+    <div class="service">
+      <div>
+        <b>${s.name}</b> — ${s.price} ₽, ${s.duration} мин
+      </div>
+      <div>
+        <button onclick="editService(${s.id})">✎</button>
+        <button onclick="deleteService(${s.id})">🗑</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function addService() {
+  const name = document.getElementById("name").value;
+  const price = parseInt(document.getElementById("price").value);
+  const duration = parseInt(document.getElementById("duration").value);
+  const groupId = parseInt(document.getElementById("group").value);
+  await fetchJSON("/api/services", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ name, price, duration, groupId })
+  });
+  await loadServices();
+}
+
+async function deleteService(id) {
+  await fetch(`/api/services/${id}`, { method: "DELETE" });
+  await loadServices();
+}
+
+function editService(id) {
+  alert("Редактирование пока не реализовано");
+}
+
 loadGroups();
+loadServices();
 EOF
 
-echo ">>> Installing dependencies..."
-npm install
-
-echo ">>> Starting server..."
+# === 5. Запуск ===
+echo ">>> Запуск сервера..."
 node server.js
