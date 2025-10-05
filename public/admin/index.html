@@ -1,94 +1,56 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Admin · Masters</title>
-    <style>
-      :root { --bg:#0b0b0c; --card:#1c1c1e; --text:#fafafa; --muted:#9ba0a6; --accent:#0a84ff; }
-      *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px -apple-system,system-ui,Segoe UI,Roboto} 
-      .wrap{max-width:880px;margin:24px auto;padding:0 16px}
-      .title{font-weight:700;font-size:28px;margin:8px 0 20px}
-      .grid{display:grid;grid-template-columns:1fr;gap:16px}
-      .card{background:var(--card);border-radius:18px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
-      .row{display:flex;gap:8px}
-      .row>*{flex:1}
-      input,textarea{width:100%;border:1px solid #2c2c2e;background:#111114;color:var(--text);padding:12px 14px;border-radius:14px;outline:none}
-      button{border:0;background:var(--accent);color:#fff;padding:12px 16px;border-radius:14px;font-weight:600;cursor:pointer}
-      button:hover{filter:brightness(1.05)}
-      .item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #2c2c2e}
-      .item:last-child{border-bottom:0}
-      .muted{color:var(--muted);font-size:13px}
-      .toast{position:fixed;inset:auto 16px 16px auto;background:#2c2c2e;color:#fff;padding:10px 14px;border-radius:12px;opacity:0;transform:translateY(10px);transition:.25s}
-      .toast.show{opacity:1;transform:none}
-      a.btn-del{color:#ff453a;text-decoration:none;font-weight:600}
-      .empty{color:var(--muted);text-align:center;padding:18px}
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div class="title">Мастера</div>
-      <div class="grid">
-        <div class="card">
-          <div class="row">
-            <input id="name" placeholder="Имя*" />
-            <input id="phone" placeholder="Телефон" />
-          </div>
-          <div style="margin-top:8px">
-            <textarea id="about" rows="3" placeholder="О мастере"></textarea>
-          </div>
-          <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
-            <button id="create">Сохранить</button>
-          </div>
-        </div>
-        <div class="card">
-          <div id="list"></div>
-        </div>
-      </div>
-    </div>
-    <div id="toast" class="toast"></div>
-    <script>
-      const API = '/admin/api/masters';
-      const $ = (sel)=>document.querySelector(sel);
-      const toast = (msg)=>{ const t=$("#toast"); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1500); }
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Админка — Мастера</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Мастера</h1>
+      <p class="subtitle">Мини-панель управления (v2.5.0)</p>
+    </header>
 
-      async function fetchJSON(u, opt){ const r=await fetch(u, opt); const t=await r.text(); try{ return JSON.parse(t);}catch{ return {raw:t, status:r.status};} }
-      async function load(){
-        const data = await fetchJSON(API);
-        const list = $("#list");
-        if(!data.items || !data.items.length){ list.innerHTML = '<div class="empty">Пока пусто</div>'; return; }
-        list.innerHTML = data.items.map(m=>`
-          <div class="item">
-            <div>
-              <div><b>${m.name}</b></div>
-              <div class="muted">${m.phone??''}</div>
-            </div>
-            <div><a class="btn-del" href="#" data-id="${m.id}">Удалить</a></div>
-          </div>
-        `).join('');
-      }
-      async function create(){
-        const body = {
-          name: $("#name").value.trim(),
-          phone: $("#phone").value.trim() || undefined,
-          about: $("#about").value.trim() || undefined
-        };
-        const r = await fetchJSON(API, { method: 'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)});
-        if(r.error){ toast('Ошибка: '+r.error); return; }
-        $("#name").value = ""; $("#phone").value = ""; $("#about").value = "";
-        toast('Сохранено'); load();
-      }
-      async function del(id){
-        const r = await fetchJSON(API+'?id='+encodeURIComponent(id), { method: 'DELETE' });
-        if(r.error){ toast('Ошибка: '+r.error); return; }
-        toast('Удалено'); load();
-      }
-      document.addEventListener('click', (e)=>{
-        const a = e.target.closest('a.btn-del');
-        if(a){ e.preventDefault(); del(a.dataset.id); }
-      });
-      $("#create").addEventListener('click', create);
-      load();
-    </script>
-  </body>
+    <section class="card">
+      <h2>Добавить мастера</h2>
+      <form id="form">
+        <div class="grid">
+          <label>
+            <span>Имя*</span>
+            <input type="text" name="name" placeholder="Иван" required />
+          </label>
+          <label>
+            <span>Телефон*</span>
+            <input type="tel" name="phone" placeholder="+7..." required />
+          </label>
+          <label>
+            <span>Специализация</span>
+            <input type="text" name="specialty" placeholder="Парикмахер" />
+          </label>
+          <label>
+            <span>Фото (URL)</span>
+            <input type="url" name="photoUrl" placeholder="https://..." />
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit">Сохранить</button>
+          <button type="reset" class="secondary">Сбросить</button>
+        </div>
+        <p id="msg" class="msg" hidden></p>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="list-head">
+        <h2>Список</h2>
+        <button id="reload" class="secondary">Обновить</button>
+      </div>
+      <div id="list" class="list"></div>
+    </section>
+  </div>
+
+  <script type="module" src="./admin.js"></script>
+</body>
 </html>

@@ -1,35 +1,33 @@
-# --- Builder ---
+# --- Build stage ---
 FROM node:22-bookworm-slim AS builder
-
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install
+RUN npm install --production=false
 
 COPY tsconfig.json ./
 COPY src ./src
 COPY public ./public
 
+# Ensure data dir exists at build (not required for runtime but OK)
 RUN mkdir -p /app/data
+
 RUN npm run build
 
-# --- Runtime ---
-FROM node:22-bookworm-slim
-
-ENV NODE_ENV=production
+# --- Runtime stage ---
+FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
-
-# prepare data dir and non-root
-RUN mkdir -p /app/data && chown -R node:node /app
 
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
-COPY docker/entrypoint.sh ./entrypoint.sh
 
-RUN chmod +x ./entrypoint.sh
+# Prepare data dir and permissions
+RUN mkdir -p /app/data && chown -R node:node /app
+ENV DATA_DIR=/app/data
+ENV NODE_ENV=production
 
-USER node
 EXPOSE 8080
-ENTRYPOINT ["./entrypoint.sh"]
+USER node
+CMD ["node", "dist/index.js"]

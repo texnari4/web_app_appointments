@@ -1,9 +1,10 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const masterCreateSchema = z.object({
-  name: z.string().min(2).max(80),
-  phone: z.string().min(5).max(32).optional(),
-  about: z.string().max(280).optional()
+  name: z.string().min(1, "Имя обязательно"),
+  phone: z.string().min(5, "Телефон обязателен"),
+  specialty: z.string().optional(),
+  photoUrl: z.string().url("Неверный URL").optional(),
 });
 
-export type MasterCreateInput = z.infer<typeof masterCreateSchema>;
+export const masterUpdateSchema = masterCreateSchema.partial();
