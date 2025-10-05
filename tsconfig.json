@@ -1,23 +1,24 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM"
-    ],
+    "target": "ES2021",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "outDir": "dist",
-    "rootDir": "src",
+    "resolveJsonModule": true,
+    "lib": [
+      "ES2021",
+      "DOM"
+    ],
     "types": [
       "node"
     ]
   },
   "include": [
-    "src"
+    "src/**/*"
   ]
 }
