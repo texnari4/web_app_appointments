@@ -178,76 +178,84 @@ button:hover { opacity: 0.8; }
 <tbody></tbody>
 </table>
 
-<button class="add-btn" onclick="addService()">➕ Добавить услугу</button>
+<button class="add-btn" id="addBtn">➕ Добавить услугу</button>
 <div class="banner" id="banner">Изменения сохранены</div>
 
 <script>
-const apiBase = '/api';
-let services = [];
-let groups = [];
+document.addEventListener('DOMContentLoaded', () => {
+  const apiBase = '/api';
+  let services = [];
+  let groups = [];
 
-async function loadData() {
-  services = await (await fetch(apiBase + '/services')).json();
-  groups = await (await fetch(apiBase + '/groups')).json();
-  renderGroups();
-  renderTable();
-}
+  async function loadData() {
+    const sResp = await fetch(apiBase + '/services');
+    const gResp = await fetch(apiBase + '/groups');
+    services = await sResp.json();
+    groups = await gResp.json();
+    renderGroups();
+    renderTable();
+  }
 
-function renderGroups() {
-  const filter = document.getElementById('groupFilter');
-  filter.innerHTML = '<option value="">Все</option>' +
-    groups.map(g => \`<option value="\${g.name}">\${g.name}</option>\`).join('');
-  filter.onchange = renderTable;
-}
+  function renderGroups() {
+    const filter = document.getElementById('groupFilter');
+    let html = '<option value="">Все</option>';
+    for (const g of groups) html += '<option value="' + g.name + '">' + g.name + '</option>';
+    filter.innerHTML = html;
+    filter.onchange = renderTable;
+  }
 
-function renderTable() {
-  const tbody = document.querySelector('#servicesTable tbody');
-  const groupFilter = document.getElementById('groupFilter').value;
-  tbody.innerHTML = services
-    .filter(s => !groupFilter || s.group === groupFilter)
-    .map(s => \`
-      <tr data-id="\${s.id}">
-        <td contenteditable="true" onblur="updateService(\${s.id}, 'name', this.innerText)">\${s.name}</td>
-        <td contenteditable="true" onblur="updateService(\${s.id}, 'price', this.innerText)">\${s.price}</td>
-        <td contenteditable="true" onblur="updateService(\${s.id}, 'group', this.innerText)">\${s.group}</td>
-        <td><button class="del-btn" onclick="deleteService(\${s.id})">Удалить</button></td>
-      </tr>\`).join('');
-}
+  function renderTable() {
+    const tbody = document.querySelector('#servicesTable tbody');
+    const groupFilter = document.getElementById('groupFilter').value;
+    tbody.innerHTML = '';
+    for (const s of services) {
+      if (groupFilter && s.group !== groupFilter) continue;
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td contenteditable="true" onblur="updateService(' + s.id + ', \\'name\\', this.innerText)">' + s.name + '</td>' +
+        '<td contenteditable="true" onblur="updateService(' + s.id + ', \\'price\\', this.innerText)">' + s.price + '</td>' +
+        '<td contenteditable="true" onblur="updateService(' + s.id + ', \\'group\\', this.innerText)">' + s.group + '</td>' +
+        '<td><button class="del-btn" onclick="deleteService(' + s.id + ')">Удалить</button></td>';
+      tbody.appendChild(tr);
+    }
+  }
 
-async function addService() {
-  const newService = { name: "Новая услуга", price: 0, group: groups[0]?.name || "" };
-  await fetch(apiBase + '/services', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(newService)
-  });
-  showBanner("Услуга добавлена");
-  await loadData();
-}
+  window.addService = async function () {
+    const newService = { name: "Новая услуга", price: 0, group: groups[0]?.name || "" };
+    await fetch(apiBase + '/services', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newService)
+    });
+    showBanner("Услуга добавлена");
+    await loadData();
+  }
 
-async function updateService(id, field, value) {
-  await fetch(apiBase + '/services/' + id, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ [field]: value })
-  });
-  showBanner("Изменения сохранены");
-}
+  window.updateService = async function (id, field, value) {
+    await fetch(apiBase + '/services/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value })
+    });
+    showBanner("Изменения сохранены");
+  }
 
-async function deleteService(id) {
-  await fetch(apiBase + '/services/' + id, { method: 'DELETE' });
-  showBanner("Услуга удалена");
-  await loadData();
-}
+  window.deleteService = async function (id) {
+    await fetch(apiBase + '/services/' + id, { method: 'DELETE' });
+    showBanner("Услуга удалена");
+    await loadData();
+  }
 
-function showBanner(text) {
-  const banner = document.getElementById('banner');
-  banner.textContent = text;
-  banner.style.display = 'block';
-  setTimeout(() => banner.style.display = 'none', 2000);
-}
+  function showBanner(text) {
+    const banner = document.getElementById('banner');
+    banner.textContent = text;
+    banner.style.display = 'block';
+    setTimeout(() => banner.style.display = 'none', 2000);
+  }
 
-loadData();
+  document.getElementById('addBtn').onclick = addService;
+  loadData();
+});
 </script>
 </body>
 </html>
