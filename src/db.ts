@@ -1,267 +1,190 @@
-import fs from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-export type ID = string;
-export type ISO = string;
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-export interface Master {
-  id: ID;
+type UUID = string;
+
+export type Master = {
+  id: UUID;
   name: string;
-  phone?: string;
+  phone: string;
   avatarUrl?: string;
-  description?: string;
-  specialties?: string[];
-  schedule?: {"daysOfWeek": number[]};
   isActive: boolean;
-  createdAt: ISO;
-  updatedAt: ISO;
-}
+  about?: string;
+  specialties?: string[];
+  schedule?: {
+    mon?: boolean; tue?: boolean; wed?: boolean; thu?: boolean; fri?: boolean; sat?: boolean; sun?: boolean;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
 
-export interface ServiceGroup {
-  id: ID;
-  name: string;
+export type ServiceGroup = {
+  id: UUID;
+  title: string;
   description?: string;
-  createdAt: ISO;
-  updatedAt: ISO;
-}
+  createdAt: string;
+  updatedAt: string;
+};
 
-export interface Service {
-  id: ID;
-  groupId: ID;
-  name: string;
+export type Service = {
+  id: UUID;
+  groupId: UUID;
+  title: string;
   description?: string;
   price: number;
   durationMin: number;
-  createdAt: ISO;
-  updatedAt: ISO;
-}
+  createdAt: string;
+  updatedAt: string;
+};
 
-export interface Client {
-  id: ID;
+export type Client = {
+  id: UUID;
   name: string;
-  phone?: string;
-  createdAt: ISO;
-  updatedAt: ISO;
-}
+  phone: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
-export interface Booking {
-  id: ID;
-  masterId: ID;
-  clientId: ID;
-  serviceId: ID;
-  startsAt: ISO;
-  endsAt: ISO;
-  note?: string;
-  createdAt: ISO;
-  updatedAt: ISO;
-}
-
-export interface DB {
+type Db = {
   masters: Master[];
   serviceGroups: ServiceGroup[];
   services: Service[];
   clients: Client[];
-  bookings: Booking[];
-  settings: Record<string, unknown>;
-}
-
-const DATA_DIR = process.env.DATA_DIR || '/app/data';
-const DB_PATH = path.join(DATA_DIR, 'db.json');
+};
 
 async function ensureFile() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
+  await mkdir(DATA_DIR, { recursive: true });
   try {
-    await fs.access(DB_PATH);
-  } catch { 
-    await fs.writeFile(DB_PATH, JSON.stringify(defaultSeed(), null, 2));
-    await fs.chmod(DB_PATH, 0o666).catch(() => {});
-  }
-}
-
-export async function readDb(): Promise<DB> {
-  await ensureFile();
-  const raw = await fs.readFile(DB_PATH, 'utf8').catch(async () => { 
-    await fs.writeFile(DB_PATH, JSON.stringify(defaultSeed(), null, 2));
-    return JSON.stringify(defaultSeed());
-  });
-  try { 
-    const parsed = JSON.parse(raw) as Partial<DB>;
-    // If file exists but empty/invalid – reset
-    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.masters)) {
-      const seed = defaultSeed();
-      await fs.writeFile(DB_PATH, JSON.stringify(seed, null, 2));
-      return seed;
-    }
-    return parsed as DB;
+    await readFile(DB_FILE, 'utf-8');
   } catch {
-    const seed = defaultSeed();
-    await fs.writeFile(DB_PATH, JSON.stringify(seed, null, 2));
-    return seed;
+    const now = new Date().toISOString();
+    const seed: Db = {
+      masters: [{
+        id: crypto.randomUUID(),
+        name: "Юлия",
+        phone: "+375331126113",
+        avatarUrl: "http://testurl.com",
+        isActive: true,
+        specialties: ["Ногтевой сервис"],
+        createdAt: now,
+        updatedAt: now
+      }],
+      serviceGroups: [{
+        id: crypto.randomUUID(),
+        title: "Ногтевой сервис",
+        description: "Маникюр, покрытие, уход",
+        createdAt: now,
+        updatedAt: now
+      }],
+      services: [],
+      clients: [{
+        id: crypto.randomUUID(),
+        name: "Тест Клиент",
+        phone: "+375000000000",
+        createdAt: now,
+        updatedAt: now
+      }]
+    };
+    await writeFile(DB_FILE, JSON.stringify(seed, null, 2), 'utf-8');
   }
 }
 
-export async function writeDb(db: DB): Promise<void> {
+async function readDb(): Promise<Db> {
   await ensureFile();
-  await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2));
+  const txt = await readFile(DB_FILE, 'utf-8');
+  return JSON.parse(txt) as Db;
 }
 
-export const nowISO = () => new Date().toISOString();
-export const uid = () => crypto.randomUUID();
-
-function defaultSeed(): DB {
-  const t = nowISO();
-  const groupId = uid();
-  const masterId = uid();
-  return {
-    masters: [{
-      id: masterId,
-      name: 'Юлия',
-      phone: '+375331126113',
-      avatarUrl: 'https://picsum.photos/seed/master1/120/120',
-      description: 'Мастер ногтевого сервиса',
-      specialties: ['маникюр', 'педикюр'],
-      schedule: { daysOfWeek: [1,2,3,4,5] },
-      isActive: true,
-      createdAt: t,
-      updatedAt: t,
-    }],
-    serviceGroups: [{
-      id: groupId,
-      name: 'Ногтевой сервис',
-      description: 'Маникюр и педикюр',
-      createdAt: t,
-      updatedAt: t
-    }],
-    services: [
-      {
-        id: uid(),
-        groupId,
-        name: 'Маникюр классический',
-        description: 'Обработка ногтей и кутикулы',
-        price: 25,
-        durationMin: 60,
-        createdAt: t,
-        updatedAt: t,
-      },
-      {
-        id: uid(),
-        groupId,
-        name: 'Покрытие гель-лак',
-        description: 'Цветное покрытие с топом',
-        price: 20,
-        durationMin: 45,
-        createdAt: t,
-        updatedAt: t,
-      }
-    ],
-    clients: [{ id: uid(), name: 'Анна', phone: '+375291234567', createdAt: t, updatedAt: t }],
-    bookings: [],
-    settings: {}
-  };
+async function writeDb(db: Db): Promise<void> {
+  await ensureFile();
+  await writeFile(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
 }
 
-// CRUD helpers
-export async function listMasters() { return (await readDb()).masters; }
-export async function createMaster(payload: Partial<Master>): Promise<Master> {
-  const db = await readDb();
-  const t = nowISO();
-  const item: Master = {
-    id: uid(),
-    name: payload.name || 'Без имени',
-    phone: payload.phone,
-    avatarUrl: payload.avatarUrl,
-    description: payload.description,
-    specialties: payload.specialties ?? [],
-    schedule: payload.schedule ?? { daysOfWeek: [1,2,3,4,5] },
-    isActive: payload.isActive ?? true, // will be fixed in ts by using true literal
-    createdAt: t,
-    updatedAt: t,
-  } as Master;
-  db.masters.push(item);
-  await writeDb(db);
-  return item;
-}
+export const db = {
+  async listMasters() {
+    const d = await readDb();
+    return d.masters;
+  },
+  async addMaster(input: Omit<Master,'id'|'createdAt'|'updatedAt'>) {
+    const d = await readDb();
+    const now = new Date().toISOString();
+    const item: Master = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...input };
+    d.masters.push(item);
+    await writeDb(d);
+    return item;
+  },
+  async updateMaster(id: UUID, patch: Partial<Master>) {
+    const d = await readDb();
+    const idx = d.masters.findIndex(m => m.id === id);
+    if (idx === -1) return null;
+    d.masters[idx] = { ...d.masters[idx], ...patch, id, updatedAt: new Date().toISOString() };
+    await writeDb(d);
+    return d.masters[idx];
+  },
+  async deleteMaster(id: UUID) {
+    const d = await readDb();
+    const before = d.masters.length;
+    d.masters = d.masters.filter(m => m.id !== id);
+    await writeDb(d);
+    return d.masters.length < before;
+  },
 
-export async function updateMaster(id: ID, payload: Partial<Master>): Promise<Master | null> {
-  const db = await readDb();
-  const idx = db.masters.findIndex(m => m.id === id);
-  if (idx === -1) return null;
-  db.masters[idx] = { ...db.masters[idx], ...payload, updatedAt: nowISO() };
-  await writeDb(db);
-  return db.masters[idx];
-}
+  async listGroups() {
+    const d = await readDb();
+    return d.serviceGroups;
+  },
+  async addGroup(input: Omit<ServiceGroup,'id'|'createdAt'|'updatedAt'>) {
+    const d = await readDb();
+    const now = new Date().toISOString();
+    const item: ServiceGroup = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...input };
+    d.serviceGroups.push(item);
+    await writeDb(d);
+    return item;
+  },
+  async updateGroup(id: UUID, patch: Partial<ServiceGroup>) {
+    const d = await readDb();
+    const idx = d.serviceGroups.findIndex(g => g.id === id);
+    if (idx === -1) return null;
+    d.serviceGroups[idx] = { ...d.serviceGroups[idx], ...patch, id, updatedAt: new Date().toISOString() };
+    await writeDb(d);
+    return d.serviceGroups[idx];
+  },
+  async deleteGroup(id: UUID) {
+    const d = await readDb();
+    d.services = d.services.filter(s => s.groupId !== id);
+    d.serviceGroups = d.serviceGroups.filter(g => g.id !== id);
+    await writeDb(d);
+    return true;
+  },
 
-export async function deleteMaster(id: ID): Promise<boolean> {
-  const db = await readDb();
-  const before = db.masters.length;
-  db.masters = db.masters.filter(m => m.id !== id);
-  await writeDb(db);
-  return db.masters.length < before;
-}
-
-// Groups
-export async function listServiceGroups() { return (await readDb()).serviceGroups; }
-export async function createServiceGroup(payload: Partial<ServiceGroup>): Promise<ServiceGroup> {
-  const db = await readDb();
-  const t = nowISO();
-  const item: ServiceGroup = {
-    id: uid(),
-    name: payload.name || 'Новая группа',
-    description: payload.description,
-    createdAt: t,
-    updatedAt: t,
-  };
-  db.serviceGroups.push(item);
-  await writeDb(db);
-  return item;
-}
-export async function updateServiceGroup(id: ID, payload: Partial<ServiceGroup>) {
-  const db = await readDb();
-  const idx = db.serviceGroups.findIndex(g => g.id === id);
-  if (idx === -1) return null;
-  db.serviceGroups[idx] = { ...db.serviceGroups[idx], ...payload, updatedAt: nowISO() };
-  await writeDb(db);
-  return db.serviceGroups[idx];
-}
-export async function deleteServiceGroup(id: ID) {
-  const db = await readDb();
-  db.serviceGroups = db.serviceGroups.filter(g => g.id !== id);
-  db.services = db.services.filter(s => s.groupId !== id);
-  await writeDb(db);
-  return true;
-}
-
-// Services
-export async function listServices() { return (await readDb()).services; }
-export async function createService(payload: Partial<Service>): Promise<Service> {
-  const db = await readDb();
-  const t = nowISO();
-  const item: Service = {
-    id: uid(),
-    groupId: payload.groupId as ID,
-    name: payload.name || 'Новая услуга',
-    description: payload.description,
-    price: Number(payload.price ?? 0),
-    durationMin: Number(payload.durationMin ?? 30),
-    createdAt: t,
-    updatedAt: t,
-  };
-  db.services.push(item);
-  await writeDb(db);
-  return item;
-}
-export async function updateService(id: ID, payload: Partial<Service>) {
-  const db = await readDb();
-  const idx = db.services.findIndex(s => s.id === id);
-  if (idx === -1) return null;
-  db.services[idx] = { ...db.services[idx], ...payload, updatedAt: nowISO() };
-  await writeDb(db);
-  return db.services[idx];
-}
-export async function deleteService(id: ID) {
-  const db = await readDb();
-  db.services = db.services.filter(s => s.id !== id);
-  await writeDb(db);
-  return true;
-}
+  async listServices() {
+    const d = await readDb();
+    return d.services;
+  },
+  async addService(input: Omit<Service,'id'|'createdAt'|'updatedAt'>) {
+    const d = await readDb();
+    const now = new Date().toISOString();
+    const item: Service = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...input };
+    d.services.push(item);
+    await writeDb(d);
+    return item;
+  },
+  async updateService(id: UUID, patch: Partial<Service>) {
+    const d = await readDb();
+    const idx = d.services.findIndex(s => s.id === id);
+    if (idx === -1) return null;
+    d.services[idx] = { ...d.services[idx], ...patch, id, updatedAt: new Date().toISOString() };
+    await writeDb(d);
+    return d.services[idx];
+  },
+  async deleteService(id: UUID) {
+    const d = await readDb();
+    d.services = d.services.filter(s => s.id !== id);
+    await writeDb(d);
+    return true;
+  }
+};

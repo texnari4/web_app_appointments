@@ -1,58 +1,18 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Админка • Beauty</title>
-  <link rel="stylesheet" href="./styles.css">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Админка</title>
+  <link rel="stylesheet" href="/public/admin/styles.css"/>
 </head>
 <body>
-  <header>
-    <h1>Админка</h1>
-    <nav>
-      <button data-tab="masters">Мастера</button>
-      <button data-tab="services">Услуги</button>
-    </nav>
-  </header>
-
-  <main id="content"></main>
-
-  <template id="tpl-services">
-    <section>
-      <h2>Группы услуг</h2>
-      <div class="row">
-        <input id="groupName" placeholder="Название группы">
-        <input id="groupDesc" placeholder="Описание">
-        <button id="addGroupBtn">Добавить группу</button>
-      </div>
-      <ul id="groups"></ul>
-
-      <h2>Услуги</h2>
-      <div class="row">
-        <select id="svcGroup"></select>
-        <input id="svcName" placeholder="Название">
-        <input id="svcDesc" placeholder="Описание">
-        <input id="svcPrice" type="number" placeholder="Цена">
-        <input id="svcDur" type="number" placeholder="Длительность, мин">
-        <button id="addServiceBtn">Добавить услугу</button>
-      </div>
-      <ul id="services"></ul>
-    </section>
-  </template>
-
-  <template id="tpl-masters">
-    <section>
-      <h2>Мастера</h2>
-      <div class="row">
-        <input id="mName" placeholder="Имя">
-        <input id="mPhone" placeholder="Телефон">
-        <input id="mAvatar" placeholder="Ссылка на фото">
-        <button id="addMasterBtn">Добавить мастера</button>
-      </div>
-      <ul id="masters"></ul>
-    </section>
-  </template>
-
-  <script type="module" src="./admin.js"></script>
+  <header><h1>Админка</h1></header>
+  <nav class="tabs">
+    <button data-tab="masters">Мастера</button>
+    <button data-tab="services">Услуги</button>
+  </nav>
+  <main id="app"></main>
+  <script src="/public/admin/admin.js" type="module"></script>
 </body>
 </html>

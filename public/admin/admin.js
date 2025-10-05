@@ -1,137 +1,148 @@
-async function jsonGET(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`GET ${url}`);
-  return r.json();
-}
-async function jsonPOST(url, body) {
-  const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  if (!r.ok) throw new Error(`POST ${url}`);
-  return r.json();
-}
-async function jsonPUT(url, body) {
-  const r = await fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  if (!r.ok) throw new Error(`PUT ${url}`);
-  return r.json();
-}
-async function jsonDELETE(url) {
-  const r = await fetch(url, { method:'DELETE'});
-  if (!r.ok) throw new Error(`DELETE ${url}`);
-  return r.json();
+const api = {
+  async jsonGET(url){ const r = await fetch(url); if(!r.ok) throw new Error(`GET ${url}`); return r.json(); },
+  async jsonPOST(url, body){ const r = await fetch(url,{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); if(!r.ok) throw new Error(`POST ${url}`); return r.json(); },
+  async jsonPUT(url, body){ const r = await fetch(url,{method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); if(!r.ok) throw new Error(`PUT ${url}`); return r.json(); },
+  async del(url){ const r = await fetch(url,{method:'DELETE'}); if(!r.ok) throw new Error(`DELETE ${url}`); return true; }
+};
+
+function el(html){ const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstElementChild; }
+
+async function renderMasters(root){
+  const container = el(`<div class="container">
+    <div class="card">
+      <h2>Добавить мастера</h2>
+      <div class="grid">
+        <div><label>Имя</label><input id="m-name"/></div>
+        <div><label>Телефон</label><input id="m-phone"/></div>
+        <div><label>Аватар URL</label><input id="m-avatar"/></div>
+      </div>
+      <div style="margin-top:12px"><button class="btn" id="m-save">Сохранить</button></div>
+    </div>
+    <div class="card"><h2>Список мастеров</h2><div class="list" id="m-list"></div></div>
+  </div>`);
+  root.replaceChildren(container);
+
+  async function reload(){
+    const data = await api.jsonGET('/public/api/masters');
+    const list = container.querySelector('#m-list');
+    list.innerHTML = '';
+    data.items.forEach(it => {
+      list.appendChild(el(`<div class="item"><div>
+        <div><strong>${it.name}</strong></div>
+        <div class="small">${it.phone}</div></div>
+        <div class="row"><button class="btn secondary" data-del="${it.id}">Удалить</button></div>
+      </div>`));
+    });
+  }
+
+  container.querySelector('#m-save').addEventListener('click', async ()=>{
+    await api.jsonPOST('/public/api/masters', {
+      name: container.querySelector('#m-name').value,
+      phone: container.querySelector('#m-phone').value,
+      avatarUrl: container.querySelector('#m-avatar').value,
+      isActive: true
+    });
+    await reload();
+  });
+  container.addEventListener('click', async (e)=>{
+    const t = e.target;
+    if(t instanceof HTMLElement && t.dataset.del){
+      await api.del(`/public/api/masters/${t.dataset.del}`);
+      await reload();
+    }
+  });
+  await reload();
 }
 
-const content = document.getElementById('content');
-document.querySelectorAll('nav button').forEach(btn => {
-  btn.addEventListener('click', () => loadTab(btn.dataset.tab));
+async function renderServices(root){
+  const container = el(`<div class="container">
+    <div class="card">
+      <h2>Группа услуг</h2>
+      <div class="row">
+        <input id="g-title" placeholder="Название группы"/>
+        <button class="btn" id="g-add">Добавить группу</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Добавить услугу</h2>
+      <div class="grid">
+        <div><label>Группа</label><select id="s-group"></select></div>
+        <div><label>Название</label><input id="s-title"/></div>
+        <div><label>Цена</label><input id="s-price" type="number" min="0"/></div>
+        <div><label>Длительность (мин)</label><input id="s-dur" type="number" min="5" step="5"/></div>
+        <div class="grid" style="grid-template-columns:1fr">
+          <label>Описание</label><textarea id="s-desc" rows="3"></textarea>
+        </div>
+      </div>
+      <div style="margin-top:12px"><button class="btn" id="s-save">Сохранить услугу</button></div>
+    </div>
+    <div class="card"><h2>Список услуг</h2><div class="list" id="s-list"></div></div>
+  </div>`);
+  root.replaceChildren(container);
+
+  async function loadGroups(){
+    const {items} = await api.jsonGET('/public/api/service-groups');
+    const sel = container.querySelector('#s-group');
+    sel.innerHTML = items.map((g)=>`<option value="${g.id}">${g.title}</option>`).join('');
+  }
+  async function reloadServices(){
+    const {items} = await api.jsonGET('/public/api/services');
+    const list = container.querySelector('#s-list');
+    const groups = (await api.jsonGET('/public/api/service-groups')).items;
+    const gMap = Object.fromEntries(groups.map(g=>[g.id,g.title]));
+    list.innerHTML = '';
+    items.forEach(s=>{
+      list.appendChild(el(`<div class="item">
+        <div>
+          <div><strong>${s.title}</strong> <span class="small">/ ${gMap[s.groupId]||'—'}</span></div>
+          <div class="small">${s.durationMin} мин • ${s.price} BYN</div>
+        </div>
+        <div class="row">
+          <button class="btn secondary" data-del="${s.id}">Удалить</button>
+        </div>
+      </div>`));
+    });
+  }
+
+  container.querySelector('#g-add').addEventListener('click', async ()=>{
+    const title = container.querySelector('#g-title').value.trim();
+    if(!title) return;
+    await api.jsonPOST('/public/api/service-groups', { title });
+    container.querySelector('#g-title').value='';
+    await loadGroups();
+  });
+
+  container.querySelector('#s-save').addEventListener('click', async ()=>{
+    const groupId = container.querySelector('#s-group').value;
+    const title = container.querySelector('#s-title').value;
+    const price = Number(container.querySelector('#s-price').value);
+    const durationMin = Number(container.querySelector('#s-dur').value);
+    const description = container.querySelector('#s-desc').value;
+    await api.jsonPOST('/public/api/services', { groupId, title, price, durationMin, description });
+    await reloadServices();
+  });
+
+  container.addEventListener('click', async (e)=>{
+    const t = e.target;
+    if(t instanceof HTMLElement && t.dataset.del){
+      await api.del(`/public/api/services/${t.dataset.del}`);
+      await reloadServices();
+    }
+  });
+
+  await loadGroups();
+  await reloadServices();
+}
+
+async function loadTab(tab){
+  const root = document.getElementById('app');
+  if(tab==='services') return renderServices(root);
+  return renderMasters(root);
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.querySelectorAll('.tabs button').forEach(btn=>{
+    btn.addEventListener('click', ()=> loadTab(btn.dataset.tab));
+  });
+  loadTab('masters');
 });
-loadTab('services');
-
-async function loadTab(tab) {
-  if (tab === 'services') {
-    content.innerHTML = document.getElementById('tpl-services').innerHTML;
-    await renderServices();
-  } else if (tab === 'masters') {
-    content.innerHTML = document.getElementById('tpl-masters').innerHTML;
-    await renderMasters();
-  }
-}
-
-async function renderMasters() {
-  const list = document.getElementById('masters');
-  const data = await jsonGET('/public/api/masters');
-  list.innerHTML = '';
-  for (const m of data.items) {
-    const li = document.createElement('li');
-    li.className = 'item';
-    li.innerHTML = `<div class="cols"><strong>${m.name}</strong><span class="muted">${m.phone ?? ''}</span></div>
-                    <div class="cols">
-                      <button class="primary" data-id="${m.id}" data-act="del">Удалить</button>
-                    </div>`;
-    list.appendChild(li);
-  }
-  document.getElementById('addMasterBtn').onclick = async () => {
-    const name = (document.getElementById('mName') as HTMLInputElement).value.trim();
-    const phone = (document.getElementById('mPhone') as HTMLInputElement).value.trim();
-    const avatarUrl = (document.getElementById('mAvatar') as HTMLInputElement).value.trim();
-    await jsonPOST('/public/api/masters', { name, phone, avatarUrl, isActive: true });
-    await renderMasters();
-  };
-  list.onclick = async (e) => {
-    const t = e.target as HTMLElement;
-    if (t.matches('button[data-act="del"]')) {
-      const id = t.getAttribute('data-id');
-      await jsonDELETE(`/public/api/masters/${id}`);
-      await renderMasters();
-    }
-  };
-}
-
-async function renderServices() {
-  const groupsEl = document.getElementById('groups');
-  const servicesEl = document.getElementById('services');
-  const selGroup = document.getElementById('svcGroup') as HTMLSelectElement;
-
-  const groups = (await jsonGET('/public/api/service-groups')).items;
-  const services = (await jsonGET('/public/api/services')).items;
-
-  // groups UI
-  groupsEl.innerHTML = '';
-  selGroup.innerHTML = '';
-  for (const g of groups) {
-    const li = document.createElement('li');
-    li.className = 'item';
-    li.innerHTML = `<div class="cols"><strong>${g.name}</strong><span class="muted">${g.description ?? ''}</span></div>
-                    <div class="cols"><button class="primary" data-id="${g.id}" data-act="del-group">Удалить</button></div>`;
-    groupsEl.appendChild(li);
-
-    const opt = document.createElement('option');
-    opt.value = g.id;
-    opt.textContent = g.name;
-    selGroup.appendChild(opt);
-  }
-
-  // services UI
-  servicesEl.innerHTML = '';
-  for (const s of services) {
-    const group = groups.find((g:any) => g.id === s.groupId);
-    const li = document.createElement('li');
-    li.className = 'item';
-    li.innerHTML = `<div class="cols"><strong>${s.name}</strong><span class="muted">${group?.name ?? ''}</span>
-                    <span class="muted">${s.durationMin} мин</span><span class="muted">${s.price} BYN</span></div>
-                    <div class="cols"><button class="primary" data-id="${s.id}" data-act="del-service">Удалить</button></div>`;
-    servicesEl.appendChild(li);
-  }
-
-  // handlers
-  document.getElementById('addGroupBtn')!.onclick = async () => {
-    const name = (document.getElementById('groupName') as HTMLInputElement).value.trim();
-    const description = (document.getElementById('groupDesc') as HTMLInputElement).value.trim();
-    await jsonPOST('/public/api/service-groups', { name, description });
-    await renderServices();
-  };
-  document.getElementById('addServiceBtn')!.onclick = async () => {
-    const groupId = selGroup.value;
-    const name = (document.getElementById('svcName') as HTMLInputElement).value.trim();
-    const description = (document.getElementById('svcDesc') as HTMLInputElement).value.trim();
-    const price = Number((document.getElementById('svcPrice') as HTMLInputElement).value);
-    const durationMin = Number((document.getElementById('svcDur') as HTMLInputElement).value);
-    await jsonPOST('/public/api/services', { groupId, name, description, price, durationMin });
-    await renderServices();
-  };
-
-  groupsEl.onclick = async (e) => {
-    const t = e.target as HTMLElement;
-    if (t.matches('button[data-act="del-group"]')) {
-      const id = t.getAttribute('data-id');
-      await jsonDELETE(`/public/api/service-groups/${id}`);
-      await renderServices();
-    }
-  };
-  servicesEl.onclick = async (e) => {
-    const t = e.target as HTMLElement;
-    if (t.matches('button[data-act="del-service"]')) {
-      const id = t.getAttribute('data-id');
-      await jsonDELETE(`/public/api/services/${id}`);
-      await renderServices();
-    }
-  };
-}
