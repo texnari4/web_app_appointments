@@ -1,23 +1,33 @@
-
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Админка — Beauty</title>
-  <link rel="stylesheet" href="/public/admin/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="wrap">
-    <h1>Мастера</h1>
-    <form id="f">
-      <input name="name" placeholder="Имя" required />
-      <input name="phone" placeholder="Телефон" required />
-      <input name="avatarUrl" placeholder="Ссылка на фото" />
-      <button type="submit">Добавить</button>
-    </form>
-    <ul id="list"></ul>
-  </div>
-  <script src="/public/admin/main.js"></script>
+  <header class="topbar">
+    <h1>Beauty — Админка</h1>
+    <nav class="tabs">
+      <button data-tab="masters" class="active">Мастера</button>
+      <button data-tab="services">Услуги</button>
+      <button data-tab="appointments">Записи</button>
+      <button data-tab="clients">Клиенты</button>
+      <button data-tab="reports">Отчёты</button>
+      <button data-tab="settings">Настройки</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="masters" class="tab active"></section>
+    <section id="services" class="tab"></section>
+    <section id="appointments" class="tab"></section>
+    <section id="clients" class="tab"></section>
+    <section id="reports" class="tab"></section>
+    <section id="settings" class="tab"></section>
+  </main>
+
+  <script src="admin.js" type="module"></script>
 </body>
 </html>
