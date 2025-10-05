@@ -1,259 +1,230 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Админка — Мастера</title>
   <style>
-    :root { --bg:#0b0b0c; --panel:#141417; --muted:#8f9098; --text:#fff; --accent:#0ea5e9; --ok:#22c55e; --err:#ef4444; }
-    * { box-sizing: border-box; }
-    html, body { height:100%; }
-    body {
-      margin:0; background:linear-gradient(180deg, #0b0b0c, #111113);
-      color:var(--text); font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
-      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-    }
-    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
-    header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-    .title { font-size:20px; font-weight:700; letter-spacing:.2px; }
-    .status { font-size:12px; color:var(--muted); }
-    .grid { display:grid; grid-template-columns: 360px 1fr; gap:16px; }
-    .card { background:var(--panel); border:1px solid #1f2025; border-radius:16px; padding:16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
-    .card h2 { margin:0 0 12px 0; font-size:16px; }
-    label { display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
-    input[type="text"], input[type="tel"], input[type="url"] {
-      width:100%; height:40px; border-radius:12px; border:1px solid #2a2b31; background:#0e0e11;
-      color:var(--text); padding: 0 12px; outline:none;
-    }
-    input[type="text"]:focus, input[type="tel"]:focus, input[type="url"]:focus { border-color:#2f8dee; box-shadow: 0 0 0 4px rgba(14,165,233,.15); }
-    .row { display:flex; gap:8px; }
-    .btn {
-      display:inline-flex; align-items:center; justify-content:center; gap:8px;
-      height:40px; padding:0 14px; border-radius:12px; border:1px solid #2a2b31; background:#0e0e11;
-      color:var(--text); cursor:pointer; transition: all .15s ease;
-    }
-    .btn.primary { background:linear-gradient(180deg, #2f8dee, #1a62c9); border-color:#2f8dee; }
-    .btn.primary:hover { filter:brightness(1.05); transform: translateY(-1px); }
-    .btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
-    .hint { color:var(--muted); font-size:12px; margin-top:8px; }
-    .list { display:grid; gap:10px; }
-    .item {
-      display:flex; align-items:center; gap:12px;
-      padding:10px; border-radius:12px; border:1px solid #22232a; background:#101015;
-    }
-    .avatar { width:40px; height:40px; border-radius:12px; background:#1f2025; object-fit:cover; }
-    .name { font-weight:600; }
-    .phone { color:var(--muted); font-size:12px; }
-    .pill { padding:2px 8px; font-size:11px; border-radius:999px; border:1px solid #2a2b31; color:#b6b7bd; }
-    .toast {
-      position:fixed; right:16px; bottom:16px; padding:10px 12px; border-radius:12px; border:1px solid #2a2b31;
-      background:#101015; color:#fff; box-shadow:0 10px 30px rgba(0,0,0,.3); opacity:0; transform: translateY(8px);
-      transition: all .18s ease;
-    }
-    .toast.show { opacity:1; transform: translateY(0); }
-    .toast.ok { border-color: rgba(34,197,94,.4); }
-    .toast.err { border-color: rgba(239,68,68,.4); }
-    .empty { color:var(--muted); font-size:13px; padding:16px; border:1px dashed #2a2b31; border-radius:12px; background:#0f0f13; }
-    .toolbar { display:flex; align-items:center; gap:8px; justify-content:space-between; margin:0 0 8px 0; }
-    .search { flex:1; }
+    :root{--bg:#0b0f14;--panel:#111827;--muted:#6b7280;--txt:#e5e7eb;--accent:#14b8a6;--accent-2:#22d3ee;--danger:#ef4444;--ok:#22c55e}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0a0f16,#0b1220);color:var(--txt);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans","Helvetica Neue",Arial}
+    .wrap{display:grid;grid-template-columns:340px 1fr;gap:20px;max-width:1200px;margin:0 auto;padding:20px}
+    header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .brand{font-weight:700;letter-spacing:.2px}
+    .status{font-size:12px;color:var(--muted)}
+    .card{background:radial-gradient(1200px 200px at -10% -10%,rgba(20,184,166,.08),transparent 60%),radial-gradient(1000px 160px at 120% 0,rgba(34,211,238,.08),transparent 60%),var(--panel);border:1px solid rgba(255,255,255,.06);border-radius:16px;box-shadow:0 10px 35px rgba(0,0,0,.3);padding:16px}
+    .h2{margin:0 0 10px;font-size:16px;font-weight:700}
+    form .row{display:flex;gap:10px}
+    label{display:block;font-size:12px;color:var(--muted);margin:12px 0 6px}
+    input[type=text], input[type=tel], input[type=url]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:#0e1622;color:var(--txt);outline:none}
+    input::placeholder{color:#94a3b8}
+    .actions{display:flex;gap:10px;margin-top:14px}
+    button{appearance:none;border:0;border-radius:12px;padding:10px 14px;font-weight:600;cursor:pointer}
+    .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#051014}
+    .btn-secondary{background:#1f2937;color:var(--txt)}
+    .btn-primary[disabled]{opacity:.6;cursor:not-allowed}
+    .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    .item{display:flex;gap:12px;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.06);background:#0f172a}
+    .avatar{width:48px;height:48px;border-radius:10px;object-fit:cover;background:#0b1220;border:1px solid rgba(255,255,255,.06)}
+    .name{font-weight:700}
+    .muted{color:var(--muted);font-size:12px}
+    .toast{position:fixed;right:16px;bottom:16px;background:#111827;border:1px solid rgba(255,255,255,.08);padding:10px 12px;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.35);opacity:0;transform:translateY(6px);transition:.2s}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+    .toolbar input{flex:1}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(20,184,166,.15);color:var(--accent);font-size:11px;margin-left:6px}
+    @media (max-width:900px){.wrap{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <div class="title">Мастера</div>
+      <div class="brand">Админка • Мастера <span id="count" class="badge">0</span></div>
       <div class="status" id="status">готово</div>
     </header>
 
-    <div class="grid">
-      <section class="card">
-        <h2>Добавить мастера</h2>
-        <form id="form">
-          <label for="name">Имя</label>
-          <input id="name" type="text" placeholder="Например, Юлия" autocomplete="name" required>
-
-          <label for="phone">Телефон</label>
-          <input id="phone" type="tel" placeholder="+375…" required>
-
-          <label for="avatarUrl">Аватар (URL)</label>
-          <input id="avatarUrl" type="url" placeholder="https://…">
-
-          <div class="row" style="margin-top:12px;">
-            <button class="btn" type="button" id="reset">Очистить</button>
-            <button class="btn primary" type="submit" id="save">Сохранить</button>
+    <section class="card">
+      <div class="h2">Добавить мастера</div>
+      <form id="f">
+        <label>Имя</label>
+        <input id="name" type="text" placeholder="Напр. Юлия" required />
+        <div class="row">
+          <div style="flex:1">
+            <label>Телефон</label>
+            <input id="phone" type="text" placeholder="+375..." required />
           </div>
-          <div class="hint">После сохранения запись сразу появится справа в списке.</div>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="toolbar">
-          <div class="pill" id="count">0 записей</div>
-          <input class="search" id="q" type="text" placeholder="Поиск по имени или телефону">
+          <div style="flex:1">
+            <label>Avatar URL</label>
+            <input id="avatar" type="url" placeholder="https://..." />
+          </div>
         </div>
-        <div id="list" class="list"></div>
-      </section>
-    </div>
+        <div class="actions">
+          <button class="btn-primary" id="saveBtn" type="submit">Сохранить</button>
+          <button class="btn-secondary" type="button" id="resetBtn">Очистить</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="h2">Список мастеров</div>
+      <div class="toolbar">
+        <input id="q" type="text" placeholder="Поиск по имени или телефону" />
+        <button class="btn-secondary" id="refreshBtn" type="button">Обновить</button>
+      </div>
+      <div id="list" class="list" aria-live="polite"></div>
+    </section>
   </div>
 
-  <div id="toast" class="toast" role="status" aria-live="polite">Готово</div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script>
-  (function(){
-    "use strict";
+    (function(){
+      "use strict";
 
-    // API endpoints (server already exposes public API)
-    var API = {
-      list: "/public/api/masters",
-      create: "/public/api/masters"
-    };
+      var API = "/public/api/masters";
+      var listEl = document.getElementById("list");
+      var countEl = document.getElementById("count");
+      var statusEl = document.getElementById("status");
+      var toastEl = document.getElementById("toast");
+      var formEl = document.getElementById("f");
+      var btnSave = document.getElementById("saveBtn");
+      var btnReset = document.getElementById("resetBtn");
+      var btnRefresh = document.getElementById("refreshBtn");
+      var qEl = document.getElementById("q");
+      var memory = []; // текущее состояние
 
-    var d = document;
-    var el = function(id){ return d.getElementById(id); };
-    var $form = el("form");
-    var $name = el("name");
-    var $phone = el("phone");
-    var $avatar = el("avatarUrl");
-    var $save = el("save");
-    var $reset = el("reset");
-    var $list = el("list");
-    var $count = el("count");
-    var $status = el("status");
-    var $q = el("q");
-    var $toast = el("toast");
-
-    function toast(text, kind){
-      $toast.textContent = text;
-      $toast.className = "toast show" + (kind ? " " + kind : "");
-      setTimeout(function(){ $toast.className = "toast"; }, 1800);
-    }
-
-    function setStatus(text){ $status.textContent = text; }
-
-    function createNode(tag, props){
-      var node = d.createElement(tag);
-      if(props){
-        if(props.className) node.className = props.className;
-        if(props.text) node.textContent = props.text;
-        if(props.src) node.src = props.src;
-        if(props.alt) node.alt = props.alt;
+      function showToast(text){
+        toastEl.textContent = text;
+        toastEl.classList.add("show");
+        setTimeout(function(){ toastEl.classList.remove("show"); }, 1500);
       }
-      return node;
-    }
 
-    function render(list){
-      var q = ($q.value || "").toLowerCase();
-      $list.innerHTML = "";
-      if(!list || !list.length){
-        var empty = createNode("div", { className: "empty", text: "Пока пусто. Добавьте первого мастера слева." });
-        $list.appendChild(empty);
-        $count.textContent = "0 записей";
-        return;
+      function setBusy(flag, text){
+        if(flag){ statusEl.textContent = text || "выполняю..."; }
+        else { statusEl.textContent = "готово"; }
+        btnSave.disabled = !!flag;
       }
-      var filtered = list.filter(function(x){
-        var s = (x.name || "") + " " + (x.phone || "");
-        return s.toLowerCase().indexOf(q) !== -1;
-      });
-      filtered.forEach(function(x){
-        var item = createNode("div", { className: "item" });
-        var img = createNode("img", { className: "avatar", alt: x.name || "avatar" });
-        img.src = x.avatarUrl ? x.avatarUrl : "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
-        var meta = createNode("div");
-        var nm = createNode("div", { className: "name", text: x.name || "Без имени" });
-        var ph = createNode("div", { className: "phone", text: x.phone || "" });
-        meta.appendChild(nm); meta.appendChild(ph);
-        var pill = createNode("div", { className: "pill", text: x.isActive ? "Активен" : "Скрыт" });
-        item.appendChild(img); item.appendChild(meta); item.appendChild(pill);
-        $list.appendChild(item);
-      });
-      $count.textContent = String(filtered.length) + " записей";
-    }
 
-    function normalizeResponse(data){
-      // Accept either { items: [...] } or plain [...]
-      if(!data) return [];
-      if(Array.isArray(data)) return data;
-      if(data.items && Array.isArray(data.items)) return data.items;
-      return [];
-    }
+      function normalizeItems(x){
+        if(!x) return [];
+        if (Array.isArray(x)) return x;
+        if (x.items && Array.isArray(x.items)) return x.items;
+        return [];
+      }
 
-    function parseJsonSafe(res){
-      return res.text().then(function(t){
-        try { return JSON.parse(t); } catch(e){ return {}; }
-      });
-    }
+      function render(items){
+        memory = items.slice();
+        countEl.textContent = String(items.length);
+        listEl.innerHTML = "";
+        for (var i=0;i<items.length;i++){
+          var it = items[i];
+          var card = document.createElement("div");
+          card.className = "item";
+          var img = document.createElement("img");
+          img.className = "avatar";
+          img.alt = "";
+          img.src = it.avatarUrl || "";
+          var body = document.createElement("div");
+          var name = document.createElement("div");
+          name.className = "name";
+          name.textContent = it.name || "(без имени)";
+          var phone = document.createElement("div");
+          phone.className = "muted";
+          phone.textContent = it.phone || "";
+          var meta = document.createElement("div");
+          meta.className = "muted";
+          meta.textContent = (it.isActive ? "активен" : "скрыт") + " • " + (it.createdAt || "");
+          body.appendChild(name); body.appendChild(phone); body.appendChild(meta);
+          card.appendChild(img); card.appendChild(body);
+          listEl.appendChild(card);
+        }
+      }
 
-    function load(){
-      setStatus("загрузка…");
-      return fetch(API.list, { method:"GET", headers: { "Accept":"application/json" } })
-        .then(parseJsonSafe)
-        .then(function(data){
-          var items = normalizeResponse(data);
-          render(items);
-          setStatus("готово");
+      function fetchList(){
+        setBusy(true,"загружаю...");
+        return fetch(API, {
+          method: "GET",
+          headers: {
+            "Accept":"application/json",
+            "Cache-Control":"no-store, no-cache, must-revalidate, proxy-revalidate",
+            "Pragma":"no-cache"
+          },
+          cache: "no-store"
+        })
+        .then(function(r){ return r.json().catch(function(){ return []; }); })
+        .then(function(data){ render(normalizeItems(data)); })
+        .catch(function(err){ console.error(err); showToast("Не удалось загрузить"); })
+        .finally(function(){ setBusy(false); });
+      }
+
+      function doSave(payload){
+        setBusy(true,"сохраняю...");
+        return fetch(API, {
+          method: "POST",
+          headers: { "Content-Type":"application/json", "Accept":"application/json" },
+          body: JSON.stringify(payload),
+          cache: "no-store"
+        })
+        .then(function(r){
+          // Сервер может вернуть 201/200 без тела — это ок
+          if(!r.ok){ throw new Error("HTTP "+r.status); }
+          return r.text().then(function(t){
+            try { return t ? JSON.parse(t) : null; } catch(_){ return null; }
+          });
+        })
+        .then(function(_data){
+          showToast("Сохранено");
+          // Жёстко перезагружаем список, чтобы не зависеть от ответа
+          return fetchList();
         })
         .catch(function(err){
-          console.error("load error", err);
-          setStatus("ошибка");
-          toast("Не удалось загрузить список", "err");
-        });
-    }
-
-    function formData(){
-      return {
-        name: ($name.value || "").trim(),
-        phone: ($phone.value || "").trim(),
-        avatarUrl: ($avatar.value || "").trim(),
-        isActive: true
-      };
-    }
-
-    function canSave(v){
-      if(!v.name) return false;
-      if(!v.phone) return false;
-      return true;
-    }
-
-    function save(e){
-      e.preventDefault();
-      var v = formData();
-      if(!canSave(v)){
-        toast("Заполните имя и телефон", "err");
-        return;
+          console.error(err);
+          showToast("Ошибка сохранения");
+        })
+        .finally(function(){ setBusy(false); });
       }
-      $save.disabled = true;
-      setStatus("сохраняю…");
-      fetch(API.create, {
-        method: "POST",
-        headers: { "Content-Type":"application/json", "Accept":"application/json" },
-        body: JSON.stringify(v)
-      })
-      .then(parseJsonSafe)
-      .then(function(_){
-        // не полагаемся на ответ сервера — просто перезагружаем список
-        $form.reset();
-        setStatus("обновляю список…");
-        return load();
-      })
-      .then(function(){
-        toast("Сохранено", "ok");
-        setStatus("готово");
-      })
-      .catch(function(err){
-        console.error("save error", err);
-        toast("Ошибка сохранения", "err");
-        setStatus("ошибка");
-      })
-      .finally(function(){ $save.disabled = false; });
-    }
 
-    $form.addEventListener("submit", save);
-    $reset.addEventListener("click", function(){ $form.reset(); });
-    $q.addEventListener("input", function(){ load(); });
+      // Поиск по локальному состоянию без запроса
+      function filterLocal(q){
+        var s = (q||"").trim().toLowerCase();
+        if(!s){ render(memory); return; }
+        var f = memory.filter(function(it){
+          return String(it.name||"").toLowerCase().indexOf(s) >= 0 ||
+                 String(it.phone||"").toLowerCase().indexOf(s) >= 0;
+        });
+        render(f);
+      }
 
-    // старт
-    load();
-  })();
+      // handlers
+      formEl.addEventListener("submit", function(ev){
+        ev.preventDefault();
+        var payload = {
+          name: document.getElementById("name").value.trim(),
+          phone: document.getElementById("phone").value.trim(),
+          avatarUrl: document.getElementById("avatar").value.trim(),
+          isActive: true
+        };
+        if(!payload.name || !payload.phone){
+          showToast("Заполните имя и телефон"); return;
+        }
+        doSave(payload).then(function(){
+          formEl.reset();
+          document.getElementById("name").focus();
+        });
+      });
+
+      btnReset.addEventListener("click", function(){
+        formEl.reset(); document.getElementById("name").focus();
+      });
+
+      btnRefresh.addEventListener("click", function(){ fetchList(); });
+
+      qEl.addEventListener("input", function(){ filterLocal(qEl.value); });
+
+      // Первичная загрузка
+      fetchList();
+    })();
   </script>
 </body>
 </html>
