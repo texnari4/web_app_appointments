@@ -1,66 +1,81 @@
-import express from "express";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { listMasters, createMaster, updateMaster, deleteMaster } from "./db.js";
+
+import express, { Request, Response } from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { z } from 'zod';
+import { listMasters, createMaster, updateMaster, deleteMaster } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = process.env.PORT || 8080;
-
-app.use((req, res, next) => {
-  const started = Date.now();
-  res.on("finish", () => {
-    const ms = Date.now() - started;
-    console.log(`[req] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
-  });
-  next();
-});
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
 
 app.use(express.json());
+app.use('/public', express.static(path.join(__dirname, '../public')));
 
-const publicDir = path.join(__dirname, "..", "public");
-app.use("/admin", express.static(path.join(publicDir, "admin")));
-
-app.get("/health", (_req, res) => {
+// Health
+app.get('/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
-app.get("/api/masters", async (_req, res) => {
+// Root -> not found in mini app context, but keep explicit
+app.all('/', (_req, res) => {
+  res.status(404).json({ error: 'NOT_FOUND' });
+});
+
+// Admin page
+app.get('/admin/', (_req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin/index.html'));
+});
+
+// Schemas
+const MasterCreateSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().optional(),
+  about: z.string().optional(),
+});
+
+const MasterUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  phone: z.string().optional(),
+  about: z.string().optional(),
+});
+
+// API
+app.get('/public/api/masters', async (_req, res) => {
+  const data = await listMasters();
+  res.json({ items: data });
+});
+
+app.post('/public/api/masters', async (req, res) => {
   try {
-    const masters = await listMasters();
-    res.json({ ok: true, data: masters });
-  } catch {
-    res.status(500).json({ ok: false, error: "READ_FAILED" });
+    const payload = MasterCreateSchema.parse(req.body);
+    const created = await createMaster(payload);
+    res.status(201).json(created);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    res.status(400).json({ error: msg });
   }
 });
 
-app.post("/api/masters", async (req, res) => {
+app.patch('/public/api/masters/:id', async (req, res) => {
   try {
-    const master = await createMaster(req.body);
-    res.status(201).json({ ok: true, data: master });
-  } catch (e) {
-    res.status(400).json({ ok: false, error: e.message || "CREATE_FAILED" });
+    const patch = MasterUpdateSchema.parse(req.body);
+    const updated = await updateMaster(req.params.id, patch);
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    res.status(400).json({ error: msg });
   }
 });
 
-app.patch("/api/masters/:id", async (req, res) => {
-  try {
-    const master = await updateMaster(req.params.id, req.body);
-    res.json({ ok: true, data: master });
-  } catch (e) {
-    res.status(400).json({ ok: false, error: e.message || "UPDATE_FAILED" });
-  }
+app.delete('/public/api/masters/:id', async (req, res) => {
+  const ok = await deleteMaster(req.params.id);
+  res.json({ ok });
 });
 
-app.delete("/api/masters/:id", async (req, res) => {
-  try {
-    await deleteMaster(req.params.id);
-    res.json({ ok: true });
-  } catch {
-    res.status(500).json({ ok: false, error: "DELETE_FAILED" });
-  }
+app.listen(PORT, () => {
+  console.log(`Server started on :${PORT}`);
 });
-
-app.listen(port, () => console.log(`Server started on :${port}`));

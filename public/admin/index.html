@@ -1,56 +1,122 @@
+
 <!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Админка — Мастера</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <title>Admin · Beauty Appointments</title>
+  <style>
+    :root {
+      --bg: #0b0b0c;
+      --card: #151518;
+      --text: #e8e8ea;
+      --muted: #a1a1aa;
+      --accent: #0a84ff; /* iOS blue */
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Inter,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing: antialiased; padding: 24px;
+    }
+    h1 { font-size: 24px; margin: 0 0 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { background: var(--card); border-radius: var(--radius); padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+    label { display:block; margin: 8px 0 4px; color: var(--muted); font-size: 12px; }
+    input, textarea {
+      width: 100%; border: 1px solid #2a2a2e; background: #0f0f12; color: var(--text);
+      padding: 10px 12px; border-radius: 12px; outline: none;
+    }
+    button {
+      appearance: none; background: var(--accent); color: white; border: 0; padding: 10px 14px;
+      border-radius: 12px; font-weight: 600; cursor: pointer; transition: transform .06s ease;
+    }
+    button:active { transform: scale(0.98); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 8px 6px; border-bottom: 1px solid #2a2a2e; text-align: left; font-size: 14px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .row { display:flex; gap: 8px; align-items:center; }
+    .danger { background:#ff3b30; }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <header class="header">
-      <h1>Мастера</h1>
-      <p class="subtitle">Мини-панель управления (v2.5.0)</p>
-    </header>
-
-    <section class="card">
-      <h2>Добавить мастера</h2>
-      <form id="form">
-        <div class="grid">
-          <label>
-            <span>Имя*</span>
-            <input type="text" name="name" placeholder="Иван" required />
-          </label>
-          <label>
-            <span>Телефон*</span>
-            <input type="tel" name="phone" placeholder="+7..." required />
-          </label>
-          <label>
-            <span>Специализация</span>
-            <input type="text" name="specialty" placeholder="Парикмахер" />
-          </label>
-          <label>
-            <span>Фото (URL)</span>
-            <input type="url" name="photoUrl" placeholder="https://..." />
-          </label>
-        </div>
-        <div class="actions">
-          <button type="submit">Сохранить</button>
-          <button type="reset" class="secondary">Сбросить</button>
-        </div>
-        <p id="msg" class="msg" hidden></p>
-      </form>
-    </section>
-
-    <section class="card">
-      <div class="list-head">
-        <h2>Список</h2>
-        <button id="reload" class="secondary">Обновить</button>
+  <h1>Админка · Мастера</h1>
+  <div class="grid">
+    <div class="card">
+      <h3 style="margin:0 0 8px;">Создать мастера</h3>
+      <div class="muted">Мини-форма</div>
+      <label>Имя</label>
+      <input id="name" placeholder="Например, Анна">
+      <label>Телефон</label>
+      <input id="phone" placeholder="+7 ...">
+      <label>О себе</label>
+      <textarea id="about" rows="3" placeholder="Описание, специализация..."></textarea>
+      <div class="row" style="margin-top:12px;">
+        <button id="createBtn">Сохранить</button>
+        <span id="status" class="muted"></span>
       </div>
-      <div id="list" class="list"></div>
-    </section>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <h3 style="margin:0;">Список</h3>
+        <button id="reload">Обновить</button>
+      </div>
+      <table>
+        <thead><tr><th>Имя</th><th>Телефон</th><th>Создано</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
   </div>
 
-  <script type="module" src="./admin.js"></script>
+  <script type="module">
+    const api = '/public/api/masters';
+    const rows = document.getElementById('rows');
+    const status = document.getElementById('status');
+
+    async function load() {
+      rows.innerHTML = '<tr><td colspan="4" class="muted">Загрузка...</td></tr>';
+      const r = await fetch(api);
+      const data = await r.json();
+      rows.innerHTML = '';
+      for (const m of data.items) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`<td>\${m.name}</td><td>\${m.phone ?? ''}</td><td class="muted">\${new Date(m.createdAt).toLocaleString()}</td>
+          <td><button class="danger" data-id="\${m.id}">Удалить</button></td>\`;
+        rows.appendChild(tr);
+      }
+    }
+
+    document.getElementById('createBtn').addEventListener('click', async () => {
+      status.textContent = 'Сохраняю...';
+      const payload = {
+        name: (document.getElementById('name') as HTMLInputElement).value.trim(),
+        phone: (document.getElementById('phone') as HTMLInputElement).value.trim(),
+        about: (document.getElementById('about') as HTMLTextAreaElement).value.trim(),
+      };
+      const r = await fetch(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (r.ok) {
+        status.textContent = 'Готово';
+        await load();
+      } else {
+        const err = await r.json().catch(()=>({error:'Ошибка'}));
+        status.textContent = 'Ошибка: ' + (err.error ?? r.statusText);
+      }
+      setTimeout(()=> status.textContent = '', 2000);
+    });
+
+    document.getElementById('reload').addEventListener('click', load);
+
+    rows.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'BUTTON' && target.dataset.id) {
+        const id = target.dataset.id;
+        await fetch(\`\${api}/\${id}\`, { method: 'DELETE' });
+        await load();
+      }
+    });
+
+    load();
+  </script>
 </body>
 </html>
