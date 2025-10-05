@@ -1,24 +1,34 @@
-# --- Builder ---
+# --- Builder stage ---
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+
+# Install deps
+COPY package.json package-lock.json* ./
+RUN npm ci || npm install
+
+# Copy sources
 COPY tsconfig.json ./
 COPY src ./src
 COPY public ./public
-RUN mkdir -p /app/data
+
+# Build (produces /app/dist)
 RUN npm run build
 
 # --- Runtime stage ---
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
+
+# App user & writable data dir (Railway volume can be mounted to /app/data)
+RUN useradd -m -r appuser && mkdir -p /app/data && chown -R appuser:appuser /app
+
+# Copy artifacts
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
-RUN mkdir -p /app/data && chown -R node:node /app
-USER node
-ENV PORT=8080
-ENV DATA_DIR=/app/data
+
+USER appuser
+ENV NODE_ENV=production
 EXPOSE 8080
+
 CMD ["node", "dist/index.js"]
