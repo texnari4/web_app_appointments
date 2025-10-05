@@ -1,5 +1,19 @@
 #!/bin/bash
 set -e
+
+echo ">>> Checking Node.js environment..."
+
+if ! command -v npm &> /dev/null; then
+  echo ">>> Node.js not found, installing..."
+  apt-get update -y
+  apt-get install -y curl
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y nodejs
+  echo ">>> Node.js installed: $(node -v), npm: $(npm -v)"
+else
+  echo ">>> Node.js already installed: $(node -v)"
+fi
+
 echo ">>> Setting up full project (server + admin)..."
 
 mkdir -p data public
