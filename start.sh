@@ -50,10 +50,12 @@ const groupsFile = join(DATA_DIR, 'groups.json');
 const bookingsFile = join(DATA_DIR, 'bookings.json');
 const adminsFile = join(DATA_DIR, 'admins.json');
 const mastersFile = join(DATA_DIR, 'masters.json');
+const contactsFile = join(DATA_DIR, 'contacts.json');
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://beautyminiappappointments-production.up.railway.app').replace(/\/+$/,'');
 const TG_API = TELEGRAM_BOT_TOKEN ? `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}` : null;
+const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || null;
 
 async function tgSendMessage(chatId, text, extra = {}) {
   if (!TG_API) return;
@@ -118,6 +120,7 @@ const DEFAULT_SERVICES = [
 
 const DEFAULT_BOOKINGS = [];
 const DEFAULT_MASTERS = [];
+const DEFAULT_CONTACTS = [];
 
 const DEFAULT_ADMINS = [
   {
@@ -152,6 +155,7 @@ ensureDataFile(servicesFile, DEFAULT_SERVICES);
 ensureDataFile(bookingsFile, DEFAULT_BOOKINGS);
 ensureDataFile(adminsFile, DEFAULT_ADMINS);
 ensureDataFile(mastersFile, DEFAULT_MASTERS);
+ensureDataFile(contactsFile, DEFAULT_CONTACTS);
 
 function readJSON(file, fallback = []) {
   try {
@@ -284,6 +288,21 @@ function readAdmins() {
 
 function writeAdmins(admins) {
   writeJSON(adminsFile, admins);
+}
+
+function readContacts() { return readJSON(contactsFile, []); }
+function writeContacts(list) { writeJSON(contactsFile, list); }
+function upsertContact(next) {
+  const list = readContacts();
+  const idx = list.findIndex(c => String(c.id) === String(next.id));
+  const now = new Date().toISOString();
+  if (idx === -1) {
+    list.push({ ...next, createdAt: now, updatedAt: now });
+  } else {
+    list[idx] = { ...list[idx], ...next, updatedAt: now };
+  }
+  writeContacts(list);
+  return next;
 }
 
 function authenticate(req) {
@@ -547,8 +566,34 @@ const server = createServer(async (req, res) => {
         { label: 'services.json', path: servicesFile, get: () => readJSON(servicesFile, []) },
         { label: 'admins.json',   path: adminsFile,   get: () => readJSON(adminsFile, []) },
         { label: 'masters.json',  path: mastersFile,  get: () => readJSON(mastersFile, []) },
-        { label: 'bookings.json', path: bookingsFile, get: () => readJSON(bookingsFile, []) }
+        { label: 'bookings.json', path: bookingsFile, get: () => readJSON(bookingsFile, []) },
+        { label: 'contacts.json', path: contactsFile, get: () => readJSON(contactsFile, []) }
       ];
+    // ===== CONTACTS API =====
+    if (pathname === '/api/contacts/me' && req.method === 'GET') {
+      if (!ctx.telegramId) { sendJSON(res, 200, { contact: null }); return; }
+      const list = readContacts();
+      const c = list.find(x => String(x.id) === String(ctx.telegramId)) || null;
+      sendJSON(res, 200, { contact: c });
+      return;
+    }
+
+    if (pathname === '/api/contacts/bootstrap' && req.method === 'POST') {
+      // Upsert from WebApp: we trust cookie set via /auth/telegram; optionally merge name/username in body
+      if (!ctx.telegramId) { sendJSON(res, 400, { error: 'not in Telegram WebApp (no tg_id)' }); return; }
+      let body = {};
+      try { body = JSON.parse(await readBody(req) || '{}'); } catch {}
+      const next = {
+        id: ctx.telegramId,
+        username: (body.username ?? '').replace(/^@/, '') || undefined,
+        first_name: body.first_name ?? undefined,
+        last_name: body.last_name ?? undefined,
+        phone: body.phone ?? undefined
+      };
+      upsertContact(next);
+      sendJSON(res, 200, { ok: true });
+      return;
+    }
       const rowHtml = files.map(f => {
         try {
           const s = statSync(f.path);
@@ -570,7 +615,7 @@ const server = createServer(async (req, res) => {
 <h1>Статус приложения</h1>
 <section>
 <p>Node.js: <b>${process.version}</b> · Uptime: <b>${uptime}</b></p>
-<p>BASE_URL: <code>${PUBLIC_BASE_URL}</code> · Telegram bot: <b>${TELEGRAM_BOT_TOKEN ? 'configured' : 'not set'}</b></p>
+<p>BASE_URL: <code>${PUBLIC_BASE_URL}</code> · Telegram bot: <b>${TELEGRAM_BOT_TOKEN ? 'configured' : 'not set'}</b>${TELEGRAM_BOT_USERNAME ? ` · @${TELEGRAM_BOT_USERNAME}` : ''}</p>
 <p>Memory RSS: <b>${mem.rss}</b>, Heap Used: <b>${mem.heapUsed}</b></p>
 </section>
 <section>
@@ -1186,9 +1231,25 @@ const server = createServer(async (req, res) => {
       const admins = readAdmins();
       const isAdmin = admins.some(a => a.id === ctx.telegramId);
       if (!isAdmin) {
-        const deny = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>403</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:#f6f7fb;color:#111827;display:grid;place-items:center;height:100vh;margin:0}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:22px;max-width:720px;text-align:center;display:grid;gap:10px}</style><section><h1>Доступ ограничен</h1><p>Откройте админку из Telegram через команду <b>/admin</b> у бота или запустите мини‑приложение внутри Telegram — мы авторизуем вас автоматически.</p><p class="muted">Если вы уже в Telegram WebApp, попробуйте вернуться и открыть заново.</p></section>`;
-        res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(deny);
+        const bootstrap = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Авторизация…</title><style>html,body{height:100%}body{margin:0;display:grid;place-items:center;background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;color:#111827}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:22px;max-width:720px;text-align:center;display:grid;gap:10px}</style></head><body><section><h1>Авторизация через Telegram…</h1><p class="muted">Если вы открыли эту страницу <b>внутри Telegram</b>, мы попробуем авторизовать вас автоматически.</p><p class="muted">Если страница не обновится в течение 3 секунд, откройте админку из бота командой <b>/admin</b>.</p></section><script>
+(function(){
+  function done(ok){ if(ok){ location.replace('/admin'); } else { document.body.innerHTML = '<section><h1>403</h1><p>Доступ ограничен. Откройте админку из Telegram: /admin</p></section>'; } }
+  try{
+    var tg = window.Telegram && window.Telegram.WebApp;
+    if(tg && tg.initData){
+      fetch('/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})})
+        .then(function(r){ return r.ok; })
+        .then(done)
+        .catch(function(){ done(false); });
+      setTimeout(function(){ /* fallback reload */ location.replace('/admin'); }, 3000);
+    } else {
+      done(false);
+    }
+  }catch(e){ done(false); }
+})();
+</script></body></html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(bootstrap);
         return;
       }
       const adminPrimary = join(__dirname, 'templates', 'admin.html');
@@ -1211,14 +1272,27 @@ const server = createServer(async (req, res) => {
           const chatId = msg.chat.id;
           const userId = from.id;
           const text = (update.message?.text || update.edited_message?.text || update.callback_query?.data || '').trim();
+          if (update.message && update.message.contact) {
+            const c = update.message.contact;
+            const ownerId = c.user_id || userId;
+            upsertContact({ id: ownerId, phone: c.phone_number });
+            await tgSendMessage(chatId, '✅ Номер получен. Спасибо!');
+          }
           if (/^\/start\b/.test(text)) {
-            await tgSendMessage(chatId, '👋 Привет! Доступные команды:\n• /client — открыть клиентскую форму\n• /admin — админ-панель');
+            await tgSendMessage(chatId, '👋 Привет! Доступные команды:\n• /client — открыть клиентскую форму\n• /admin — админ-панель\n\nЧтобы мы могли заполнять ваши данные автоматически, поделитесь номером телефона.', {
+              reply_markup: { keyboard: [[{ text: '📱 Поделиться номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
+            });
           } else if (/^\/client\b/.test(text)) {
             const url = `${PUBLIC_BASE_URL}/client`;
             await tgSendMessage(chatId, `🧾 <b>Клиентская форма</b>\n${url}`);
           } else if (/^\/admin\b/.test(text)) {
-            const url = `${PUBLIC_BASE_URL}/admin?tg_id=${userId}`;
-            await tgSendMessage(chatId, `🛠 <b>Админ-панель</b>\n${url}`);
+            const url = `${PUBLIC_BASE_URL}/admin`;
+            // Send both text and a Web App button to open inside Telegram
+            await tgSendMessage(chatId, `🛠 <b>Админ-панель</b>\nОткройте внутри Telegram для авто‑входа.\n${url}`, {
+              reply_markup: {
+                inline_keyboard: [ [ { text: 'Открыть админку', web_app: { url } } ] ]
+              }
+            });
           } else {
             await tgSendMessage(chatId, 'Не знаю эту команду. Попробуйте /client или /admin');
           }
@@ -1231,7 +1305,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (pathname === '/tg/info' && req.method === 'GET') {
-      sendJSON(res, 200, { baseUrl: PUBLIC_BASE_URL, botConfigured: Boolean(TELEGRAM_BOT_TOKEN) });
+      sendJSON(res, 200, { baseUrl: PUBLIC_BASE_URL, botConfigured: Boolean(TELEGRAM_BOT_TOKEN), botUsername: TELEGRAM_BOT_USERNAME });
       return;
     }
 
@@ -1479,6 +1553,7 @@ const server = createServer(async (req, res) => {
         zip.addFile('admins.json', Buffer.from(JSON.stringify(readJSON(adminsFile, []), null, 2)));
         zip.addFile('masters.json', Buffer.from(JSON.stringify(readJSON(mastersFile, []), null, 2)));
         zip.addFile('bookings.json', Buffer.from(JSON.stringify(readJSON(bookingsFile, []), null, 2)));
+        zip.addFile('contacts.json', Buffer.from(JSON.stringify(readJSON(contactsFile, []), null, 2)));
         zip.addFile('manifest.json', Buffer.from(JSON.stringify({ createdAt: new Date().toISOString(), version: 1 }, null, 2)));
         const name = makeBackupName();
         const buf = zip.toBuffer();
@@ -1522,17 +1597,20 @@ const server = createServer(async (req, res) => {
         const admins = readJsonEntry('admins.json');
         const masters = readJsonEntry('masters.json');
         const bookings = readJsonEntry('bookings.json');
+        const contacts = readJsonEntry('contacts.json');
         if (groups) writeJSON(groupsFile, groups);
         if (services) writeJSON(servicesFile, services);
         if (admins) writeJSON(adminsFile, admins);
         if (masters) writeJSON(mastersFile, masters);
         if (bookings) writeJSON(bookingsFile, bookings);
+        if (contacts) writeJSON(contactsFile, contacts);
         const imported = {
           groups: Array.isArray(groups) ? groups.length : 0,
           services: Array.isArray(services) ? services.length : 0,
           admins: Array.isArray(admins) ? admins.length : 0,
           masters: Array.isArray(masters) ? masters.length : 0,
-          bookings: Array.isArray(bookings) ? bookings.length : 0
+          bookings: Array.isArray(bookings) ? bookings.length : 0,
+          contacts: Array.isArray(contacts) ? contacts.length : 0
         };
         sendJSON(res, 200, { status: 'ok', imported });
       } catch (e) {
@@ -1755,6 +1833,18 @@ cat <<'EOF' > public/client.html
       transform: translateY(-2px);
       box-shadow: 0 28px 46px -24px rgba(0, 122, 255, 0.55);
     }
+    .secondary-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: #fff;
+      color: #111827;
+      font-weight: 600;
+      cursor: pointer;
+    }
 
     .summary-card {
       border-radius: 18px;
@@ -1825,8 +1915,11 @@ cat <<'EOF' > public/client.html
           </label>
           <label>
             Телефон
-            <input type="tel" id="clientPhone" placeholder="+7 (999) 123-45-67" required />
+            <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" required />
           </label>
+          <div>
+            <button type="button" class="secondary-btn" id="sharePhoneBtn">📱 Поделиться номером в чате</button>
+          </div>
           <label>
             Комментарий для мастера (необязательно)
             <textarea id="clientNotes" placeholder="Например: хочу нежный пастельный оттенок"></textarea>
@@ -1853,7 +1946,7 @@ cat <<'EOF' > public/client.html
             <input type="date" id="dateInput" required />
           </label>
           <label>
-            ID мастера (необязательно)
+            Имя мастера 
             <input type="text" id="masterInput" placeholder="Если хотите записаться к конкретному мастеру" />
           </label>
         </div>
@@ -1878,6 +1971,18 @@ cat <<'EOF' > public/client.html
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // Bootstrap contact from Telegram WebApp (id/username/name); phone will be asked via bot keyboard
+      try {
+        const tg = window.Telegram && window.Telegram.WebApp;
+        if (tg) { tg.ready && tg.ready(); tg.expand && tg.expand(); }
+        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+          const u = tg.initDataUnsafe.user;
+          fetch('/api/contacts/bootstrap', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: u.username||'', first_name: u.first_name||'', last_name: u.last_name||'' })
+          }).catch(()=>{});
+        }
+      } catch(_) {}
       const bookingForm = document.getElementById('bookingForm');
       const serviceSelect = document.getElementById('serviceSelect');
       const serviceSummary = document.getElementById('serviceSummary');
@@ -1892,6 +1997,48 @@ cat <<'EOF' > public/client.html
       const clientNameInput = document.getElementById('clientName');
       const clientPhoneInput = document.getElementById('clientPhone');
       const clientNotesInput = document.getElementById('clientNotes');
+      const sharePhoneBtn = document.getElementById('sharePhoneBtn');
+      let tgBotUsername = null;
+      // Fetch bot info to know username
+      fetch('/tg/info').then(r=>r.json()).then(j=>{ tgBotUsername = j.botUsername || null; }).catch(()=>{});
+
+      sharePhoneBtn.addEventListener('click', () => {
+        const tg = window.Telegram && window.Telegram.WebApp;
+        if (!tgBotUsername) {
+          showBanner('Бот не настроен. Сообщите администратору задать TELEGRAM_BOT_USERNAME', 'error');
+          return;
+        }
+        const url = `https://t.me/${tgBotUsername}?start=share_phone`;
+        if (tg && typeof tg.openTelegramLink === 'function') {
+          tg.openTelegramLink(url);
+          showBanner('Открыл диалог с ботом. Нажмите «📱 Поделиться номером» в чате.');
+        } else {
+          window.open(url, '_blank');
+        }
+        // Через несколько секунд попробуем подтянуть телефон
+        setTimeout(prefillFromContact, 4000);
+      });
+
+      const prefillFromContact = async () => {
+        try {
+          const r = await fetch('/api/contacts/me');
+          if (!r.ok) return;
+          const data = await r.json();
+          const c = data.contact;
+          if (!c) return;
+          if (c.first_name || c.last_name) {
+            const name = [c.first_name||'', c.last_name||''].join(' ').trim();
+            if (name && !clientNameInput.value) clientNameInput.value = name;
+          }
+          if (c.phone && !clientPhoneInput.value) {
+            clientPhoneInput.value = c.phone;
+          }
+          if ((c.username || c.id) && !clientNotesInput.value) {
+            const nick = c.username ? '@'+c.username : '';
+            clientNotesInput.placeholder = clientNotesInput.placeholder + (nick?` — ${nick}`:'');
+          }
+        } catch(_) {}
+      };
 
       const state = {
         services: [],
@@ -2143,6 +2290,7 @@ cat <<'EOF' > public/client.html
 
       initDate();
       loadServices().then(fetchAvailability);
+      prefillFromContact();
     });
   </script>
 </body>
@@ -2220,10 +2368,15 @@ npm start
 // Auto-auth via Telegram WebApp initData (if opened inside Telegram)
 try{
   const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { tg.ready && tg.ready(); tg.expand && tg.expand(); }
   if (tg && tg.initData) {
-    fetch('/auth/telegram', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ initData: tg.initData }) })
-      .then(()=>{/* cookie set */})
-      .catch(()=>{});
+    // If no tg_id cookie yet — authenticate and reload to apply cookies to same-origin requests
+    var hasCookie = document.cookie.split(';').some(function(p){ return p.trim().startsWith('tg_id='); });
+    if (!hasCookie) {
+      fetch('/auth/telegram', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ initData: tg.initData }) })
+        .then(function(r){ if(r.ok){ location.reload(); } })
+        .catch(function(){});
+    }
   }
 }catch(_){}
 (async function(){
