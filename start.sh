@@ -39,6 +39,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs
 import { parse } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
@@ -225,6 +226,21 @@ function sendText(res, statusCode, payload) {
   res.end(payload);
 }
 
+function parseCookies(req){
+  const h = req.headers['cookie'];
+  if(!h) return {};
+  return Object.fromEntries(h.split(';').map(p=>p.trim().split('=')).map(([k,...v])=>[k, decodeURIComponent(v.join('='))]));
+}
+function setCookie(res, name, value, opts={}){
+  const parts = [`${name}=${encodeURIComponent(value)}`];
+  if(opts.path) parts.push(`Path=${opts.path}`); else parts.push('Path=/');
+  if(opts.maxAge!=null) parts.push(`Max-Age=${opts.maxAge}`);
+  if(opts.httpOnly!==false) parts.push('HttpOnly');
+  if(opts.sameSite) parts.push(`SameSite=${opts.sameSite}`); else parts.push('SameSite=Lax');
+  if(opts.secure!==false) parts.push('Secure');
+  res.setHeader('Set-Cookie', [...(res.getHeader('Set-Cookie')||[]), parts.join('; ')]);
+}
+
 const ROLE_WEIGHT = {
   unknown: -1,
   guest: 0,
@@ -233,6 +249,16 @@ const ROLE_WEIGHT = {
 };
 
 function parseTelegramId(req) {
+  // 1) Cookie (set after Telegram WebApp auth)
+  try {
+    const cookies = parseCookies(req);
+    if (cookies.tg_id) {
+      const c = Number(cookies.tg_id);
+      if (Number.isFinite(c)) return c;
+    }
+  } catch {}
+
+  // 2) Custom headers (for reverse-proxy or future use)
   const headerId = req.headers['x-telegram-id'] ?? req.headers['x-telegram-user-id'];
   if (headerId != null) {
     const numeric = Number(headerId);
@@ -241,6 +267,7 @@ function parseTelegramId(req) {
     }
   }
 
+  // 3) Query param (?tg_id=...) — используется при открытии ссылки из бота
   const urlIdMatch = req.url && req.url.includes('?')
     ? Number(new URL(`http://localhost${req.url}`).searchParams.get('tg_id'))
     : NaN;
@@ -1114,7 +1141,56 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Telegram WebApp auth — verifies initData and sets signed cookie tg_id
+    if (pathname === '/auth/telegram' && (req.method === 'POST' || req.method === 'GET')) {
+      if (!TELEGRAM_BOT_TOKEN) { sendJSON(res, 400, { error: 'TELEGRAM_BOT_TOKEN not set' }); return; }
+      const input = req.method === 'GET' ? (query.initData || query.init_data || '') : await readBody(req);
+      let initData = '';
+      try {
+        if (req.method === 'GET') {
+          initData = String(input || '').trim();
+        } else {
+          const p = JSON.parse(input||'{}');
+          initData = String(p.initData || p.init_data || '').trim();
+        }
+      } catch { initData = ''; }
+      if (!initData) { sendJSON(res, 400, { error: 'initData required' }); return; }
+
+      // Parse initData (querystring format)
+      const urlParams = new URLSearchParams(initData);
+      const hash = urlParams.get('hash');
+      urlParams.delete('hash');
+      const dataCheckArr = [];
+      for (const [k,v] of urlParams.entries()) dataCheckArr.push(`${k}=${v}`);
+      dataCheckArr.sort();
+      const dataCheckString = dataCheckArr.join('\n');
+
+      // Calculate signature
+      const secret = crypto.createHmac('sha256', 'WebAppData').update(TELEGRAM_BOT_TOKEN).digest();
+      const calcHash = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
+      if (calcHash !== hash) { sendJSON(res, 403, { error: 'invalid hash' }); return; }
+
+      // Extract user
+      let user = null;
+      try { user = JSON.parse(urlParams.get('user')||'null'); } catch { user = null; }
+      const id = Number(user?.id);
+      if (!Number.isFinite(id)) { sendJSON(res, 400, { error: 'user.id missing' }); return; }
+
+      // Set short-lived cookie (12h)
+      setCookie(res, 'tg_id', String(id), { maxAge: 60*60*12 });
+      sendJSON(res, 200, { ok: true, id });
+      return;
+    }
+
     if (pathname === '/admin' || pathname === '/admin/' || pathname.startsWith('/admin')) {
+      const admins = readAdmins();
+      const isAdmin = admins.some(a => a.id === ctx.telegramId);
+      if (!isAdmin) {
+        const deny = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>403</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:#f6f7fb;color:#111827;display:grid;place-items:center;height:100vh;margin:0}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:22px;max-width:720px;text-align:center;display:grid;gap:10px}</style><section><h1>Доступ ограничен</h1><p>Откройте админку из Telegram через команду <b>/admin</b> у бота или запустите мини‑приложение внутри Telegram — мы авторизуем вас автоматически.</p><p class="muted">Если вы уже в Telegram WebApp, попробуйте вернуться и открыть заново.</p></section>`;
+        res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(deny);
+        return;
+      }
       const adminPrimary = join(__dirname, 'templates', 'admin.html');
       const adminFallback = join(__dirname, 'public', 'admin.html');
       const adminPath = existsSync(adminPrimary) ? adminPrimary : adminFallback;
@@ -2141,6 +2217,15 @@ npm start
   </section>
 </main>
 <script>
+// Auto-auth via Telegram WebApp initData (if opened inside Telegram)
+try{
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg && tg.initData) {
+    fetch('/auth/telegram', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ initData: tg.initData }) })
+      .then(()=>{/* cookie set */})
+      .catch(()=>{});
+  }
+}catch(_){}
 (async function(){
   const masterForm = document.getElementById('masterForm');
   const mastersTable = document.getElementById('mastersTable');
