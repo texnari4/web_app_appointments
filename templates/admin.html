@@ -357,7 +357,7 @@
       <button data-tab="services">Услуги</button>
   <button data-tab="masters">Мастера</button>
       <button data-tab="groups">Группы</button>
-      <button data-tab="admins">Администраторы</button>
+      <button data-tab="admins">Админ</button>
     </nav>
 
     <section class="tab-panel active" data-tab-panel="bookings">
@@ -583,6 +583,19 @@
     <section class="tab-panel" data-tab-panel="admins">
       <div class="form-grid">
         <div>
+          <h2 style="display:flex;align-items:center;gap:10px;margin:0">
+            <a id="gsTableLink" href="#" target="_blank" style="text-decoration:none;">GS table</a>
+            <span class="muted" id="gsSheetIdLabel" style="font-size:12px"></span>
+          </h2>
+          <div class="auth-dev" style="margin-top:12px">
+            <button type="button" class="secondary-btn" id="gsExportBtn">Экспорт в Google Sheets</button>
+            <button type="button" class="primary-btn" id="gsImportBtn">Импорт из Google Sheets</button>
+          </div>
+          <small class="muted">Требуются переменные окружения GOOGLE_SERVICE_ACCOUNT_JSON и GOOGLE_SHEET_ID. Доступ только для администраторов.</small>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div>
           <h2>Добавить администратора</h2>
           <form id="adminForm" class="form-grid">
             <label>
@@ -665,6 +678,10 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const clearManualIdBtn = document.getElementById('clearManualIdBtn');
       const bookingsWarning = document.getElementById('bookingsWarning');
       const adminsWarning = document.getElementById('adminsWarning');
+      const gsTableLink = document.getElementById('gsTableLink');
+      const gsExportBtn = document.getElementById('gsExportBtn');
+      const gsImportBtn = document.getElementById('gsImportBtn');
+      const gsSheetIdLabel = document.getElementById('gsSheetIdLabel');
 
       const tabsNav = document.querySelectorAll('nav.tabs button');
       const tabPanels = document.querySelectorAll('.tab-panel');
@@ -832,7 +849,8 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         loadServices();
         loadBookings();
         loadAdmins();
-  loadMasters();
+        loadMasters();
+        initGsControls();
       };
 
       const switchTab = (tab) => {
@@ -2070,3 +2088,54 @@ masterGroupAddBtn?.addEventListener('click', () => {
 </script>
 </body>
 </html>
+
+      // === Google Sheets integration helpers ===
+      const fetchGsUrl = async () => {
+        try {
+          const resp = await apiFetch('/api/gs/url');
+          if (!resp.ok) return null;
+          return await resp.json();
+        } catch (_) { return null; }
+      };
+
+      async function initGsControls() {
+        const data = await fetchGsUrl();
+        if (data?.url) {
+          gsTableLink.href = data.url;
+          gsSheetIdLabel.textContent = data.sheetId ? `(${data.sheetId})` : '';
+        }
+        // доступ
+        [gsExportBtn, gsImportBtn].forEach(btn => btn && (btn.disabled = !authState.isAuthorized));
+      }
+
+      gsTableLink?.addEventListener('click', async (e) => {
+        // если нет href — подгрузим
+        if (!gsTableLink.href || gsTableLink.getAttribute('href') === '#') {
+          const data = await fetchGsUrl();
+          if (data?.url) {
+            gsTableLink.href = data.url;
+          }
+        }
+      });
+
+      gsExportBtn?.addEventListener('click', async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        const resp = await apiFetch('/api/gs/export', { method: 'POST' });
+        if (!resp.ok) { await handleError(resp); return; }
+        const result = await resp.json();
+        showBanner(`Экспорт выполнен: ${result.updated || 'OK'}`);
+      });
+
+      gsImportBtn?.addEventListener('click', async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        const resp = await apiFetch('/api/gs/import', { method: 'POST' });
+        if (!resp.ok) { await handleError(resp); return; }
+        const result = await resp.json();
+        // Обновим локальные данные после импорта
+        loadGroups();
+        loadServices();
+        loadBookings();
+        loadAdmins();
+        loadMasters();
+        showBanner(`Импорт выполнен: ${result.status || 'OK'}`);
+      });
