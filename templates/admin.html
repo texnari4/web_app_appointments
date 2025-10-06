@@ -347,7 +347,8 @@
 
     <nav class="tabs">
       <button data-tab="bookings" class="active">Записи</button>
-      <button data-tab="services">Услуги</button>
+      \1
+  <button data-tab="masters">Мастера</button>
       <button data-tab="groups">Группы</button>
       <button data-tab="admins">Администраторы</button>
     </nav>
@@ -381,9 +382,96 @@
         </thead>
         <tbody></tbody>
       </table>
-    </section>
+    \1<section class="tab-panel" data-tab-panel="masters">
+  <div class="form-grid">
+    <div>
+      <h2>Добавить мастера</h2>
+      <form id="masterForm" class="form-grid">
+        <label>
+          Имя
+          <input type="text" name="name" required placeholder="Например: Анна Петрова" />
+        </label>
+        <label>
+          Специальности (через запятую)
+          <input type="text" name="specialties" placeholder="бровист, визажист" />
+        </label>
+        <label>
+          Фото (URL)
+          <input type="url" name="photoUrl" placeholder="https://…/photo.jpg" />
+        </label>
+        <label>
+          Описание
+          <textarea name="description" placeholder="Кратко о мастере"></textarea>
+        </label>
 
-    <section class="tab-panel" data-tab-panel="services">
+        <fieldset style="border:none;padding:0;margin:0;display:grid;gap:12px">
+          <legend class="muted" style="margin-bottom:4px">Расписание</legend>
+          <label>
+            Тип расписания
+            <select name="scheduleType">
+              <option value="weekly" selected>По дням недели</option>
+              <option value="shift">Смены (2/2 и т.п.)</option>
+            </select>
+          </label>
+
+          <div data-schedule="weekly" class="form-grid">
+            <label>Дни недели
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <label><input type="checkbox" name="weeklyDays" value="1" /> Пн</label>
+                <label><input type="checkbox" name="weeklyDays" value="2" /> Вт</label>
+                <label><input type="checkbox" name="weeklyDays" value="3" /> Ср</label>
+                <label><input type="checkbox" name="weeklyDays" value="4" /> Чт</label>
+                <label><input type="checkbox" name="weeklyDays" value="5" /> Пт</label>
+                <label><input type="checkbox" name="weeklyDays" value="6" /> Сб</label>
+                <label><input type="checkbox" name="weeklyDays" value="0" /> Вс</label>
+              </div>
+            </label>
+            <label>Начало <input type="time" name="weeklyStart" value="10:00" /></label>
+            <label>Конец <input type="time" name="weeklyEnd" value="19:00" /></label>
+          </div>
+
+          <div data-schedule="shift" class="form-grid" style="display:none">
+            <label>Смена: рабочих дней
+              <input type="number" name="shiftWork" min="1" value="2" />
+            </label>
+            <label>Смена: выходных дней
+              <input type="number" name="shiftRest" min="1" value="2" />
+            </label>
+            <label>Опорная дата (начало рабочей смены)
+              <input type="date" name="shiftAnchor" />
+            </label>
+            <label>Начало <input type="time" name="shiftStart" value="10:00" /></label>
+            <label>Конец <input type="time" name="shiftEnd" value="19:00" /></label>
+          </div>
+        </fieldset>
+
+        <label>
+          Услуги мастера
+          <select name="serviceIds" multiple size="6"></select>
+        </label>
+
+        <button type="submit" class="primary-btn">Добавить мастера</button>
+      </form>
+    </div>
+  </div>
+
+  <h2>Список мастеров</h2>
+  <table id="mastersTable">
+    <thead>
+      <tr>
+        <th>Фото</th>
+        <th>Имя</th>
+        <th>Спец-ть</th>
+        <th>Описание</th>
+        <th>Расписание</th>
+        <th>Услуги</th>
+        <th class="table-actions">Действия</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+<section class="tab-panel" data-tab-panel="services">
       <div class="form-grid">
         <div>
           <h2>Добавить услугу</h2>
@@ -514,11 +602,8 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const state = {
-        services: [],
-        groups: [],
-        bookings: [],
-        admins: [],
+      \1
+  masters: [],
         filterGroupId: null,
         bookingStatusFilter: 'pending',
         activeTab: 'bookings'
@@ -527,9 +612,9 @@
       const servicesTableBody = document.querySelector('#servicesTable tbody');
       const groupsTableBody = document.querySelector('#groupsTable tbody');
       const bookingsTableBody = document.querySelector('#bookingsTable tbody');
-      const adminsTableBody = document.querySelector('#adminsTable tbody');
-
-      const bookingStatusFilter = document.getElementById('bookingStatusFilter');
+      \1const mastersTableBody = document.querySelector(\'#mastersTable tbody\');
+const masterForm = document.getElementById(\'masterForm\');
+const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const groupFilter = document.getElementById('groupFilter');
       const adminForm = document.getElementById('adminForm');
       const serviceForm = document.getElementById('serviceForm');
@@ -709,7 +794,8 @@
         loadGroups();
         loadServices();
         loadBookings();
-        loadAdmins();
+        \1
+  loadMasters();
       };
 
       const switchTab = (tab) => {
@@ -930,7 +1016,46 @@
             `;
 
             const masterCell = document.createElement('td');
-            masterCell.textContent = booking.masterId ? `ID ${booking.masterId}` : 'Не выбран';
+
+const selected = booking.masterId ? state.masters.find(m => m.id === booking.masterId) : null;
+const title = selected ? selected.name : 'Не выбран';
+
+const eligibleMasters = state.masters.filter(m =>
+  (m.serviceIds || []).includes(booking.serviceId)
+);
+
+if (authState.isAuthorized && eligibleMasters.length) {
+  const select = document.createElement('select');
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = '— не выбран —';
+  select.appendChild(empty);
+
+  eligibleMasters.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = m.name;
+    opt.selected = booking.masterId === m.id;
+    select.appendChild(opt);
+  });
+
+  select.addEventListener('change', async () => {
+    const masterId = select.value === '' ? null : Number(select.value);
+    const resp = await apiFetch(`/api/bookings/${booking.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ masterId })
+    });
+    if (!resp.ok) { await handleError(resp); select.value = booking.masterId ?? ''; return; }
+    await resp.json();
+    showBanner('Мастер обновлён для записи');
+    loadBookings();
+  });
+
+  masterCell.appendChild(select);
+} else {
+  masterCell.textContent = title;
+}
 
             const statusCell = document.createElement('td');
             const badge = document.createElement('span');
@@ -1546,6 +1671,254 @@
       refreshAccess();
       switchTab(state.activeTab);
     });
-  </script>
+  // ===== MASTERS: загрузка и рендер =====
+const loadMasters = async () => {
+  const response = await apiFetch('/api/masters');
+  if (!response.ok) {
+    await handleError(response);
+    state.masters = [];
+    renderMastersTable();
+    return;
+  }
+  state.masters = await response.json();
+  renderMastersTable();
+  renderMasterServiceOptions();
+};
+
+const renderMasterServiceOptions = () => {
+  if (!masterForm) return;
+  const select = masterForm.querySelector('select[name="serviceIds"]');
+  if (!select) return;
+  select.innerHTML = state.services.map(s =>
+    `<option value="${s.id}">${escapeHtml(s.name)} (${s.duration} мин)</option>`
+  ).join('');
+};
+
+const renderMastersTable = () => {
+  mastersTableBody.innerHTML = '';
+
+  if (!state.masters.length) {
+    const row = document.createElement('tr');
+    row.className = 'empty-row';
+    const cell = document.createElement('td');
+    cell.colSpan = 7;
+    cell.textContent = 'Мастеров пока нет';
+    row.appendChild(cell);
+    mastersTableBody.appendChild(row);
+    return;
+  }
+
+  state.masters.forEach((m) => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = m.id;
+    const editable = authState.isAuthorized;
+
+    const photo = document.createElement('td');
+    photo.innerHTML = m.photoUrl ? `<img src="${escapeHtml(m.photoUrl)}" alt="" style="width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid rgba(148,163,184,.35)" />` : '—';
+
+    const name = document.createElement('td');
+    name.dataset.field = 'name';
+    if (editable) name.contentEditable = 'true';
+    name.textContent = m.name || '';
+
+    const spec = document.createElement('td');
+    spec.dataset.field = 'specialties';
+    if (editable) spec.contentEditable = 'true';
+    spec.textContent = (m.specialties || []).join(', ');
+
+    const desc = document.createElement('td');
+    desc.dataset.field = 'description';
+    if (editable) desc.contentEditable = 'true';
+    desc.textContent = m.description || '';
+
+    const sched = document.createElement('td');
+    const s = m.schedule || {};
+    if (s.type === 'weekly') {
+      const w = s.weekly || {};
+      const daysLabel = (w.days || []).map(d => ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d]).join(', ');
+      sched.innerHTML = `Недели: <div class="muted">${daysLabel || '—'}</div><div class="muted">${w.start||'—'}–${w.end||'—'}</div>`;
+    } else if (s.type === 'shift') {
+      const sh = s.shift || {};
+      sched.innerHTML = `Смены: <div class="muted">${sh.workDays||'?'} раб / ${sh.restDays||'?'} вых</div><div class="muted">${sh.start||'—'}–${sh.end||'—'}</div>`;
+    } else {
+      sched.textContent = '—';
+    }
+
+    const servicesCell = document.createElement('td');
+    const names = (m.serviceIds || [])
+      .map(id => state.services.find(svc => svc.id === id)?.name)
+      .filter(Boolean);
+    servicesCell.innerHTML = names.length ? names.map(n => `<div>${escapeHtml(n)}</div>`).join('') : '—';
+    if (editable) {
+      const select = document.createElement('select');
+      select.multiple = true;
+      select.size = 5;
+      select.dataset.field = 'serviceIds';
+      state.services.forEach(svc => {
+        const opt = document.createElement('option');
+        opt.value = svc.id;
+        opt.textContent = svc.name;
+        opt.selected = (m.serviceIds || []).includes(svc.id);
+        select.appendChild(opt);
+      });
+      servicesCell.appendChild(select);
+    }
+
+    const actions = document.createElement('td');
+    actions.className = 'table-actions';
+    if (editable) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'danger-btn';
+      del.dataset.action = 'delete-master';
+      del.dataset.id = m.id;
+      del.textContent = 'Удалить';
+      actions.appendChild(del);
+    }
+
+    tr.append(photo, name, spec, desc, sched, servicesCell, actions);
+    mastersTableBody.appendChild(tr);
+  });
+};
+
+// Переключение типа расписания
+masterForm?.addEventListener('change', (e) => {
+  if (e.target.name === 'scheduleType') {
+    const type = e.target.value;
+    masterForm.querySelector('[data-schedule="weekly"]').style.display = (type === 'weekly') ? 'grid' : 'none';
+    masterForm.querySelector('[data-schedule="shift"]').style.display = (type === 'shift') ? 'grid' : 'none';
+  }
+});
+
+// Создание мастера
+masterForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!authState.isAuthorized) {
+    showBanner('Нет прав для выполнения действия', 'error');
+    return;
+  }
+
+  const fd = new FormData(masterForm);
+  const scheduleType = fd.get('scheduleType');
+
+  const specialties = String(fd.get('specialties') || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  const serviceIds = Array.from(masterForm.querySelector('select[name="serviceIds"]').selectedOptions)
+    .map(o => Number(o.value));
+
+  const payload = {
+    name: fd.get('name'),
+    specialties,
+    photoUrl: fd.get('photoUrl') || undefined,
+    description: fd.get('description') || '',
+    schedule: scheduleType === 'weekly' ? {
+      type: 'weekly',
+      weekly: {
+        days: Array.from(masterForm.querySelectorAll('input[name="weeklyDays"]:checked')).map(i => Number(i.value)),
+        start: fd.get('weeklyStart') || '10:00',
+        end: fd.get('weeklyEnd') || '19:00'
+      }
+    } : {
+      type: 'shift',
+      shift: {
+        workDays: Number(fd.get('shiftWork') || 2),
+        restDays: Number(fd.get('shiftRest') || 2),
+        anchorDate: fd.get('shiftAnchor') || new Date().toISOString().slice(0,10),
+        start: fd.get('shiftStart') || '10:00',
+        end: fd.get('shiftEnd') || '19:00'
+      }
+    },
+    serviceIds
+  };
+
+  const response = await apiFetch('/api/masters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    await handleError(response);
+    return;
+  }
+
+  const created = await response.json();
+  state.masters.push(created);
+  masterForm.reset();
+  renderMastersTable();
+  showBanner('Мастер добавлен');
+});
+
+// Обновления/удаление
+const updateMasterField = async (id, patch) => {
+  const response = await apiFetch(`/api/masters/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch)
+  });
+  if (!response.ok) {
+    await handleError(response);
+    return null;
+  }
+  const updated = await response.json();
+  const idx = state.masters.findIndex(m => m.id === id);
+  if (idx !== -1) state.masters[idx] = updated;
+  return updated;
+};
+
+mastersTableBody?.addEventListener('blur', async (e) => {
+  const cell = e.target;
+  if (!authState.isAuthorized || cell.tagName !== 'TD' || !cell.dataset.field) return;
+  const row = cell.closest('tr'); const id = Number(row?.dataset.id);
+  const master = state.masters.find(m => m.id === id); if (!id || !master) return;
+
+  const field = cell.dataset.field;
+  let value = cell.textContent.trim();
+
+  if (!value && (field === 'name')) {
+    cell.textContent = master[field] || '';
+    showBanner('Имя не может быть пустым', 'error'); return;
+  }
+
+  if (field === 'specialties') {
+    value = value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const ok = await updateMasterField(id, { specialties: value });
+    if (!ok) cell.textContent = (master.specialties||[]).join(', ');
+    else showBanner('Мастер обновлён');
+    return;
+  }
+
+  const ok = await updateMasterField(id, { [field]: value });
+  if (!ok) cell.textContent = master[field] || '';
+  else showBanner('Мастер обновлён');
+}, true);
+
+mastersTableBody?.addEventListener('change', async (e) => {
+  const target = e.target;
+  if (target.dataset.field === 'serviceIds') {
+    const row = target.closest('tr'); const id = Number(row?.dataset.id);
+    const selected = Array.from(target.selectedOptions).map(o => Number(o.value));
+    const ok = await updateMasterField(id, { serviceIds: selected });
+    if (ok) showBanner('Услуги мастера обновлены');
+  }
+});
+
+mastersTableBody?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-action="delete-master"]');
+  if (!btn) return;
+  if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+  const id = Number(btn.dataset.id);
+  if (!id || !confirm('Удалить мастера?')) return;
+  const response = await apiFetch(`/api/masters/${id}`, { method: 'DELETE' });
+  if (!response.ok) { await handleError(response); return; }
+  state.masters = state.masters.filter(m => m.id !== id);
+  renderMastersTable();
+  showBanner('Мастер удалён');
+});
+
+</script>
 </body>
 </html>
