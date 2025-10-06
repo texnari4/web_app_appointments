@@ -584,14 +584,14 @@
       <div class="form-grid">
         <div>
           <h2 style="display:flex;align-items:center;gap:10px;margin:0">
-            <a id="gsTableLink" href="#" target="_blank" style="text-decoration:none;">GS table</a>
-            <span class="muted" id="gsSheetIdLabel" style="font-size:12px"></span>
+            <span id="backupTitle" style="text-decoration:none;cursor:default;">Бэкап</span>
+            <span class="muted" id="backupHint" style="font-size:12px">Экспорт/импорт ZIP архива данных</span>
           </h2>
           <div class="auth-dev" style="margin-top:12px">
-            <button type="button" class="secondary-btn" id="gsExportBtn">Экспорт в Google Sheets</button>
-            <button type="button" class="primary-btn" id="gsImportBtn">Импорт из Google Sheets</button>
+            <button type="button" class="secondary-btn" id="gsExportBtn">Экспорт ZIP</button>
+            <button type="button" class="primary-btn" id="gsImportBtn">Импорт ZIP</button>
           </div>
-          <small class="muted">Требуются переменные окружения GOOGLE_SERVICE_ACCOUNT_JSON и GOOGLE_SHEET_ID. Доступ только для администраторов.</small>
+          <small class="muted">Доступ только для администраторов.</small>
         </div>
       </div>
       <div class="form-grid">
@@ -682,10 +682,8 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const clearManualIdBtn = document.getElementById('clearManualIdBtn');
       const bookingsWarning = document.getElementById('bookingsWarning');
       const adminsWarning = document.getElementById('adminsWarning');
-      const gsTableLink = document.getElementById('gsTableLink');
       const gsExportBtn = document.getElementById('gsExportBtn');
       const gsImportBtn = document.getElementById('gsImportBtn');
-      const gsSheetIdLabel = document.getElementById('gsSheetIdLabel');
 
       const tabsNav = document.querySelectorAll('nav.tabs button');
       const tabPanels = document.querySelectorAll('.tab-panel');
@@ -854,8 +852,48 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         loadBookings();
         loadAdmins();
         loadMasters();
-        initGsControls();
+        [gsExportBtn, gsImportBtn].forEach(btn => btn && (btn.disabled = !authState.isAuthorized));
       };
+
+      // === Backup export/import ===
+      gsExportBtn?.addEventListener('click', async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        try {
+          const resp = await apiFetch('/api/backup/export');
+          if (!resp.ok) { await handleError(resp); return; }
+          const blob = await resp.blob();
+          const disposition = resp.headers.get('Content-Disposition') || '';
+          const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/);
+          const fname = decodeURIComponent(match?.[1] || match?.[2] || 'backup.zip');
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+          showBanner('Экспортирован ZIP архив');
+        } catch (e) {
+          console.error(e); showBanner('Не удалось экспортировать архив', 'error');
+        }
+      });
+
+      gsImportBtn?.addEventListener('click', async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.zip,application/zip';
+        input.onchange = async () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          const fd = new FormData();
+          fd.append('file', file);
+          const resp = await apiFetch('/api/backup/import', { method: 'POST', body: fd });
+          if (!resp.ok) { await handleError(resp); return; }
+          const result = await resp.json();
+          // reload data
+          loadGroups(); loadServices(); loadBookings(); loadAdmins(); loadMasters();
+          showBanner(`Импортировано: ${result?.imported || 'OK'}`);
+        };
+        input.click();
+      });
 
       const switchTab = (tab) => {
         state.activeTab = tab;

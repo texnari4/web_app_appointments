@@ -34,6 +34,7 @@ EOF
 
 # --- server.mjs ---
 cat <<'EOF' > server.mjs
+import { readFileSync } from 'node:fs';
 import { createServer } from 'http';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { parse } from 'url';
@@ -64,6 +65,14 @@ const DEFAULT_GROUPS = [
   { id: 2, name: 'Парикмахерские услуги' },
   { id: 3, name: 'Ногтевой сервис' }
 ];
+
+function makeBackupName() {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yyyy = d.getFullYear();
+  return `time:${dd}.${mm}.${yyyy}.zip`;
+}
 
 const DEFAULT_SERVICES = [
   {
@@ -1241,6 +1250,80 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+        // === Backup ZIP (export) ===
+    if (pathname === '/api/backup/export' && req.method === 'GET') {
+      if (!ensureAuthorized(ctx, res, ['admin'])) return;
+      try {
+        const AdmZip = (await import('adm-zip')).default;
+        const zip = new AdmZip();
+        zip.addFile('groups.json', Buffer.from(JSON.stringify(readJSON(groupsFile, []), null, 2)));
+        zip.addFile('services.json', Buffer.from(JSON.stringify(readJSON(servicesFile, []), null, 2)));
+        zip.addFile('admins.json', Buffer.from(JSON.stringify(readJSON(adminsFile, []), null, 2)));
+        zip.addFile('masters.json', Buffer.from(JSON.stringify(readJSON(mastersFile, []), null, 2)));
+        zip.addFile('bookings.json', Buffer.from(JSON.stringify(readJSON(bookingsFile, []), null, 2)));
+        zip.addFile('manifest.json', Buffer.from(JSON.stringify({ createdAt: new Date().toISOString(), version: 1 }, null, 2)));
+        const name = makeBackupName();
+        const buf = zip.toBuffer();
+        res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}` });
+        res.end(buf);
+      } catch (e) {
+        console.error(e);
+        sendJSON(res, 500, { error: String(e.message || e) });
+      }
+      return;
+    }
+
+    // === Backup ZIP (import) ===
+    if (pathname === '/api/backup/import' && req.method === 'POST') {
+      if (!ensureAuthorized(ctx, res, ['admin'])) return;
+      try {
+        const Busboy = (await import('busboy')).default;
+        const bb = Busboy({ headers: req.headers });
+        let zipBuffer = Buffer.alloc(0);
+        let received = false;
+        await new Promise((resolve, reject) => {
+          bb.on('file', (_name, stream) => {
+            received = true;
+            stream.on('data', (chunk) => { zipBuffer = Buffer.concat([zipBuffer, chunk]); });
+            stream.on('error', reject);
+          });
+          bb.on('error', reject);
+          bb.on('finish', resolve);
+          req.pipe(bb);
+        });
+        if (!received || !zipBuffer.length) { sendJSON(res, 400, { error: 'Файл не получен' }); return; }
+        const AdmZip = (await import('adm-zip')).default;
+        const zip = new AdmZip(zipBuffer);
+        const entries = Object.fromEntries(zip.getEntries().map(e => [e.entryName, e]));
+        function readJsonEntry(name) {
+          const e = entries[name]; if (!e) return null;
+          try { return JSON.parse(e.getData().toString('utf-8')); } catch { return null; }
+        }
+        const groups = readJsonEntry('groups.json');
+        const services = readJsonEntry('services.json');
+        const admins = readJsonEntry('admins.json');
+        const masters = readJsonEntry('masters.json');
+        const bookings = readJsonEntry('bookings.json');
+        if (groups) writeJSON(groupsFile, groups);
+        if (services) writeJSON(servicesFile, services);
+        if (admins) writeJSON(adminsFile, admins);
+        if (masters) writeJSON(mastersFile, masters);
+        if (bookings) writeJSON(bookingsFile, bookings);
+        const imported = {
+          groups: Array.isArray(groups) ? groups.length : 0,
+          services: Array.isArray(services) ? services.length : 0,
+          admins: Array.isArray(admins) ? admins.length : 0,
+          masters: Array.isArray(masters) ? masters.length : 0,
+          bookings: Array.isArray(bookings) ? bookings.length : 0
+        };
+        sendJSON(res, 200, { status: 'ok', imported });
+      } catch (e) {
+        console.error(e);
+        sendJSON(res, 500, { error: String(e.message || e) });
+      }
+      return;
+    }
+
     sendJSON(res, 404, { error: 'Файл не найден' });
   } catch (error) {
     console.error('Необработанная ошибка сервера:', error);
@@ -1854,6 +1937,7 @@ cp "$SCRIPT_DIR/templates/admin.html" public/admin.html
 
 echo ">>> Установка зависимостей..."
 npm install --omit=dev
+npm install adm-zip busboy --omit=dev
 
 echo ">>> Запуск сервера..."
 npm start
