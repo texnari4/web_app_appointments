@@ -448,11 +448,12 @@
         </fieldset>
 
         <label>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
             <span>Услуги мастера</span>
-            <span style="display:inline-flex;gap:6px">
-              <button type="button" class="secondary-btn" id="masterServicesAdd" title="Добавить услугу">+</button>
-              <button type="button" class="secondary-btn" id="masterServicesRemove" title="Удалить выбранные">−</button>
+            <span style="display:inline-flex;gap:8px;align-items:center">
+              <select id="masterServicesPicker"></select>
+              <button type="button" class="secondary-btn" id="masterServicesAdd" title="Добавить выбранную из списка">Добавить</button>
+              <button type="button" class="secondary-btn" id="masterServicesRemove" title="Удалить выбранные ниже">Удалить</button>
             </span>
           </div>
           <select name="serviceIds" multiple size="6"></select>
@@ -1219,6 +1220,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         }
         state.services = await response.json();
         renderServicesTable();
+        renderMasterServiceOptions();
       };
 
       const loadBookings = async () => {
@@ -1701,32 +1703,34 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         select.innerHTML = state.services.map(s =>
           `<option value="${s.id}">${escapeHtml(s.name)} (${s.duration} мин)</option>`
         ).join('');
+        updateMasterPickerOptions();
       };
 
-      // Кнопки +/− для управления услугами в форме мастера
+      // Кнопки и выпадающий селект для управления услугами мастера
       const masterServicesSelect = masterForm?.querySelector('select[name="serviceIds"]');
+      const masterServicesPicker = document.getElementById('masterServicesPicker');
       const masterServicesAddBtn = document.getElementById('masterServicesAdd');
       const masterServicesRemoveBtn = document.getElementById('masterServicesRemove');
 
-      masterServicesAddBtn?.addEventListener('click', () => {
-        if (!masterServicesSelect) return;
-        // список услуг, которых ещё нет в выборе
+      function updateMasterPickerOptions() {
+        if (!masterServicesPicker || !masterServicesSelect) return;
         const selectedIds = new Set(Array.from(masterServicesSelect.selectedOptions).map(o => Number(o.value)));
-        const alreadyIds = new Set(Array.from(masterServicesSelect.options).filter(o => o.selected).map(o => Number(o.value)));
-        const available = state.services.filter(s => !alreadyIds.has(s.id));
-        if (!available.length) {
-          showBanner('Все услуги уже добавлены', 'error');
-          return;
+        const options = state.services
+          .filter(s => !selectedIds.has(s.id))
+          .map(s => `<option value="${s.id}">${escapeHtml(s.name)} (${s.duration} мин)</option>`);
+        masterServicesPicker.innerHTML = options.join('');
+        masterServicesPicker.disabled = options.length === 0;
+      }
+
+      masterServicesAddBtn?.addEventListener('click', () => {
+        if (!masterServicesPicker || !masterServicesSelect) return;
+        const val = masterServicesPicker.value;
+        if (!val) { showBanner('Нет доступных услуг для добавления', 'error'); return; }
+        const opt = Array.from(masterServicesSelect.options).find(o => o.value === val);
+        if (opt) {
+          opt.selected = true;
+          updateMasterPickerOptions();
         }
-        // простое диалоговое окно выбора по индексу
-        const msg = 'Выберите услугу для добавления (введите номер):\n' + available.map((s, i) => `${i+1}. ${s.name} (${s.duration} мин)`).join('\n');
-        const input = prompt(msg);
-        const idx = Number(input) - 1;
-        if (!Number.isFinite(idx) || idx < 0 || idx >= available.length) return;
-        const add = available[idx];
-        // отметить в мультиселекте
-        const option = Array.from(masterServicesSelect.options).find(o => Number(o.value) === add.id);
-        if (option) option.selected = true;
       });
 
       masterServicesRemoveBtn?.addEventListener('click', () => {
@@ -1734,7 +1738,10 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         const sel = Array.from(masterServicesSelect.selectedOptions);
         if (!sel.length) { showBanner('Выберите услуги для удаления', 'error'); return; }
         sel.forEach(o => { o.selected = false; });
+        updateMasterPickerOptions();
       });
+
+      masterServicesSelect?.addEventListener('change', updateMasterPickerOptions);
 
       const renderMastersTable = () => {
         mastersTableBody.innerHTML = '';
@@ -1889,6 +1896,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         const created = await response.json();
         state.masters.push(created);
         masterForm.reset();
+        renderMasterServiceOptions();
         renderMastersTable();
         showBanner('Мастер добавлен');
       });

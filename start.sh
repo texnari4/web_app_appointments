@@ -48,6 +48,7 @@ const servicesFile = join(DATA_DIR, 'services.json');
 const groupsFile = join(DATA_DIR, 'groups.json');
 const bookingsFile = join(DATA_DIR, 'bookings.json');
 const adminsFile = join(DATA_DIR, 'admins.json');
+const mastersFile = join(DATA_DIR, 'masters.json');
 
 const SLOT_STEP_MIN = Number(process.env.SLOT_STEP_MIN || 30);
 const BUSINESS_OPEN_TIME = process.env.BUSINESS_OPEN_TIME || '09:00';
@@ -87,6 +88,7 @@ const DEFAULT_SERVICES = [
 ];
 
 const DEFAULT_BOOKINGS = [];
+const DEFAULT_MASTERS = [];
 
 const DEFAULT_ADMINS = [
   {
@@ -120,6 +122,7 @@ ensureDataFile(groupsFile, DEFAULT_GROUPS);
 ensureDataFile(servicesFile, DEFAULT_SERVICES);
 ensureDataFile(bookingsFile, DEFAULT_BOOKINGS);
 ensureDataFile(adminsFile, DEFAULT_ADMINS);
+ensureDataFile(mastersFile, DEFAULT_MASTERS);
 
 function readJSON(file, fallback = []) {
   try {
@@ -989,9 +992,112 @@ const server = createServer(async (req, res) => {
     }
 
     if (pathname === '/admin' || pathname === '/admin/' || pathname.startsWith('/admin')) {
-      const html = readFileSync(join(__dirname, 'public', 'admin.html'), 'utf-8');
+      const adminPrimary = join(__dirname, 'templates', 'admin.html');
+      const adminFallback = join(__dirname, 'public', 'admin.html');
+      const adminPath = existsSync(adminPrimary) ? adminPrimary : adminFallback;
+      const html = readFileSync(adminPath, 'utf-8');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
+      return;
+    }
+    // ===== MASTERS API =====
+    if (pathname === '/api/masters' && req.method === 'GET') {
+      const masters = readJSON(mastersFile, []);
+      sendJSON(res, 200, masters);
+      return;
+    }
+
+    if (pathname === '/api/masters' && req.method === 'POST') {
+      if (!ensureAuthorized(ctx, res, ['admin'])) {
+        return;
+      }
+      const body = await readBody(req);
+      const payload = JSON.parse(body || '{}');
+
+      const name = String(payload.name ?? '').trim();
+      if (!name) {
+        sendJSON(res, 400, { error: 'Имя мастера обязательно' });
+        return;
+      }
+
+      const masters = readJSON(mastersFile, []);
+      const newMaster = {
+        id: Date.now(),
+        name,
+        specialties: Array.isArray(payload.specialties) ? payload.specialties.map(s => String(s)) : [],
+        photoUrl: payload.photoUrl ? String(payload.photoUrl) : null,
+        description: String(payload.description ?? ''),
+        schedule: payload.schedule ?? null,
+        serviceIds: Array.isArray(payload.serviceIds) ? payload.serviceIds.map(n => Number(n)).filter(Number.isFinite) : []
+      };
+
+      masters.push(newMaster);
+      writeJSON(mastersFile, masters);
+      sendJSON(res, 201, newMaster);
+      return;
+    }
+
+    if (pathname.startsWith('/api/masters/') && req.method === 'PUT') {
+      if (!ensureAuthorized(ctx, res, ['admin'])) {
+        return;
+      }
+      const id = parseId(pathname);
+      if (!id) {
+        sendJSON(res, 400, { error: 'Некорректный идентификатор мастера' });
+        return;
+      }
+
+      const body = await readBody(req);
+      const patch = JSON.parse(body || '{}');
+      const masters = readJSON(mastersFile, []);
+      const idx = masters.findIndex((m) => m.id === id);
+      if (idx === -1) {
+        sendJSON(res, 404, { error: 'Мастер не найден' });
+        return;
+      }
+
+      const current = masters[idx];
+      const next = {
+        ...current,
+        ...patch,
+        name: patch.name !== undefined ? String(patch.name).trim() : current.name,
+        specialties: patch.specialties !== undefined ? (Array.isArray(patch.specialties) ? patch.specialties.map(String) : current.specialties) : current.specialties,
+        photoUrl: patch.photoUrl !== undefined ? (patch.photoUrl ? String(patch.photoUrl) : null) : current.photoUrl,
+        description: patch.description !== undefined ? String(patch.description) : current.description,
+        schedule: patch.schedule !== undefined ? patch.schedule : current.schedule,
+        serviceIds: patch.serviceIds !== undefined ? (Array.isArray(patch.serviceIds) ? patch.serviceIds.map(n => Number(n)).filter(Number.isFinite) : current.serviceIds) : current.serviceIds
+      };
+
+      if (!next.name) {
+        sendJSON(res, 400, { error: 'Имя мастера обязательно' });
+        return;
+      }
+
+      masters[idx] = next;
+      writeJSON(mastersFile, masters);
+      sendJSON(res, 200, next);
+      return;
+    }
+
+    if (pathname.startsWith('/api/masters/') && req.method === 'DELETE') {
+      if (!ensureAuthorized(ctx, res, ['admin'])) {
+        return;
+      }
+      const id = parseId(pathname);
+      if (!id) {
+        sendJSON(res, 400, { error: 'Некорректный идентификатор мастера' });
+        return;
+      }
+
+      const masters = readJSON(mastersFile, []);
+      const nextMasters = masters.filter((m) => m.id !== id);
+      if (nextMasters.length === masters.length) {
+        sendJSON(res, 404, { error: 'Мастер не найден' });
+        return;
+      }
+
+      writeJSON(mastersFile, nextMasters);
+      sendJSON(res, 200, { success: true });
       return;
     }
 
@@ -1006,7 +1112,8 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => console.log(`✅ Сервер запущен на порту ${PORT}`));
 EOF
 
-# --- admin.html ---
+#
+# --- client.html ---
 cat <<'EOF' > public/client.html
 <!DOCTYPE html>
 <html lang="ru">
@@ -1610,3 +1717,152 @@ npm install --omit=dev
 
 echo ">>> Запуск сервера..."
 npm start
+
+ # --- admin.html ---
+ cat <<'EOF' > public/admin.html
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Админка — Masters CRUD</title>
+  <style>
+    body{font-family:system-ui,-apple-system,'Segoe UI',Inter,sans-serif;margin:0;padding:24px;background:#f6f7fb;color:#111827}
+    main{max-width:1000px;margin:0 auto;display:grid;gap:20px}
+    section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:16px;padding:18px;display:grid;gap:12px}
+    label{display:grid;gap:6px;color:#4b5563;font-size:14px}
+    input,select,textarea{border:1px solid rgba(148,163,184,.45);border-radius:10px;padding:10px 12px;font:inherit}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-top:1px solid rgba(209,213,219,.6);padding:8px 10px;text-align:left;vertical-align:top}
+    .primary-btn{background:#2563eb;color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer}
+    .secondary-btn{background:#e5e7eb;color:#111827;border:none;border-radius:10px;padding:8px 12px;cursor:pointer}
+    .danger-btn{background:#ef4444;color:#fff;border:none;border-radius:10px;padding:8px 12px;cursor:pointer}
+    .muted{color:#6b7280}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Админка — Мастера</h1>
+  <section>
+    <h2>Добавить мастера</h2>
+    <form id="masterForm">
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+        <label>Имя<input name="name" required placeholder="Анна Петрова"></label>
+        <label>Специальности<input name="specialties" placeholder="бровист, визажист"></label>
+        <label style="grid-column:1/3">Фото (URL)<input name="photoUrl" placeholder="https://.../photo.jpg"></label>
+        <label style="grid-column:1/3">Описание<textarea name="description" rows="3"></textarea></label>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <select id="masterServicesPicker"></select>
+        <button type="button" class="secondary-btn" id="masterServicesAdd">Добавить услугу</button>
+        <button type="button" class="secondary-btn" id="masterServicesRemove">Удалить выбранные</button>
+      </div>
+      <label style="margin-top:8px">Услуги мастера
+        <select name="serviceIds" multiple size="6"></select>
+      </label>
+      <div style="margin-top:10px">
+        <button class="primary-btn" type="submit">Добавить мастера</button>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <h2>Список мастеров</h2>
+    <table>
+      <thead><tr><th>Имя</th><th>Спец-ть</th><th>Услуги</th><th></th></tr></thead>
+      <tbody id="mastersTable"></tbody>
+    </table>
+  </section>
+</main>
+<script>
+(async function(){
+  const masterForm = document.getElementById('masterForm');
+  const mastersTable = document.getElementById('mastersTable');
+  const servicesPicker = document.getElementById('masterServicesPicker');
+  const addBtn = document.getElementById('masterServicesAdd');
+  const removeBtn = document.getElementById('masterServicesRemove');
+  const servicesSelect = masterForm.querySelector('select[name="serviceIds"]');
+
+  const state = { services: [], masters: [] };
+  const api = (path, opts={}) => fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+
+  const loadServices = async()=>{
+    const r = await api('/api/services');
+    state.services = r.ok ? await r.json() : [];
+    servicesSelect.innerHTML = state.services.map(s=>`<option value="${s.id}">${s.name} (${s.duration} мин)</option>`).join('');
+    updatePicker();
+  };
+
+  function updatePicker(){
+    const selected = new Set(Array.from(servicesSelect.selectedOptions).map(o=>Number(o.value)));
+    const options = state.services.filter(s=>!selected.has(s.id)).map(s=>`<option value="${s.id}">${s.name} (${s.duration} мин)</option>`);
+    servicesPicker.innerHTML = options.join('');
+    servicesPicker.disabled = options.length===0;
+  }
+
+  addBtn.addEventListener('click',()=>{
+    const val = servicesPicker.value; if(!val) return;
+    const opt = Array.from(servicesSelect.options).find(o=>o.value===val);
+    if(opt){ opt.selected = true; updatePicker(); }
+  });
+  removeBtn.addEventListener('click',()=>{
+    const sel = Array.from(servicesSelect.selectedOptions); if(!sel.length) return;
+    sel.forEach(o=>o.selected=false); updatePicker();
+  });
+  servicesSelect.addEventListener('change', updatePicker);
+
+  const renderMasters = ()=>{
+    mastersTable.innerHTML = '';
+    if(!state.masters.length){ mastersTable.innerHTML = '<tr><td colspan="4" class="muted">Пока нет мастеров</td></tr>'; return; }
+    state.masters.forEach(m=>{
+      const tr = document.createElement('tr');
+      const services = (m.serviceIds||[]).map(id=>state.services.find(s=>s.id===id)?.name).filter(Boolean).join(', ');
+      tr.innerHTML = `<td>${m.name||''}</td><td>${(m.specialties||[]).join(', ')}</td><td>${services||'—'}</td><td><button data-id="${m.id}" class="danger-btn">Удалить</button></td>`;
+      mastersTable.appendChild(tr);
+    });
+  };
+
+  const loadMasters = async()=>{
+    const r = await api('/api/masters');
+    state.masters = r.ok ? await r.json() : [];
+    renderMasters();
+  };
+
+  masterForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(masterForm);
+    const serviceIds = Array.from(servicesSelect.selectedOptions).map(o=>Number(o.value));
+    const payload = {
+      name: fd.get('name'),
+      specialties: String(fd.get('specialties')||'').split(',').map(s=>s.trim()).filter(Boolean),
+      photoUrl: fd.get('photoUrl')||null,
+      description: fd.get('description')||'',
+      schedule: null,
+      serviceIds
+    };
+    const r = await api('/api/masters', { method: 'POST', body: JSON.stringify(payload) });
+    if(!r.ok){ alert('Ошибка при добавлении мастера'); return; }
+    const created = await r.json();
+    state.masters.push(created);
+    masterForm.reset();
+    servicesSelect.selectedIndex = -1;
+    updatePicker();
+    renderMasters();
+  });
+
+  mastersTable.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('button.danger-btn'); if(!btn) return;
+    const id = Number(btn.dataset.id); if(!id) return;
+    const r = await api(`/api/masters/${id}`, { method: 'DELETE' });
+    if(!r.ok){ alert('Ошибка удаления'); return; }
+    state.masters = state.masters.filter(m=>m.id!==id);
+    renderMasters();
+  });
+
+  await loadServices();
+  await loadMasters();
+})();
+</script>
+</body>
+</html>
+EOF
