@@ -2081,18 +2081,6 @@ masterGroupAddBtn?.addEventListener('click', () => {
         }
       });
 
-      const initialId = detectTelegramId();
-      if (initialId) {
-        authState.telegramId = initialId;
-      }
-      updateAuthStatus();
-      refreshAccess();
-      switchTab(state.activeTab);
-    });
-</script>
-</body>
-</html>
-
       // === Google Sheets integration helpers ===
       const fetchGsUrl = async () => {
         try {
@@ -2113,11 +2101,13 @@ masterGroupAddBtn?.addEventListener('click', () => {
       }
 
       gsTableLink?.addEventListener('click', async (e) => {
-        // если нет href — подгрузим
+        // если нет href — подгрузим и предотвратим переход по "#"
         if (!gsTableLink.href || gsTableLink.getAttribute('href') === '#') {
+          e.preventDefault();
           const data = await fetchGsUrl();
           if (data?.url) {
             gsTableLink.href = data.url;
+            window.open(data.url, '_blank');
           }
         }
       });
@@ -2143,3 +2133,14 @@ masterGroupAddBtn?.addEventListener('click', () => {
         loadMasters();
         showBanner(`Импорт выполнен: ${result.status || 'OK'}`);
       });
+
+      const initialId = detectTelegramId();
+      if (initialId) {
+        authState.telegramId = initialId;
+      }
+      updateAuthStatus();
+      refreshAccess();
+      switchTab(state.activeTab);
+    });
+</script>
+</body>
