@@ -1126,7 +1126,9 @@ const server = createServer(async (req, res) => {
     if (pathname === '/tg/webhook' && req.method === 'POST') {
       try {
         const raw = await readBody(req);
+        console.log('TG UPDATE RAW:', raw);
         const update = JSON.parse(raw || '{}');
+        console.log('TG UPDATE OBJ:', JSON.stringify(update));
         const msg = update.message || update.edited_message || (update.callback_query && update.callback_query.message) || null;
         const from = (update.message && update.message.from) || (update.edited_message && update.edited_message.from) || (update.callback_query && update.callback_query.from) || null;
         if (msg && from) {
@@ -1154,6 +1156,53 @@ const server = createServer(async (req, res) => {
 
     if (pathname === '/tg/info' && req.method === 'GET') {
       sendJSON(res, 200, { baseUrl: PUBLIC_BASE_URL, botConfigured: Boolean(TELEGRAM_BOT_TOKEN) });
+      return;
+    }
+
+    // Telegram webhook utilities
+    if (pathname === '/tg/getWebhookInfo' && req.method === 'GET') {
+      if (!TG_API) { sendJSON(res, 400, { error: 'TELEGRAM_BOT_TOKEN not set' }); return; }
+      try {
+        const r = await fetch(`${TG_API}/getWebhookInfo`);
+        const j = await r.json();
+        sendJSON(res, 200, j);
+      } catch (e) {
+        sendJSON(res, 500, { error: String(e.message||e) });
+      }
+      return;
+    }
+
+    if (pathname === '/tg/setWebhook' && req.method === 'GET') {
+      if (!TG_API) { sendJSON(res, 400, { error: 'TELEGRAM_BOT_TOKEN not set' }); return; }
+      const url = `${PUBLIC_BASE_URL}/tg/webhook`;
+      try {
+        const r = await fetch(`${TG_API}/setWebhook`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+        const j = await r.json();
+        sendJSON(res, 200, { requestedUrl: url, ...j });
+      } catch (e) {
+        sendJSON(res, 500, { error: String(e.message||e) });
+      }
+      return;
+    }
+
+    if (pathname === '/tg/deleteWebhook' && req.method === 'GET') {
+      if (!TG_API) { sendJSON(res, 400, { error: 'TELEGRAM_BOT_TOKEN not set' }); return; }
+      try {
+        const r = await fetch(`${TG_API}/deleteWebhook`, { method: 'POST' });
+        const j = await r.json();
+        sendJSON(res, 200, j);
+      } catch (e) {
+        sendJSON(res, 500, { error: String(e.message||e) });
+      }
+      return;
+    }
+
+    if (pathname === '/tg/test' && req.method === 'GET') {
+      if (!TG_API) { sendJSON(res, 400, { error: 'TELEGRAM_BOT_TOKEN not set' }); return; }
+      const chatId = query.chat_id || query.chatId;
+      if (!chatId) { sendJSON(res, 400, { error: 'chat_id required' }); return; }
+      await tgSendMessage(chatId, `Test OK: ${new Date().toISOString()}`);
+      sendJSON(res, 200, { ok: true });
       return;
     }
 
