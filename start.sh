@@ -34,7 +34,6 @@ EOF
 
 # --- server.mjs ---
 cat <<'EOF' > server.mjs
-import { readFileSync } from 'node:fs';
 import { createServer } from 'http';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { parse } from 'url';
