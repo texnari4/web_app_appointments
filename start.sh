@@ -50,6 +50,11 @@ const bookingsFile = join(DATA_DIR, 'bookings.json');
 const adminsFile = join(DATA_DIR, 'admins.json');
 const mastersFile = join(DATA_DIR, 'masters.json');
 
+const GOOGLE_SHEET_ID = process.env.GOOGLE_SHEET_ID || '1eHQ43tJYemxZJZGE8VDPJQ9duol7RHdbbNTPhUrTwLc';
+const GOOGLE_SERVICE_ACCOUNT_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || null;
+const GOOGLE_TOKEN_AUD = 'https://oauth2.googleapis.com/token';
+const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+
 const SLOT_STEP_MIN = Number(process.env.SLOT_STEP_MIN || 30);
 const BUSINESS_OPEN_TIME = process.env.BUSINESS_OPEN_TIME || '09:00';
 const BUSINESS_CLOSE_TIME = process.env.BUSINESS_CLOSE_TIME || '21:00';
@@ -136,6 +141,56 @@ function readJSON(file, fallback = []) {
 function writeJSON(file, data) {
   writeFileSync(file, JSON.stringify(data, null, 2));
 }
+
+async function getGoogleAccessToken() {
+  if (!GOOGLE_SERVICE_ACCOUNT_JSON) {
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON not set');
+  }
+  let creds;
+  try { creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON); } catch (e) { throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT_JSON'); }
+  const { client_email, private_key } = creds;
+  if (!client_email || !private_key) throw new Error('Service account creds missing client_email/private_key');
+
+  const now = Math.floor(Date.now()/1000);
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const claim = Buffer.from(JSON.stringify({ iss: client_email, scope: GOOGLE_SHEETS_SCOPE, aud: GOOGLE_TOKEN_AUD, exp: now + 3600, iat: now })).toString('base64url');
+  const input = `${header}.${claim}`;
+  const { createSign } = await import('node:crypto');
+  const signature = createSign('RSA-SHA256').update(input).end().sign(private_key).toString('base64url');
+  const jwt = `${input}.${signature}`;
+
+  const resp = await fetch(GOOGLE_TOKEN_AUD, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }) });
+  if (!resp.ok) { const t = await resp.text(); throw new Error(`Failed to get token: ${resp.status} ${t}`); }
+  const json = await resp.json();
+  return json.access_token;
+}
+
+async function sheetsValuesUpdate(spreadsheetId, range, values) {
+  const token = await getGoogleAccessToken();
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+  const resp = await fetch(url, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ range, values, majorDimension: 'ROWS' }) });
+  if (!resp.ok) throw new Error(`Sheets update failed: ${resp.status}`);
+  return await resp.json();
+}
+
+async function sheetsValuesClear(spreadsheetId, range) {
+  const token = await getGoogleAccessToken();
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:clear`;
+  const resp = await fetch(url, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+  if (!resp.ok) throw new Error(`Sheets clear failed: ${resp.status}`);
+  return await resp.json();
+}
+
+async function sheetsValuesGet(spreadsheetId, range) {
+  const token = await getGoogleAccessToken();
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
+  const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+  if (!resp.ok) throw new Error(`Sheets get failed: ${resp.status}`);
+  return await resp.json();
+}
+
+function toCsvList(arr) { return Array.isArray(arr) ? arr.join(', ') : ''; }
+function toNum(val) { const n = Number(val); return Number.isFinite(n) ? n : null; }
 
 function sendJSON(res, statusCode, payload) {
   res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1098,6 +1153,91 @@ const server = createServer(async (req, res) => {
 
       writeJSON(mastersFile, nextMasters);
       sendJSON(res, 200, { success: true });
+      return;
+    }
+
+    // === Google Sheets integration ===
+    if (pathname === '/api/gs/url' && req.method === 'GET') {
+      const url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/edit`;
+      sendJSON(res, 200, { url, sheetId: GOOGLE_SHEET_ID });
+      return;
+    }
+
+    if (pathname === '/api/gs/export' && req.method === 'POST') {
+      if (!ensureAuthorized(ctx, res, ['admin'])) return;
+      try {
+        const groups = readJSON(groupsFile, []);
+        const services = readJSON(servicesFile, []);
+        const admins = readJSON(adminsFile, []);
+        const masters = readJSON(mastersFile, []);
+        const bookings = readJSON(bookingsFile, []);
+
+        const groupsValues = [['id','name'], ...groups.map(g => [g.id, g.name])];
+        const servicesValues = [['id','name','description','price','duration','groupId'], ...services.map(s => [s.id, s.name, s.description, s.price, s.duration, s.groupId ?? ''])];
+        const adminsValues = [['id','username','displayName','role'], ...admins.map(a => [a.id, a.username, a.displayName||'', a.role])];
+        const mastersValues = [['id','name','specialties','photoUrl','description','schedule_json','serviceIds'], ...masters.map(m => [m.id, m.name, toCsvList(m.specialties||[]), m.photoUrl||'', m.description||'', JSON.stringify(m.schedule||null), toCsvList(m.serviceIds||[])])];
+        const bookingsValues = [['id','createdAt','updatedAt','status','clientName','clientPhone','notes','serviceId','serviceName','serviceDuration','servicePrice','masterId','date','startTime','duration'], ...bookings.map(b => [b.id,b.createdAt,b.updatedAt,b.status,b.clientName,b.clientPhone||'',b.notes||'',b.serviceId,b.serviceName||'',b.serviceDuration||'',b.servicePrice||'',b.masterId??'',b.date,b.startTime,b.duration])];
+
+        await sheetsValuesClear(GOOGLE_SHEET_ID, 'Groups!A:Z');
+        await sheetsValuesUpdate(GOOGLE_SHEET_ID, 'Groups!A1', groupsValues);
+        await sheetsValuesClear(GOOGLE_SHEET_ID, 'Services!A:Z');
+        await sheetsValuesUpdate(GOOGLE_SHEET_ID, 'Services!A1', servicesValues);
+        await sheetsValuesClear(GOOGLE_SHEET_ID, 'Admins!A:Z');
+        await sheetsValuesUpdate(GOOGLE_SHEET_ID, 'Admins!A1', adminsValues);
+        await sheetsValuesClear(GOOGLE_SHEET_ID, 'Masters!A:Z');
+        await sheetsValuesUpdate(GOOGLE_SHEET_ID, 'Masters!A1', mastersValues);
+        await sheetsValuesClear(GOOGLE_SHEET_ID, 'Bookings!A:Z');
+        await sheetsValuesUpdate(GOOGLE_SHEET_ID, 'Bookings!A1', bookingsValues);
+
+        sendJSON(res, 200, { status: 'ok', updated: 'Sheets updated' });
+      } catch (e) {
+        console.error(e);
+        sendJSON(res, 500, { error: String(e.message || e) });
+      }
+      return;
+    }
+
+    if (pathname === '/api/gs/import' && req.method === 'POST') {
+      if (!ensureAuthorized(ctx, res, ['admin'])) return;
+      try {
+        const groupsResp = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Groups!A1:Z');
+        const servicesResp = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Services!A1:Z');
+        const adminsResp = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Admins!A1:Z');
+        const mastersResp = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Masters!A1:Z');
+        const bookingsResp = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Bookings!A1:Z');
+
+        function rowsToObjects(values, headersExpected) {
+          const rows = values?.values || [];
+          if (rows.length <= 1) return [];
+          const headers = rows[0];
+          const idx = Object.fromEntries(headers.map((h,i)=>[h,i]));
+          return rows.slice(1).filter(r=>r.length>0).map(r=>{
+            const obj = {};
+            headersExpected.forEach((h)=>{ obj[h] = r[idx[h]] ?? ''; });
+            return obj;
+          });
+        }
+
+        const groups = rowsToObjects(groupsResp, ['id','name']).map(r=>({ id: toNum(r.id) || Date.now(), name: String(r.name||'').trim() })).filter(g=>g.name);
+        writeJSON(groupsFile, groups);
+
+        const services = rowsToObjects(servicesResp, ['id','name','description','price','duration','groupId']).map(r=>({ id: toNum(r.id) || Date.now(), name: String(r.name||'').trim(), description: String(r.description||'').trim(), price: Number(r.price)||0, duration: Number(r.duration)||30, groupId: r.groupId===''?null:toNum(r.groupId) }));
+        writeJSON(servicesFile, services);
+
+        const admins = rowsToObjects(adminsResp, ['id','username','displayName','role']).map(r=>({ id: Number(r.id)||0, username: String(r.username||'').replace(/^@/,''), displayName: r.displayName||'', role: r.role==='owner'?'owner':'admin' })).filter(a=>a.id>0 && a.username);
+        writeJSON(adminsFile, admins.length?admins:readJSON(adminsFile, []));
+
+        const masters = rowsToObjects(mastersResp, ['id','name','specialties','photoUrl','description','schedule_json','serviceIds']).map(r=>({ id: toNum(r.id)||Date.now(), name: String(r.name||'').trim(), specialties: String(r.specialties||'').split(',').map(s=>s.trim()).filter(Boolean), photoUrl: r.photoUrl||null, description: r.description||'', schedule: (()=>{ try { return r.schedule_json?JSON.parse(r.schedule_json):null; } catch { return null; } })(), serviceIds: String(r.serviceIds||'').split(',').map(s=>toNum(s)).filter(Number.isFinite) }));
+        writeJSON(mastersFile, masters);
+
+        const bookings = rowsToObjects(bookingsResp, ['id','createdAt','updatedAt','status','clientName','clientPhone','notes','serviceId','serviceName','serviceDuration','servicePrice','masterId','date','startTime','duration']).map(r=>({ id: toNum(r.id)||Date.now(), createdAt: r.createdAt||new Date().toISOString(), updatedAt: r.updatedAt||r.createdAt||new Date().toISOString(), status: r.status||'pending', clientName: r.clientName||'', clientPhone: r.clientPhone||'', notes: r.notes||'', serviceId: Number(r.serviceId)||0, serviceName: r.serviceName||'', serviceDuration: Number(r.serviceDuration)||null, servicePrice: Number(r.servicePrice)||null, masterId: r.masterId===''?null:String(r.masterId), date: r.date||'', startTime: r.startTime||'', duration: Number(r.duration)||null }));
+        writeJSON(bookingsFile, bookings);
+
+        sendJSON(res, 200, { status: 'ok', imported: { groups: groups.length, services: services.length, admins: admins.length, masters: masters.length, bookings: bookings.length } });
+      } catch (e) {
+        console.error(e);
+        sendJSON(res, 500, { error: String(e.message || e) });
+      }
       return;
     }
 
