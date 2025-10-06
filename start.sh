@@ -35,7 +35,7 @@ EOF
 # --- server.mjs ---
 cat <<'EOF' > server.mjs
 import { createServer } from 'http';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
 import { parse } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -49,6 +49,21 @@ const groupsFile = join(DATA_DIR, 'groups.json');
 const bookingsFile = join(DATA_DIR, 'bookings.json');
 const adminsFile = join(DATA_DIR, 'admins.json');
 const mastersFile = join(DATA_DIR, 'masters.json');
+
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://beautyminiappappointments-production.up.railway.app').replace(/\/+$/,'');
+const TG_API = TELEGRAM_BOT_TOKEN ? `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}` : null;
+
+async function tgSendMessage(chatId, text, extra = {}) {
+  if (!TG_API) return;
+  try {
+    await fetch(`${TG_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra })
+    });
+  } catch {}
+}
 
 const GOOGLE_SHEET_ID = process.env.GOOGLE_SHEET_ID || '1eHQ43tJYemxZJZGE8VDPJQ9duol7RHdbbNTPhUrTwLc';
 const GOOGLE_SERVICE_ACCOUNT_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || null;
@@ -500,7 +515,52 @@ const server = createServer(async (req, res) => {
 
   try {
     if (pathname === '/health') {
-      sendText(res, 200, 'OK');
+      const files = [
+        { label: 'groups.json',   path: groupsFile,   get: () => readJSON(groupsFile, []) },
+        { label: 'services.json', path: servicesFile, get: () => readJSON(servicesFile, []) },
+        { label: 'admins.json',   path: adminsFile,   get: () => readJSON(adminsFile, []) },
+        { label: 'masters.json',  path: mastersFile,  get: () => readJSON(mastersFile, []) },
+        { label: 'bookings.json', path: bookingsFile, get: () => readJSON(bookingsFile, []) }
+      ];
+      const rowHtml = files.map(f => {
+        try {
+          const s = statSync(f.path);
+          const size = s.size;
+          const data = f.get();
+          const count = Array.isArray(data) ? data.length : (data && typeof data === 'object' ? Object.keys(data).length : 0);
+          return `<tr><td>${f.label}</td><td>${size}</td><td>${count}</td></tr>`;
+        } catch {
+          return `<tr><td>${f.label}</td><td>—</td><td>—</td></tr>`;
+        }
+      }).join('');
+      const mem = process.memoryUsage();
+      const uptime = `${Math.floor(process.uptime())}s`;
+      const html = `<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Health</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:#f6f7fb;color:#111827;margin:0;padding:24px}main{max-width:900px;margin:0 auto;display:grid;gap:16px}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:16px}table{width:100%;border-collapse:collapse}th,td{border-top:1px solid rgba(209,213,219,.6);padding:8px 10px;text-align:left}th{background:#f8fafc}</style>
+</head><body><main>
+<h1>Статус приложения</h1>
+<section>
+<p>Node.js: <b>${process.version}</b> · Uptime: <b>${uptime}</b></p>
+<p>BASE_URL: <code>${PUBLIC_BASE_URL}</code> · Telegram bot: <b>${TELEGRAM_BOT_TOKEN ? 'configured' : 'not set'}</b></p>
+<p>Memory RSS: <b>${mem.rss}</b>, Heap Used: <b>${mem.heapUsed}</b></p>
+</section>
+<section>
+<h2>Файлы данных</h2>
+<table><thead><tr><th>Файл</th><th>Размер (байт)</th><th>Количество записей</th></tr></thead><tbody>${rowHtml}</tbody></table>
+</section>
+<section>
+<h2>Ссылки</h2>
+<ul>
+<li><a href="/client">/client</a></li>
+<li><a href="/admin">/admin</a></li>
+<li><a href="/api/backup/export">/api/backup/export</a> (zip)</li>
+</ul>
+</section>
+</main></body></html>`;
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
       return;
     }
 
@@ -1063,6 +1123,40 @@ const server = createServer(async (req, res) => {
       res.end(html);
       return;
     }
+    if (pathname === '/tg/webhook' && req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const update = JSON.parse(raw || '{}');
+        const msg = update.message || update.edited_message || (update.callback_query && update.callback_query.message) || null;
+        const from = (update.message && update.message.from) || (update.edited_message && update.edited_message.from) || (update.callback_query && update.callback_query.from) || null;
+        if (msg && from) {
+          const chatId = msg.chat.id;
+          const userId = from.id;
+          const text = (update.message?.text || update.edited_message?.text || update.callback_query?.data || '').trim();
+          if (/^\/start\b/.test(text)) {
+            await tgSendMessage(chatId, '👋 Привет! Доступные команды:\n• /client — открыть клиентскую форму\n• /admin — админ-панель');
+          } else if (/^\/client\b/.test(text)) {
+            const url = `${PUBLIC_BASE_URL}/client`;
+            await tgSendMessage(chatId, `🧾 <b>Клиентская форма</b>\n${url}`);
+          } else if (/^\/admin\b/.test(text)) {
+            const url = `${PUBLIC_BASE_URL}/admin?tg_id=${userId}`;
+            await tgSendMessage(chatId, `🛠 <b>Админ-панель</b>\n${url}`);
+          } else {
+            await tgSendMessage(chatId, 'Не знаю эту команду. Попробуйте /client или /admin');
+          }
+        }
+        sendJSON(res, 200, { ok: true });
+      } catch (e) {
+        sendJSON(res, 200, { ok: true });
+      }
+      return;
+    }
+
+    if (pathname === '/tg/info' && req.method === 'GET') {
+      sendJSON(res, 200, { baseUrl: PUBLIC_BASE_URL, botConfigured: Boolean(TELEGRAM_BOT_TOKEN) });
+      return;
+    }
+
     // ===== MASTERS API =====
     if (pathname === '/api/masters' && req.method === 'GET') {
       const masters = readJSON(mastersFile, []);
