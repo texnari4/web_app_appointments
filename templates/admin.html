@@ -222,8 +222,9 @@
     }
 
     .table-actions {
-      width: 140px;
+      width: auto;
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
     }
 
@@ -310,6 +311,12 @@
       background: linear-gradient(135deg, #ff5f5f, #f43f5e);
       box-shadow: 0 22px 38px -26px rgba(244, 63, 94, 0.55);
     }
+
+    /* Icon buttons for compact actions */
+  .icon-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:8px; width:36px; height:36px; border-radius:10px; border:1px solid rgba(148,163,184,.35); background:#f3f6fc; cursor:pointer }
+  .icon-btn.primary { background: linear-gradient(135deg, #5ec5ff, #007aff); color:#fff; border-color: transparent }
+  .icon-btn.danger  { background: linear-gradient(135deg, #ff9eb5, #ff6b81); color:#fff; border-color: transparent }
+  .icon-btn svg { width:18px; height:18px }
 
     @media (max-width: 960px) {
       body {
@@ -446,6 +453,15 @@
             <label>Конец <input type="time" name="shiftEnd" value="19:00" /></label>
           </div>
         </fieldset>
+
+      <label>
+        Группа услуг
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+       <select id="masterGroupPicker"></select>
+       <button type="button" class="secondary-btn" id="masterGroupAdd" title="Добавить все услуги выбранной группы">Добавить группу</button>
+       </div>
+       <small class="muted">При добавлении группы все услуги из неё добавятся в список ниже</small>
+      </label>
 
         <label>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
@@ -628,6 +644,7 @@
       const bookingsTableBody = document.querySelector('#bookingsTable tbody');
       const adminsTableBody = document.querySelector('#adminsTable tbody');
 
+
       const mastersTableBody = document.querySelector('#mastersTable tbody');
 const masterForm = document.getElementById('masterForm');
 const bookingStatusFilter = document.getElementById('bookingStatusFilter');
@@ -637,6 +654,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const groupForm = document.getElementById('groupForm');
       const serviceFormGroupSelect = serviceForm.querySelector('select[name="groupId"]');
       const banner = document.getElementById('banner');
+
 
       const authStatus = document.getElementById('authStatus');
       const manualTelegramId = document.getElementById('manualTelegramId');
@@ -1194,6 +1212,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         renderGroupFilter();
         renderGroupsTable();
         renderServicesTable();
+        renderGroupOptionsForMasters();
       };
 
       const renderGroupOptions = () => {
@@ -1339,6 +1358,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         serviceForm.reset();
         renderServicesTable();
         showBanner('Услуга создана');
+        await loadServices(); // обновляем селекты в «Мастера»
       });
 
       groupForm.addEventListener('submit', async (event) => {
@@ -1703,6 +1723,9 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const masterServicesAddBtn = document.getElementById('masterServicesAdd');
       const masterServicesRemoveBtn = document.getElementById('masterServicesRemove');
 
+      const masterGroupPicker  = document.getElementById('masterGroupPicker');
+      const masterGroupAddBtn  = document.getElementById('masterGroupAdd');
+
       function getChosenIds() {
         return Array.from(masterServicesChosen.options).map(o => Number(o.value));
       }
@@ -1715,6 +1738,11 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           .map(s => `<option value="${s.id}">${escapeHtml(s.name)} (${s.duration} мин)</option>`);
         masterServicesPicker.innerHTML = options.join('');
         masterServicesPicker.disabled = options.length === 0;
+        const renderMasterServiceOptions = () => {
+          if (!masterForm) return;
+          updateMasterPickerOptions();
+          renderGroupOptionsForMasters();
+        };
       }
 
       function renderChosenServices(ids = getChosenIds()) {
@@ -1727,6 +1755,13 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           })
           .join('');
       }
+
+      function renderGroupOptionsForMasters() {
+  if (!masterGroupPicker) return;
+  masterGroupPicker.innerHTML = state.groups
+    .map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`)
+    .join('');
+}
 
       masterServicesAddBtn?.addEventListener('click', () => {
         if (!masterServicesPicker) return;
@@ -1745,6 +1780,17 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         renderChosenServices(ids);
         updateMasterPickerOptions();
       });
+
+
+masterGroupAddBtn?.addEventListener('click', () => {
+  const groupId = Number(masterGroupPicker.value);
+  if (!Number.isFinite(groupId)) return;
+  const servicesInGroup = state.services.filter(s => s.groupId === groupId).map(s => s.id);
+  const ids = new Set(getChosenIds());
+  servicesInGroup.forEach(id => ids.add(id));
+  renderChosenServices(Array.from(ids));
+  updateMasterPickerOptions();
+});
 
       const renderMasterServiceOptions = () => {
         if (!masterForm) return;
@@ -1810,30 +1856,33 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           const actions = document.createElement('td');
           actions.className = 'table-actions';
           if (editable) {
-            const edit = document.createElement('button');
-            edit.type = 'button';
-            edit.className = 'secondary-btn';
-            edit.dataset.action = 'edit-master';
-            edit.dataset.id = m.id;
-            edit.textContent = 'Редактировать';
-            actions.appendChild(edit);
+const edit = document.createElement('button');
+edit.type = 'button';
+edit.className = 'icon-btn';
+edit.dataset.action = 'edit-master';
+edit.dataset.id = m.id;
+edit.title = 'Редактировать';
+edit.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
+actions.appendChild(edit);
 
-            const save = document.createElement('button');
-            save.type = 'button';
-            save.className = 'primary-btn';
-            save.dataset.action = 'save-master';
-            save.dataset.id = m.id;
-            save.textContent = 'Сохранить';
-            save.style.display = 'none';
-            actions.appendChild(save);
+const save = document.createElement('button');
+save.type = 'button';
+save.className = 'icon-btn primary';
+save.dataset.action = 'save-master';
+save.dataset.id = m.id;
+save.title = 'Сохранить';
+save.style.display = 'none';
+save.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>';
+actions.appendChild(save);
 
-            const del = document.createElement('button');
-            del.type = 'button';
-            del.className = 'danger-btn';
-            del.dataset.action = 'delete-master';
-            del.dataset.id = m.id;
-            del.textContent = 'Удалить';
-            actions.appendChild(del);
+const del = document.createElement('button');
+del.type = 'button';
+del.className = 'icon-btn danger';
+del.dataset.action = 'delete-master';
+del.dataset.id = m.id;
+del.title = 'Удалить';
+del.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>';
+actions.appendChild(del);
           }
 
           tr.append(photo, name, spec, desc, sched, servicesCell, actions);
