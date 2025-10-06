@@ -456,7 +456,8 @@
               <button type="button" class="secondary-btn" id="masterServicesRemove" title="Удалить выбранные ниже">Удалить</button>
             </span>
           </div>
-          <select name="serviceIds" multiple size="6"></select>
+          <small class="muted">Список добавленных услуг</small>
+          <select id="masterServicesChosen" multiple size="6"></select>
         </label>
 
         <button type="submit" class="primary-btn">Добавить мастера</button>
@@ -1696,52 +1697,59 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       };
 
       // ===== MASTERS: опции услуг и рендер таблицы =====
-      const renderMasterServiceOptions = () => {
-        if (!masterForm) return;
-        const select = masterForm.querySelector('select[name="serviceIds"]');
-        if (!select) return;
-        select.innerHTML = state.services.map(s =>
-          `<option value="${s.id}">${escapeHtml(s.name)} (${s.duration} мин)</option>`
-        ).join('');
-        updateMasterPickerOptions();
-      };
-
       // Кнопки и выпадающий селект для управления услугами мастера
-      const masterServicesSelect = masterForm?.querySelector('select[name="serviceIds"]');
       const masterServicesPicker = document.getElementById('masterServicesPicker');
+      const masterServicesChosen = document.getElementById('masterServicesChosen');
       const masterServicesAddBtn = document.getElementById('masterServicesAdd');
       const masterServicesRemoveBtn = document.getElementById('masterServicesRemove');
 
+      function getChosenIds() {
+        return Array.from(masterServicesChosen.options).map(o => Number(o.value));
+      }
+
       function updateMasterPickerOptions() {
-        if (!masterServicesPicker || !masterServicesSelect) return;
-        const selectedIds = new Set(Array.from(masterServicesSelect.selectedOptions).map(o => Number(o.value)));
+        if (!masterServicesPicker || !masterServicesChosen) return;
+        const chosen = new Set(getChosenIds());
         const options = state.services
-          .filter(s => !selectedIds.has(s.id))
+          .filter(s => !chosen.has(s.id))
           .map(s => `<option value="${s.id}">${escapeHtml(s.name)} (${s.duration} мин)</option>`);
         masterServicesPicker.innerHTML = options.join('');
         masterServicesPicker.disabled = options.length === 0;
       }
 
-      masterServicesAddBtn?.addEventListener('click', () => {
-        if (!masterServicesPicker || !masterServicesSelect) return;
-        const val = masterServicesPicker.value;
-        if (!val) { showBanner('Нет доступных услуг для добавления', 'error'); return; }
-        const opt = Array.from(masterServicesSelect.options).find(o => o.value === val);
-        if (opt) {
-          opt.selected = true;
-          updateMasterPickerOptions();
-        }
-      });
+      function renderChosenServices(ids = getChosenIds()) {
+        const byId = new Map(state.services.map(s => [s.id, s]));
+        masterServicesChosen.innerHTML = ids
+          .map(id => {
+            const svc = byId.get(id);
+            if (!svc) return '';
+            return `<option value="${svc.id}">${escapeHtml(svc.name)} (${svc.duration} мин)</option>`;
+          })
+          .join('');
+      }
 
-      masterServicesRemoveBtn?.addEventListener('click', () => {
-        if (!masterServicesSelect) return;
-        const sel = Array.from(masterServicesSelect.selectedOptions);
-        if (!sel.length) { showBanner('Выберите услуги для удаления', 'error'); return; }
-        sel.forEach(o => { o.selected = false; });
+      masterServicesAddBtn?.addEventListener('click', () => {
+        if (!masterServicesPicker) return;
+        const val = Number(masterServicesPicker.value);
+        if (!Number.isFinite(val)) { showBanner('Нет доступных услуг для добавления', 'error'); return; }
+        const ids = new Set(getChosenIds());
+        ids.add(val);
+        renderChosenServices(Array.from(ids));
         updateMasterPickerOptions();
       });
 
-      masterServicesSelect?.addEventListener('change', updateMasterPickerOptions);
+      masterServicesRemoveBtn?.addEventListener('click', () => {
+        const selected = Array.from(masterServicesChosen.selectedOptions).map(o => Number(o.value));
+        if (!selected.length) { showBanner('Выберите услуги для удаления', 'error'); return; }
+        const ids = getChosenIds().filter(id => !selected.includes(id));
+        renderChosenServices(ids);
+        updateMasterPickerOptions();
+      });
+
+      const renderMasterServiceOptions = () => {
+        if (!masterForm) return;
+        updateMasterPickerOptions();
+      };
 
       const renderMastersTable = () => {
         mastersTableBody.innerHTML = '';
@@ -1798,24 +1806,27 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
             .map(id => state.services.find(svc => svc.id === id)?.name)
             .filter(Boolean);
           servicesCell.innerHTML = names.length ? names.map(n => `<div>${escapeHtml(n)}</div>`).join('') : '—';
-          if (editable) {
-            const select = document.createElement('select');
-            select.multiple = true;
-            select.size = 5;
-            select.dataset.field = 'serviceIds';
-            state.services.forEach(svc => {
-              const opt = document.createElement('option');
-              opt.value = svc.id;
-              opt.textContent = svc.name;
-              opt.selected = (m.serviceIds || []).includes(svc.id);
-              select.appendChild(opt);
-            });
-            servicesCell.appendChild(select);
-          }
 
           const actions = document.createElement('td');
           actions.className = 'table-actions';
           if (editable) {
+            const edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'secondary-btn';
+            edit.dataset.action = 'edit-master';
+            edit.dataset.id = m.id;
+            edit.textContent = 'Редактировать';
+            actions.appendChild(edit);
+
+            const save = document.createElement('button');
+            save.type = 'button';
+            save.className = 'primary-btn';
+            save.dataset.action = 'save-master';
+            save.dataset.id = m.id;
+            save.textContent = 'Сохранить';
+            save.style.display = 'none';
+            actions.appendChild(save);
+
             const del = document.createElement('button');
             del.type = 'button';
             del.className = 'danger-btn';
@@ -1854,8 +1865,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           .map(s => s.trim())
           .filter(Boolean);
 
-        const serviceIds = Array.from(masterForm.querySelector('select[name="serviceIds"]').selectedOptions)
-          .map(o => Number(o.value));
+        const serviceIds = Array.from(document.getElementById('masterServicesChosen').options).map(o => Number(o.value));
 
         const payload = {
           name: fd.get('name'),
@@ -1896,6 +1906,8 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         const created = await response.json();
         state.masters.push(created);
         masterForm.reset();
+        renderChosenServices([]);
+        updateMasterPickerOptions();
         renderMasterServiceOptions();
         renderMastersTable();
         showBanner('Мастер добавлен');
@@ -1944,27 +1956,65 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         else showBanner('Мастер обновлён');
       }, true);
 
-      mastersTableBody?.addEventListener('change', async (e) => {
-        const target = e.target;
-        if (target.dataset.field === 'serviceIds') {
-          const row = target.closest('tr'); const id = Number(row?.dataset.id);
-          const selected = Array.from(target.selectedOptions).map(o => Number(o.value));
-          const ok = await updateMasterField(id, { serviceIds: selected });
-          if (ok) showBanner('Услуги мастера обновлены');
-        }
-      });
+      // (removed obsolete in-row serviceIds select change handler)
 
       mastersTableBody?.addEventListener('click', async (e) => {
-        const btn = e.target.closest('button[data-action="delete-master"]');
+        const btn = e.target.closest('button');
         if (!btn) return;
-        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
-        const id = Number(btn.dataset.id);
-        if (!id || !confirm('Удалить мастера?')) return;
-        const response = await apiFetch(`/api/masters/${id}`, { method: 'DELETE' });
-        if (!response.ok) { await handleError(response); return; }
-        state.masters = state.masters.filter(m => m.id !== id);
-        renderMastersTable();
-        showBanner('Мастер удалён');
+
+        if (btn.dataset.action === 'edit-master') {
+          if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+          const row = btn.closest('tr');
+          row.querySelectorAll('td[data-field="name"], td[data-field="specialties"], td[data-field="description"]').forEach(td => {
+            td.contentEditable = 'true';
+            td.classList.add('editing');
+          });
+          btn.style.display = 'none';
+          const saveBtn = row.querySelector('button[data-action="save-master"]');
+          if (saveBtn) saveBtn.style.display = '';
+          return;
+        }
+
+        if (btn.dataset.action === 'save-master') {
+          if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+          const row = btn.closest('tr');
+          const id = Number(row?.dataset.id);
+          const master = state.masters.find(m => m.id === id);
+          if (!master) return;
+
+          const name = row.querySelector('td[data-field="name"]').textContent.trim();
+          const specialtiesStr = row.querySelector('td[data-field="specialties"]').textContent.trim();
+          const description = row.querySelector('td[data-field="description"]').textContent.trim();
+          if (!name) { showBanner('Имя не может быть пустым', 'error'); return; }
+
+          const patch = {
+            name,
+            specialties: specialtiesStr ? specialtiesStr.split(',').map(s=>s.trim()).filter(Boolean) : [] ,
+            description
+          };
+          const ok = await updateMasterField(id, patch);
+          if (ok) {
+            showBanner('Мастер сохранён');
+            // выключаем режим редактирования
+            row.querySelectorAll('td[data-field]').forEach(td => { td.contentEditable = 'false'; td.classList.remove('editing'); });
+            const editBtn = row.querySelector('button[data-action="edit-master"]');
+            if (editBtn) editBtn.style.display = '';
+            btn.style.display = 'none';
+          }
+          return;
+        }
+
+        if (btn.dataset.action === 'delete-master') {
+          if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+          const id = Number(btn.dataset.id);
+          if (!id || !confirm('Удалить мастера?')) return;
+          const response = await apiFetch(`/api/masters/${id}`, { method: 'DELETE' });
+          if (!response.ok) { await handleError(response); return; }
+          state.masters = state.masters.filter(m => m.id !== id);
+          renderMastersTable();
+          showBanner('Мастер удалён');
+          return;
+        }
       });
 
       const initialId = detectTelegramId();
