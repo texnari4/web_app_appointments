@@ -151,6 +151,68 @@ ensureDataFile(adminsFile, DEFAULT_ADMINS);
 ensureDataFile(mastersFile, DEFAULT_MASTERS);
 ensureDataFile(contactsFile, DEFAULT_CONTACTS);
 
+// --- Cold-deploy restoration helpers ---
+function restoreFromLocalBackupsIfMissing() {
+  try {
+    const bakDir = join(DATA_DIR, '_backup');
+    const files = [groupsFile, servicesFile, adminsFile, mastersFile, bookingsFile, contactsFile];
+    for (const fpath of files) {
+      if (existsSync(fpath)) continue;
+      try {
+        const base = fpath.split('/').pop().replace(/\.json$/, '');
+        const names = require('fs').readdirSync(bakDir)
+          .filter(n => n.startsWith(base + '.') && n.endsWith('.bak.json'))
+          .sort();
+        if (names.length) {
+          const latest = names[names.length-1];
+          const content = readFileSync(join(bakDir, latest));
+          writeFileSync(fpath, content);
+        }
+      } catch {}
+    }
+  } catch {}
+}
+
+async function restoreFromGoogleSheetsIfEmpty() {
+  if (!GOOGLE_SERVICE_ACCOUNT_JSON) return;
+  try {
+    const services = readJSON(servicesFile, []);
+    const masters = readJSON(mastersFile, []);
+    if ((services?.length ?? 0) === 0 && (masters?.length ?? 0) === 0) {
+      const groupsResp    = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Groups!A1:Z');
+      const servicesResp  = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Services!A1:Z');
+      const adminsResp    = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Admins!A1:Z');
+      const mastersResp   = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Masters!A1:Z');
+      const bookingsResp  = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Bookings!A1:Z');
+      function rowsToObjects(values, headersExpected) {
+        const rows = values?.values || [];
+        if (rows.length <= 1) return [];
+        const headers = rows[0];
+        const idx = Object.fromEntries(headers.map((h,i)=>[h,i]));
+        return rows.slice(1).filter(r=>r.length>0).map(r=>{
+          const obj = {}; headersExpected.forEach((h)=>{ obj[h] = r[idx[h]] ?? ''; }); return obj;
+        });
+      }
+      const groups = rowsToObjects(groupsResp, ['id','name']).map(r=>({ id: toNum(r.id)||Date.now(), name:String(r.name||'').trim() })).filter(g=>g.name);
+      if (groups.length) writeJSON(groupsFile, groups);
+      const servicesArr = rowsToObjects(servicesResp, ['id','name','description','price','duration','groupId']).map(r=>({ id: toNum(r.id)||Date.now(), name:String(r.name||'').trim(), description:String(r.description||'').trim(), price:Number(r.price)||0, duration:Number(r.duration)||30, groupId:r.groupId===''?null:toNum(r.groupId) }));
+      if (servicesArr.length) writeJSON(servicesFile, servicesArr);
+      const adminsArr = rowsToObjects(adminsResp, ['id','username','displayName','role']).map(r=>({ id:Number(r.id)||0, username:String(r.username||'').replace(/^@/,''), displayName:r.displayName||'', role:r.role==='owner'?'owner':'admin' })).filter(a=>a.id>0 && a.username);
+      if (adminsArr.length) writeJSON(adminsFile, adminsArr);
+      const mastersArr = rowsToObjects(mastersResp, ['id','name','specialties','photoUrl','description','schedule_json','serviceIds']).map(r=>({ id: toNum(r.id)||Date.now(), name:String(r.name||'').trim(), specialties:String(r.specialties||'').split(',').map(s=>s.trim()).filter(Boolean), photoUrl:r.photoUrl||null, description:r.description||'', schedule:(()=>{ try { return r.schedule_json?JSON.parse(r.schedule_json):null; } catch { return null; } })(), serviceIds:String(r.serviceIds||'').split(',').map(x=>toNum(x)).filter(Number.isFinite) }));
+      if (mastersArr.length) writeJSON(mastersFile, mastersArr);
+      const bookingsArr = rowsToObjects(bookingsResp, ['id','createdAt','updatedAt','status','clientName','clientPhone','notes','serviceId','serviceName','serviceDuration','servicePrice','masterId','date','startTime','duration']).map(r=>({ id: toNum(r.id)||Date.now(), createdAt:r.createdAt||new Date().toISOString(), updatedAt:r.updatedAt||r.createdAt||new Date().toISOString(), status:r.status||'pending', clientName:r.clientName||'', clientPhone:r.clientPhone||'', notes:r.notes||'', serviceId:Number(r.serviceId)||0, serviceName:r.serviceName||'', serviceDuration:Number(r.serviceDuration)||null, servicePrice:Number(r.servicePrice)||null, masterId:r.masterId===''?null:String(r.masterId), date:r.date||'', startTime:r.startTime||'', duration:Number(r.duration)||null }));
+      if (bookingsArr.length) writeJSON(bookingsFile, bookingsArr);
+    }
+  } catch (e) {
+    console.warn('Restore from Google Sheets failed:', e?.message||e);
+  }
+}
+
+// --- Run restoration on boot ---
+restoreFromLocalBackupsIfMissing();
+await (async()=>{ try { await restoreFromGoogleSheetsIfEmpty(); } catch {} })();
+
 function readJSON(file, fallback = []) {
   try {
     return JSON.parse(readFileSync(file, 'utf-8'));
@@ -461,14 +523,7 @@ function getWorkdayBounds() {
   return { open, close };
 }
 
-function buildDailySlots({ date, duration, masterId, bookings }) {
-  const { open, close } = getWorkdayBounds();
-  const normalizedDuration = Number(duration ?? SLOT_STEP_MIN);
-  if (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0) {
-    return [];
-  }
-
-  function isMasterWorkingOnDate(master, dateStr) {
+function isMasterWorkingOnDate(master, dateStr) {
   if (!master || !master.schedule) return true;
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return true;
@@ -491,6 +546,13 @@ function buildDailySlots({ date, duration, masterId, bookings }) {
   }
   return true;
 }
+
+function buildDailySlots({ date, duration, masterId, bookings }) {
+  const { open, close } = getWorkdayBounds();
+  const normalizedDuration = Number(duration ?? SLOT_STEP_MIN);
+  if (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0) {
+    return [];
+  }
 
   const slotAlignedDuration = alignDurationMinutes(normalizedDuration);
   if (!Number.isFinite(slotAlignedDuration)) {
@@ -604,31 +666,6 @@ const server = createServer(async (req, res) => {
         { label: 'bookings.json', path: bookingsFile, get: () => readJSON(bookingsFile, []) },
         { label: 'contacts.json', path: contactsFile, get: () => readJSON(contactsFile, []) }
       ];
-    // ===== CONTACTS API =====
-    if (pathname === '/api/contacts/me' && req.method === 'GET') {
-      if (!ctx.telegramId) { sendJSON(res, 200, { contact: null }); return; }
-      const list = readContacts();
-      const c = list.find(x => String(x.id) === String(ctx.telegramId)) || null;
-      sendJSON(res, 200, { contact: c });
-      return;
-    }
-
-    if (pathname === '/api/contacts/bootstrap' && req.method === 'POST') {
-      // Upsert from WebApp: we trust cookie set via /auth/telegram; optionally merge name/username in body
-      if (!ctx.telegramId) { sendJSON(res, 400, { error: 'not in Telegram WebApp (no tg_id)' }); return; }
-      let body = {};
-      try { body = JSON.parse(await readBody(req) || '{}'); } catch {}
-      const next = {
-        id: ctx.telegramId,
-        username: (body.username ?? '').replace(/^@/, '') || undefined,
-        first_name: body.first_name ?? undefined,
-        last_name: body.last_name ?? undefined,
-        phone: body.phone ?? undefined
-      };
-      upsertContact(next);
-      sendJSON(res, 200, { ok: true });
-      return;
-    }
       const rowHtml = files.map(f => {
         try {
           const s = statSync(f.path);
@@ -1763,11 +1800,8 @@ cat <<'EOF' >  public/client.html
               <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" required />
             </label>
           </div>
-          <div class="controls">
-            <span class="muted">Ваши контактные данные нужны для связи и напоминаний</span>
-            <div>
-              <button id="next1" class="btn primary" type="button">Продолжить</button>
-            </div>
+          <div class="controls" style="justify-content:flex-start;">
+            <button id="next1" class="btn primary" type="button">Продолжить</button>
           </div>
         </section>
 
@@ -2162,3 +2196,28 @@ try{
 </body>
 </html>
 EOF
+    // ===== CONTACTS API =====
+    if (pathname === '/api/contacts/me' && req.method === 'GET') {
+      if (!ctx.telegramId) { sendJSON(res, 200, { contact: null }); return; }
+      const list = readContacts();
+      const c = list.find(x => String(x.id) === String(ctx.telegramId)) || null;
+      sendJSON(res, 200, { contact: c });
+      return;
+    }
+
+    if (pathname === '/api/contacts/bootstrap' && req.method === 'POST') {
+      // Upsert from WebApp: we trust cookie set via /auth/telegram; optionally merge name/username in body
+      if (!ctx.telegramId) { sendJSON(res, 400, { error: 'not in Telegram WebApp (no tg_id)' }); return; }
+      let body = {};
+      try { body = JSON.parse(await readBody(req) || '{}'); } catch {}
+      const next = {
+        id: ctx.telegramId,
+        username: (body.username ?? '').replace(/^@/, '') || undefined,
+        first_name: body.first_name ?? undefined,
+        last_name: body.last_name ?? undefined,
+        phone: body.phone ?? undefined
+      };
+      upsertContact(next);
+      sendJSON(res, 200, { ok: true });
+      return;
+    }
