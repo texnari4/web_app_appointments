@@ -1688,6 +1688,7 @@ EOF
 
 #
 # --- client.html ---
+cat <<'EOF' >  public/client.html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -1960,7 +1961,7 @@ EOF
   </script>
 </body>
 </html>
-
+EOF
 # --- admin.html ---
 # ADMIN UI template will be copied below
 cp "$SCRIPT_DIR/templates/admin.html" public/admin.html
