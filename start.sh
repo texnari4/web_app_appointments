@@ -1697,7 +1697,7 @@ cat <<'EOF' >  public/client.html
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     :root { color-scheme: light; font-family: 'SF Pro Display','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
-    body { margin:0; padding:32px 16px 48px; background:linear-gradient(180deg,#f6f7fb 0%,#f0f3f8 45%,#eef1f7 100%); color:#111827; min-height:100vh; }
+    body { margin:0; padding:32px 16px 48px; background:linear-gradient(180deg,#f6f7fb 0%,#f0f3f8 45%,#eef1f7 100%); color:#111827; min-height:100vh; overflow-x:hidden; }
     main { max-width:720px; margin:0 auto; display:grid; gap:18px; }
     header { text-align:center; display:grid; gap:8px; }
     header h1 { margin:0; font-size:clamp(26px,5vw,36px); font-weight:700; letter-spacing:-0.02em; }
@@ -1708,7 +1708,12 @@ cat <<'EOF' >  public/client.html
 
     /* Wizard */
     .wizard { position:relative; overflow:hidden; border-radius:20px; max-width: 720px; margin: 0 auto; }
-    .steps { display:flex; transition:transform .35s ease; will-change: transform; }
+    .steps  { display:flex; transition:transform .35s ease; will-change: transform; }
+    @media (max-width: 420px) {
+  body { padding: 20px 12px 32px; }
+  .step { padding: 18px 14px; }
+  .step .form-grid, .step .controls { max-width: 100%; }
+}
     .step { width:100%; flex:0 0 100%; padding:24px 20px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); }
     .step h2 { margin:0 0 12px; font-size:22px; font-weight:600; }
     .form-grid { display:grid; gap:14px; }
@@ -1742,6 +1747,8 @@ cat <<'EOF' >  public/client.html
       <h1>Запишитесь в любимый салон</h1>
       <p>Три шага: контакты → услуга → дата и мастер. Мы напомним вам о визите в Telegram.</p>
     </header>
+
+
 
     <div class="wizard">
       <div id="steps" class="steps" data-step="1" style="transform: translateX(0%)">
