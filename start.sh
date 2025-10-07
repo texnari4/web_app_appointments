@@ -1702,11 +1702,14 @@ cat <<'EOF' >  public/client.html
     header { text-align:center; display:grid; gap:8px; }
     header h1 { margin:0; font-size:clamp(26px,5vw,36px); font-weight:700; letter-spacing:-0.02em; }
     header p { margin:0 auto; max-width:520px; color:#4b5563; font-size:16px; line-height:1.5; }
+    *, *::before, *::after { box-sizing: border-box; }
+    .step .form-grid, .step .controls { max-width: 640px; margin: 0 auto; }
+    input, select, textarea { width: 100%; }
 
     /* Wizard */
     .wizard { position:relative; overflow:hidden; border-radius:20px; }
     .steps { display:flex; width:300%; transition:transform .35s ease; }
-    .step { width:100%; flex:0 0 100%; padding:24px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); }
+    .step { width:100%; flex:0 0 100%; padding:24px 20px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); }
     .step h2 { margin:0 0 12px; font-size:22px; font-weight:600; }
     .form-grid { display:grid; gap:14px; }
     label { display:grid; gap:6px; font-size:14px; color:#4b5563; }
@@ -1755,7 +1758,9 @@ cat <<'EOF' >  public/client.html
           </div>
           <div class="controls">
             <span class="muted">Ваши контактные данные нужны для связи и напоминаний</span>
-            <button id="next1" class="btn primary">Далее</button>
+            <div>
+              <button id="next1" class="btn primary" type="button">Продолжить</button>
+            </div>
           </div>
         </section>
 
@@ -1909,11 +1914,23 @@ cat <<'EOF' >  public/client.html
     }
 
     // Step events & validation
+    function isValidPhone(p){
+      // Допускаем форматы: +375 29 123-45-67, +7(999)999-99-99, 8 029 1234567 и т.п.
+      const v = String(p||'').trim();
+      if(!v) return false;
+      // Должно быть не меньше 10 цифр суммарно
+      const digits = v.replace(/\D/g,'');
+      if(digits.length < 10) return false;
+      // Базовая проверка на допустимые символы
+      return /^\+?[\d\s\-()]{10,}$/.test(v);
+    }
+
     next1.addEventListener('click', ()=>{
       const name = clientNameInput.value.trim();
       const phone = clientPhoneInput.value.trim();
       if(!name){ showBanner('Укажите имя', 'error'); return; }
       if(!phone){ showBanner('Укажите номер телефона', 'error'); return; }
+      if(!isValidPhone(phone)){ showBanner('Проверьте формат номера телефона', 'error'); return; }
       go(2);
     });
     back2.addEventListener('click', ()=> go(1));
@@ -1942,6 +1959,7 @@ cat <<'EOF' >  public/client.html
       const startTime = slotBtn && slotBtn.dataset.value;
       if(!name){ showBanner('Укажите имя', 'error'); go(1); return; }
       if(!phone){ showBanner('Укажите номер телефона', 'error'); go(1); return; }
+      if(!isValidPhone(phone)){ showBanner('Проверьте формат номера телефона', 'error'); go(1); return; }
       if(!serviceId){ showBanner('Выберите услугу', 'error'); go(2); return; }
       if(!masterId){ showBanner('Выберите мастера', 'error'); go(3); return; }
       if(!date){ showBanner('Выберите дату', 'error'); go(3); return; }
