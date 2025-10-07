@@ -1804,22 +1804,26 @@ cat <<'EOF' >  public/client.html
     header h1 { margin: 0; font-weight: 800; letter-spacing: -0.02em; font-size: clamp(24px, 5vw, 34px); }
     header p { margin: 0 auto; max-width: 520px; color:#4b5563; font-size: 15px; line-height: 1.5; }
 
-    .card { position: relative; background: #fff; border: 1px solid rgba(209,213,219,.5); border-radius: 16px; box-shadow: 0 30px 60px -40px rgba(15,23,42,.35); padding: 16px; }
+    .card { position: relative; background: #fff; border: 1px solid rgba(209,213,219,.5); border-radius: 16px; box-shadow: 0 30px 60px -40px rgba(15,23,42,.35); padding: 16px; overflow:hidden; }
 
     /* Steps (simple show/hide, no wide carousels => нет горизонтального скролла) */
     .step { display: none; }
     .step.active { display: block; }
 
     .step h2 { margin: 0 0 12px; font-size: 20px; font-weight: 700; }
+    .step { padding: 2px 0; }
 
     .form-grid { display: grid; gap: 12px; }
     label { display: grid; gap: 6px; font-size: 14px; color:#4b5563; }
-    input, select, textarea { width:100%; padding: 12px 14px; border: 1px solid rgba(148,163,184,.45); border-radius: 12px; font: inherit; background:#fff; }
+    input, select, textarea {
+      width:100%; padding: 12px 14px; border: 1px solid rgba(148,163,184,.45); border-radius: 12px;
+      font: inherit; font-size:16px; line-height:1.2; background:#fff;
+    }
     input:focus, select:focus, textarea:focus { outline: none; border-color: rgba(99,102,241,.9); box-shadow: 0 0 0 3px rgba(99,102,241,.18); }
     textarea { min-height: 90px; resize: vertical; }
 
     .actions { display: grid; gap: 10px; margin-top: 12px; }
-    .btn { display: block; width: 100%; padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(148,163,184,.45); background: #fff; color:#111827; font-weight: 700; cursor: pointer; }
+    .btn { display: block; width: 100%; padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(148,163,184,.45); background: #fff; color:#111827; font-weight: 700; cursor: pointer; font-size:16px; }
     .btn.primary { border: none; background: linear-gradient(135deg,#5ec5ff,#007aff); color:#fff; box-shadow: 0 24px 40px -28px rgba(0,122,255,.55); }
     .btn[disabled] { opacity:.6; cursor:not-allowed; }
 
@@ -1924,17 +1928,16 @@ cat <<'EOF' >  public/client.html
           <button id="submit" class="btn primary" type="button">Подтвердить запись</button>
         </div>
       </section>
+
+      <!-- Шаг 4 -->
+      <section class="step" id="step4">
+        <h2>Заявка отправлена</h2>
+        <div class="summary" id="finalSummary"></div>
+        <div class="actions">
+          <button id="closeApp" class="btn primary" type="button">Закрыть</button>
+        </div>
+      </section>
     </div>
-
-
-<!-- Шаг 4 -->
-<section class="step" id="step4">
-  <h2>Заявка отправлена</h2>
-  <div class="summary" id="finalSummary"></div>
-  <div class="actions">
-    <button id="closeApp" class="btn primary" type="button">Закрыть</button>
-  </div>
-</section>
 
 
     <div class="banner" id="banner" hidden></div>
@@ -1956,6 +1959,12 @@ cat <<'EOF' >  public/client.html
     const next2 = document.getElementById('next2');
     const back3 = document.getElementById('back3');
     const submitBtn = document.getElementById('submit');
+    // Re-bind close button for step 4 (works regardless of DOM order)
+    const closeBtn = document.getElementById('closeApp');
+    if (closeBtn) closeBtn.addEventListener('click', ()=>{
+      try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && tg.close) { tg.close(); return; } } catch(_){}
+      window.location.replace('/client');
+    });
 
     const clientNameInput = document.getElementById('clientName');
     const clientPhoneInput = document.getElementById('clientPhone');
