@@ -1332,9 +1332,11 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
            sendJSON(res, 200, { ok: true });
            return;
          } else if (/^\/start\b/.test(text)) {
-           await tgSendMessage(chatId, 'Добро пожаловать в систему записи!\n\nПоделитесь контактными данными для продолжения записи — это поможет нам автоматически подставлять ваш номер телефона и имя.', {
-             reply_markup: { keyboard: [[{ text: '📱 Поделиться номером в чате', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
-           });
+  await tgSendMessage(chatId, 'Добро пожаловать! Нажмите кнопку «Записаться» для продолжения.', {
+    reply_markup: {
+      inline_keyboard: [ [ { text: '🧾 Записаться', web_app: { url: `${PUBLIC_BASE_URL}/client` } } ] ]
+    }
+  });
          } else if (/^\/client\b/.test(text)) {
            const url = `${PUBLIC_BASE_URL}/client`;
            await tgSendMessage(chatId, `🧾 <b>Клиентская форма</b>\n${url}`);
@@ -1686,7 +1688,6 @@ EOF
 
 #
 # --- client.html ---
-cat <<'EOF' > public/client.html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -1694,752 +1695,271 @@ cat <<'EOF' > public/client.html
   <title>Запись в салон — Beauty Appointments</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    :root {
-      color-scheme: light;
-      font-family: 'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
+    :root { color-scheme: light; font-family: 'SF Pro Display','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+    body { margin:0; padding:32px 16px 48px; background:linear-gradient(180deg,#f6f7fb 0%,#f0f3f8 45%,#eef1f7 100%); color:#111827; min-height:100vh; }
+    main { max-width:720px; margin:0 auto; display:grid; gap:18px; }
+    header { text-align:center; display:grid; gap:8px; }
+    header h1 { margin:0; font-size:clamp(26px,5vw,36px); font-weight:700; letter-spacing:-0.02em; }
+    header p { margin:0 auto; max-width:520px; color:#4b5563; font-size:16px; line-height:1.5; }
 
-    body {
-      margin: 0;
-      padding: 32px 16px 48px;
-      background: linear-gradient(180deg, #f6f7fb 0%, #f0f3f8 45%, #eef1f7 100%);
-      color: #111827;
-      min-height: 100vh;
-    }
+    /* Wizard */
+    .wizard { position:relative; overflow:hidden; border-radius:20px; }
+    .steps { display:flex; width:300%; transition:transform .35s ease; }
+    .step { width:100%; flex:0 0 100%; padding:24px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); }
+    .step h2 { margin:0 0 12px; font-size:22px; font-weight:600; }
+    .form-grid { display:grid; gap:14px; }
+    label { display:grid; gap:6px; font-size:14px; color:#4b5563; }
+    input, select, textarea { border:1px solid rgba(148,163,184,.45); border-radius:12px; padding:12px 14px; font-size:15px; font-family:inherit; background:rgba(255,255,255,.95); transition:border-color .2s, box-shadow .2s; }
+    input:focus, select:focus, textarea:focus { outline:none; border-color:rgba(99,102,241,.9); box-shadow:0 0 0 3px rgba(99,102,241,.18); background:#fff; }
+    textarea { min-height:90px; resize:vertical; }
+    .muted { color:#6b7280; font-size:13px; }
 
-    main {
-      max-width: 720px;
-      margin: 0 auto;
-      display: grid;
-      gap: 28px;
-    }
+    .controls { display:flex; gap:10px; justify-content:space-between; margin-top:14px; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; padding:12px 18px; border-radius:12px; border:1px solid rgba(148,163,184,.45); background:#fff; color:#111827; font-weight:700; cursor:pointer; }
+    .btn.primary { border:none; background:linear-gradient(135deg,#5ec5ff,#007aff); color:#fff; box-shadow:0 24px 40px -28px rgba(0,122,255,.55); }
+    .btn[disabled] { opacity:.6; cursor:not-allowed; }
+    .required { color:#dc2626; margin-left:4px; }
 
-    header {
-      text-align: center;
-      display: grid;
-      gap: 12px;
-    }
+    .slot-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:12px; margin-top:6px; }
+    .slot-button { padding:12px; border-radius:14px; border:1px solid rgba(148,163,184,.4); background:rgba(255,255,255,.92); cursor:pointer; font-size:15px; font-weight:500; display:grid; gap:4px; justify-items:center; transition:transform .2s, box-shadow .2s, border-color .2s; }
+    .slot-button:hover { transform:translateY(-2px); box-shadow:0 20px 34px -26px rgba(15,23,42,.38); }
+    .slot-button.selected { border-color:transparent; background:linear-gradient(130deg,#4ade80,#34c759); color:#fff; box-shadow:0 24px 32px -24px rgba(52,199,89,.55); }
+    .slot-button[disabled] { cursor:not-allowed; opacity:.45; }
 
-    header h1 {
-      margin: 0;
-      font-size: clamp(28px, 5vw, 38px);
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-
-    header p {
-      margin: 0 auto;
-      max-width: 520px;
-      color: #4b5563;
-      font-size: 16px;
-      line-height: 1.5;
-    }
-
-    section {
-      background: rgba(255, 255, 255, 0.92);
-      backdrop-filter: blur(14px);
-      border-radius: 20px;
-      padding: 24px;
-      box-shadow: 0 35px 60px -40px rgba(15, 23, 42, 0.35);
-      border: 1px solid rgba(209, 213, 219, 0.4);
-      display: grid;
-      gap: 18px;
-    }
-
-    section h2 {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 600;
-    }
-
-    .form-grid {
-      display: grid;
-      gap: 16px;
-    }
-
-    label {
-      display: grid;
-      gap: 6px;
-      font-size: 14px;
-      color: #4b5563;
-    }
-
-    input,
-    select,
-    textarea {
-      border: 1px solid rgba(148, 163, 184, 0.45);
-      border-radius: 12px;
-      padding: 12px 14px;
-      font-size: 15px;
-      font-family: inherit;
-      background: rgba(255, 255, 255, 0.95);
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    input:focus,
-    select:focus,
-    textarea:focus {
-      outline: none;
-      border-color: rgba(99, 102, 241, 0.9);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
-      background: #fff;
-    }
-
-    textarea {
-      min-height: 90px;
-      resize: vertical;
-    }
-
-    .pill-select {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .pill-button {
-      padding: 10px 18px;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.45);
-      background: rgba(255, 255, 255, 0.9);
-      cursor: pointer;
-      font-size: 14px;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-
-    .pill-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.45);
-    }
-
-    .pill-button.active {
-      background: linear-gradient(130deg, #7cb9ff, #007aff);
-      color: #fff;
-      border-color: transparent;
-      box-shadow: 0 20px 30px -22px rgba(0, 122, 255, 0.55);
-    }
-
-    .slot-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      gap: 12px;
-    }
-
-    .slot-button {
-      padding: 12px;
-      border-radius: 14px;
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      background: rgba(255, 255, 255, 0.92);
-      cursor: pointer;
-      font-size: 15px;
-      font-weight: 500;
-      display: grid;
-      gap: 4px;
-      justify-items: center;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-
-    .slot-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 20px 34px -26px rgba(15, 23, 42, 0.38);
-    }
-
-    .slot-button.selected {
-      border-color: transparent;
-      background: linear-gradient(130deg, #4ade80, #34c759);
-      color: #fff;
-      box-shadow: 0 24px 32px -24px rgba(52, 199, 89, 0.55);
-    }
-
-    .slot-button[disabled] {
-      cursor: not-allowed;
-      opacity: 0.45;
-      transform: none;
-      box-shadow: none;
-    }
-
-    .muted {
-      color: #6b7280;
-      font-size: 14px;
-    }
-
-    .muted.error {
-      .required { color: #dc2626; margin-left: 4px; }
-      color: #ef4444;
-    }
-
-    .submit-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 14px 22px;
-      border-radius: 16px;
-      border: none;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      background: linear-gradient(135deg, #5ec5ff, #007aff);
-      color: #fff;
-      box-shadow: 0 24px 40px -28px rgba(0, 122, 255, 0.55);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .submit-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 28px 46px -24px rgba(0, 122, 255, 0.55);
-    }
-    .secondary-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 12px 16px;
-      border-radius: 12px;
-      border: 1px solid rgba(148, 163, 184, 0.45);
-      background: #fff;
-      color: #111827;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .summary-card {
-      border-radius: 18px;
-      border: 1px solid rgba(209, 213, 219, 0.5);
-      background: rgba(249, 250, 251, 0.9);
-      padding: 16px 18px;
-      display: grid;
-      gap: 6px;
-      font-size: 15px;
-      color: #374151;
-    }
-
-  .banner {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 14px 22px;
-    border-radius: 14px;
-    background: linear-gradient(135deg, rgba(94, 197, 255, 0.95), rgba(0, 122, 255, 0.95));
-    color: #fff;
-    font-weight: 600;
-    box-shadow: 0 32px 48px -32px rgba(0, 122, 255, 0.55);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-  }
-
-    .banner.show {
-      opacity: 1;
-      transform: translate(-50%, -6px);
-    }
-
-  .banner.error {
-    background: linear-gradient(135deg, rgba(255, 95, 95, 0.95), rgba(244, 63, 94, 0.95));
-    box-shadow: 0 32px 48px -32px rgba(244, 63, 94, 0.6);
-  }
-
-    @media (max-width: 600px) {
-      section {
-        padding: 20px;
-      }
-
-      .slot-grid {
-        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-      }
-
-      .submit-btn {
-        width: 100%;
-      }
-    }
+    .summary-card { border-radius:18px; border:1px solid rgba(209,213,219,.5); background:rgba(249,250,251,.9); padding:12px 14px; display:grid; gap:6px; font-size:15px; color:#374151; }
+    .banner { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); padding:14px 22px; border-radius:14px; background:linear-gradient(135deg, rgba(94,197,255,.95), rgba(0,122,255,.95)); color:#fff; font-weight:600; box-shadow:0 32px 48px -32px rgba(0,122,255,.55); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; }
+    .banner.show { opacity:1; transform:translate(-50%,-6px); }
+    .banner.error { background:linear-gradient(135deg, rgba(255,95,95,.95), rgba(244,63,94,.95)); box-shadow:0 32px 48px -32px rgba(244,63,94,.6); }
   </style>
 </head>
 <body>
   <main>
     <header>
       <h1>Запишитесь в любимый салон</h1>
-      <p>Выберите услугу, удобное время и подтвердите запись буквально за минуту. Мы напомним вам о визите в Telegram.</p>
+      <p>Три шага: контакты → услуга → дата и мастер. Мы напомним вам о визите в Telegram.</p>
     </header>
 
-    <form id="bookingForm" class="form-grid">
-      <section>
-        <h2>Контакты</h2>
-        <div class="form-grid">
-          <label>
-            Как к вам обращаться
-            <input type="text" id="clientName" placeholder="Имя и фамилия" required />
-          </label>
-         <div id="phoneBlock">
-        <label>
-         Телефон
-         <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" />
-         </label>
-         <div>
-           <button type="button" class="secondary-btn" id="sharePhoneBtn">📱 Поделиться номером в чате</button>
-         </div>
-        </div>
-          <label>
-            Комментарий для мастера (необязательно)
-            <textarea id="clientNotes" placeholder="Например: хочу нежный пастельный оттенок"></textarea>
-          </label>
-        </div>
-      </section>
+    <div class="wizard">
+      <div id="steps" class="steps" data-step="1" style="transform: translateX(0%)">
+        <!-- Шаг 1: Контакты -->
+        <section class="step" data-name="contacts">
+          <h2>Шаг 1 из 3 — Контакты</h2>
+          <div class="form-grid">
+            <label>Как к вам обращаться
+              <input type="text" id="clientName" placeholder="Имя и фамилия" required />
+            </label>
+            <label>Телефон
+              <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" required />
+            </label>
+          </div>
+          <div class="controls">
+            <span class="muted">Ваши контактные данные нужны для связи и напоминаний</span>
+            <button id="next1" class="btn primary">Далее</button>
+          </div>
+        </section>
 
-      <section>
-        <h2>Выбор услуги</h2>
-        <label>
-          Услуга
-          <select id="serviceSelect" required>
-            <option value="" disabled selected>Загружаю список…</option>
-          </select>
-        </label>
-        <div class="summary-card" id="serviceSummary" hidden></div>
-      </section>
+        <!-- Шаг 2: Услуга и комментарий -->
+        <section class="step" data-name="service">
+          <h2>Шаг 2 из 3 — Услуга</h2>
+          <div class="form-grid">
+            <label>Услуга
+              <select id="serviceSelect" required>
+                <option value="" disabled selected>Загружаю список…</option>
+              </select>
+            </label>
+            <label>Комментарий для мастера (необязательно)
+              <textarea id="clientNotes" placeholder="Например: хочу нежный пастельный оттенок"></textarea>
+            </label>
+            <div class="summary-card" id="serviceSummary" hidden></div>
+          </div>
+          <div class="controls">
+            <button id="back2" class="btn">Назад</button>
+            <button id="next2" class="btn primary">Далее</button>
+          </div>
+        </section>
 
-<section>
-  <h2>Дата и специалист</h2>
-  <div class="form-grid">
-    <label>
-      Мастер <span class="required">*</span>
-      <select id="bookingMaster" required></select>
-    </label>
-    <label>
-      Дата визита
-      <input type="date" id="dateInput" required />
-    </label>
-  </div>
-  <p class="muted" id="availabilityHint">Выберите услугу и дату, чтобы увидеть свободные слоты.</p>
-</section>
+        <!-- Шаг 3: Дата и мастер -->
+        <section class="step" data-name="datetime">
+          <h2>Шаг 3 из 3 — Дата и мастер</h2>
+          <div class="form-grid">
+            <label>Мастер <span class="required">*</span>
+              <select id="bookingMaster" required></select>
+            </label>
+            <label>Дата визита
+              <input type="date" id="dateInput" required />
+            </label>
+            <p class="muted" id="availabilityHint">Выберите услугу и дату, чтобы увидеть свободные слоты.</p>
+          </div>
+          <div id="slotsContainer" class="slot-grid"></div>
+          <p class="muted" id="slotsEmpty" hidden>На выбранный день пока нет свободных окон. Попробуйте другую дату.</p>
+          <div class="controls">
+            <button id="back3" class="btn">Назад</button>
+            <button id="submit" class="btn primary">Подтвердить запись</button>
+          </div>
+        </section>
+      </div>
+    </div>
 
-      <section>
-        <h2>Свободные слоты</h2>
-        <div id="slotsContainer" class="slot-grid"></div>
-        <p class="muted" id="slotsEmpty" hidden>На выбранный день пока нет свободных окон. Попробуйте другую дату.</p>
-      </section>
-
-      <section>
-        <h2>Подтверждение</h2>
-        <div class="summary-card" id="selectionSummary" hidden></div>
-        <button type="submit" class="submit-btn">Подтвердить запись</button>
-      </section>
-    </form>
+    <div class="banner" id="banner" hidden></div>
   </main>
 
-  <div class="banner" id="banner" hidden></div>
-
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // Bootstrap contact from Telegram WebApp (id/username/name); phone will be asked via bot keyboard
-      try {
-        const tg = window.Telegram && window.Telegram.WebApp;
-        if (tg) { tg.ready && tg.ready(); tg.expand && tg.expand(); }
-        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
-          const u = tg.initDataUnsafe.user;
-          fetch('/api/contacts/bootstrap', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: u.username||'', first_name: u.first_name||'', last_name: u.last_name||'' })
-          }).catch(()=>{});
-        }
-      } catch(_) {}
-      const bookingForm = document.getElementById('bookingForm');
-      const serviceSelect = document.getElementById('serviceSelect');
-      const serviceSummary = document.getElementById('serviceSummary');
-      const dateInput = document.getElementById('dateInput');
-    //  const masterInput = document.getElementById('masterInput');
+  document.addEventListener('DOMContentLoaded', () => {
+    // Telegram WebApp bootstrap (cookie auth, если открыт внутри Telegram)
+    try { const tg = window.Telegram && window.Telegram.WebApp; if (tg) { tg.ready && tg.ready(); tg.expand && tg.expand(); } } catch(_){}
 
+    // Elements
+    const steps = document.getElementById('steps');
+    const banner = document.getElementById('banner');
+    const next1 = document.getElementById('next1');
+    const back2 = document.getElementById('back2');
+    const next2 = document.getElementById('next2');
+    const back3 = document.getElementById('back3');
+    const submitBtn = document.getElementById('submit');
+
+    const clientNameInput = document.getElementById('clientName');
+    const clientPhoneInput = document.getElementById('clientPhone');
+    const clientNotesInput = document.getElementById('clientNotes');
+    const serviceSelect = document.getElementById('serviceSelect');
+    const serviceSummary = document.getElementById('serviceSummary');
     const bookingMasterSelect = document.getElementById('bookingMaster');
-const allowedDaysHint = document.createElement('div');
-allowedDaysHint.className = 'muted';
-dateInput.parentElement.appendChild(allowedDaysHint);
-      const slotsContainer = document.getElementById('slotsContainer');
-      const slotsEmpty = document.getElementById('slotsEmpty');
-      const selectionSummary = document.getElementById('selectionSummary');
-      const banner = document.getElementById('banner');
-      const availabilityHint = document.getElementById('availabilityHint');
+    const dateInput = document.getElementById('dateInput');
+    const availabilityHint = document.getElementById('availabilityHint');
+    const slotsContainer = document.getElementById('slotsContainer');
+    const slotsEmpty = document.getElementById('slotsEmpty');
 
-      const clientNameInput = document.getElementById('clientName');
-      const clientPhoneInput = document.getElementById('clientPhone');
-      const clientNotesInput = document.getElementById('clientNotes');
-      const sharePhoneBtn = document.getElementById('sharePhoneBtn');
-      let tgBotUsername = null;
-      // Fetch bot info to know username
-      fetch('/tg/info').then(r=>r.json()).then(j=>{ tgBotUsername = j.botUsername || null; }).catch(()=>{});
-
-      sharePhoneBtn.addEventListener('click', () => {
-        const tg = window.Telegram && window.Telegram.WebApp;
-        if (!tgBotUsername) {
-          showBanner('Бот не настроен. Сообщите администратору задать TELEGRAM_BOT_USERNAME', 'error');
-          return;
-        }
-        const url = `https://t.me/${tgBotUsername}?start=share_phone`;
-        if (tg && typeof tg.openTelegramLink === 'function') {
-          tg.openTelegramLink(url);
-          showBanner('Открыл диалог с ботом. Нажмите «📱 Поделиться номером» в чате.');
-        } else {
-          window.open(url, '_blank');
-        }
-        // Через несколько секунд попробуем подтянуть телефон
-        setTimeout(prefillFromContact, 4000);
-      });
-
-      const fetchMasters = async () => {
-  const r = await fetch('/api/masters');
-  if (!r.ok) return [];
-  const list = await r.json();
-  bookingMasterSelect.innerHTML = '<option value="" disabled selected>Выберите мастера…</option>' + list.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
-  return list;
-};
-
-let mastersCache = [];
-const weekdayName = (d) => ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d];
-const isWorkingDay = (master, dateObj) => {
-  if (!master || !master.schedule || !dateObj) return true;
-  const s = master.schedule;
-  const dow = dateObj.getDay();
-  if (s.type === 'weekly') {
-    const days = (s.weekly && Array.isArray(s.weekly.days)) ? s.weekly.days : [];
-    return days.includes(dow);
-  }
-  if (s.type === 'shift') {
-    const sh = s.shift || {};
-    const anchor = new Date(sh.anchorDate || new Date().toISOString().slice(0,10));
-    const d0 = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
-    const d1 = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
-    const diffDays = Math.floor((d1 - d0) / 86400000);
-    const cycle = (Number(sh.workDays||2) + Number(sh.restDays||2));
-    const pos = ((diffDays % cycle) + cycle) % cycle;
-    return pos < Number(sh.workDays||2);
-  }
-  return true;
-};
-
-const updateAllowedDaysUI = () => {
-  const id = Number(bookingMasterSelect.value);
-  const m = mastersCache.find(x=>x.id===id);
-  if (!m || !m.schedule) { allowedDaysHint.textContent = ''; return; }
-  if (m.schedule.type === 'weekly') {
-    const days = (m.schedule.weekly?.days||[]).map(weekdayName).join(', ');
-    allowedDaysHint.textContent = days ? `Рабочие дни: ${days}` : '';
-  } else if (m.schedule.type === 'shift') {
-    const sh = m.schedule.shift||{};
-    allowedDaysHint.textContent = `Смены: ${sh.workDays||'?'} раб / ${sh.restDays||'?'} вых`;
-  } else { allowedDaysHint.textContent = ''; }
-};
-
-bookingMasterSelect.addEventListener('change', () => {
-  updateAllowedDaysUI();
-  if (dateInput.value) {
-    const m = mastersCache.find(x=>String(x.id)===String(bookingMasterSelect.value));
-    const d = new Date(dateInput.value);
-    if (!isWorkingDay(m, d)) {
-      showBanner('В этот день мастер не работает. Выберите другой день.', 'error');
-      dateInput.value = '';
-    } else {
-      fetchAvailability();
+    function showBanner(msg, type){
+      banner.textContent = msg;
+      banner.classList.toggle('error', type==='error');
+      banner.hidden = false; requestAnimationFrame(()=> banner.classList.add('show'));
+      setTimeout(()=>{ banner.classList.remove('show'); setTimeout(()=> banner.hidden=true, 200); }, 2600);
     }
-  }
-});
 
-dateInput.addEventListener('change', () => {
-  const id = bookingMasterSelect.value;
-  const m = mastersCache.find(x=>String(x.id)===String(id));
-  if (!id || !m) { showBanner('Сначала выберите мастера', 'error'); dateInput.value=''; return; }
-  const d = new Date(dateInput.value);
-  if (!isWorkingDay(m, d)) {
-    showBanner('В этот день мастер не работает. Выберите другой день.', 'error');
-    dateInput.value = '';
-    return;
-  }
-  fetchAvailability();
-});
+    function go(step){
+      steps.dataset.step = String(step);
+      steps.style.transform = `translateX(${(step-1)*-100}%)`;
+    }
 
+    // Prefill from saved contact (если есть cookie tg_id)
+    async function prefill(){
+      try{
+        const r = await fetch('/api/contacts/me');
+        if(!r.ok) return;
+        const {contact:c} = await r.json();
+        if(!c) return;
+        if(!clientNameInput.value && (c.first_name||c.last_name))
+          clientNameInput.value = [c.first_name||'', c.last_name||''].join(' ').trim();
+        if(!clientPhoneInput.value && c.phone)
+          clientPhoneInput.value = c.phone;
+      }catch{}
+    }
 
-      const prefillFromContact = async () => {
-        try {
-          const r = await fetch('/api/contacts/me');
-          if (!r.ok) return;
-          const data = await r.json();
-          const c = data.contact;
-          if (!c) return;
-          if (c.first_name || c.last_name) {
-            const name = [c.first_name||'', c.last_name||''].join(' ').trim();
-            if (name && !clientNameInput.value) clientNameInput.value = name;
-          }
-          if (c.phone && !clientPhoneInput.value) {
-            clientPhoneInput.value = c.phone;
-          }
-          if (c.phone) {
-  const pb = document.getElementById('phoneBlock');
-  if (pb) pb.style.display = 'none';
-}
-          if ((c.username || c.id) && !clientNotesInput.value) {
-            const nick = c.username ? '@'+c.username : '';
-            clientNotesInput.placeholder = clientNotesInput.placeholder + (nick?` — ${nick}`:'');
-          }
-        } catch(_) {}
-      };
+    // Load services
+    async function loadServices(){
+      const r = await fetch('/api/services');
+      const list = r.ok ? await r.json() : [];
+      serviceSelect.innerHTML = '<option value=\"\" disabled selected>Выберите услугу…</option>' +
+        list.map(s=>`<option value=\"${s.id}\" data-duration=\"${s.duration}\" data-price=\"${s.price}\">${s.name}</option>`).join('');
+      return list;
+    }
 
-      const state = {
-        services: [],
-        selectedServiceId: null,
-        selectedSlot: null,
-        availability: [],
-        serviceDuration: null
-      };
+    // Load masters
+    async function loadMasters(){
+      const r = await fetch('/api/masters');
+      const list = r.ok ? await r.json() : [];
+      bookingMasterSelect.innerHTML = '<option value=\"\" disabled selected>Выберите мастера…</option>' +
+        list.map(m=>`<option value=\"${m.id}\">${m.name}</option>`).join('');
+      return list;
+    }
 
-      const showBanner = (message, type = 'success') => {
-        banner.textContent = message;
-        banner.classList.toggle('error', type === 'error');
-        banner.classList.add('show');
-        banner.hidden = false;
-        setTimeout(() => {
-          banner.classList.remove('show');
-          setTimeout(() => {
-            banner.hidden = true;
-          }, 180);
-        }, 2400);
-      };
+    // Slots
+    function clearSlots(){ slotsContainer.innerHTML=''; slotsEmpty.hidden = true; }
 
-      const formatCurrency = (value) =>
-        new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value);
-
-      const renderServiceSummary = () => {
-        const service = state.services.find((item) => item.id === state.selectedServiceId);
-        if (!service) {
-          serviceSummary.hidden = true;
-          serviceSummary.innerHTML = '';
-          return;
-        }
-
-        state.serviceDuration = service.duration;
-        serviceSummary.hidden = false;
-        serviceSummary.innerHTML = `
-          <strong>${service.name}</strong>
-          <span>${service.description}</span>
-          <span><strong>${formatCurrency(service.price)}</strong> · ${service.duration} мин</span>
-        `;
-      };
-
-      const renderSelectionSummary = () => {
-        const service = state.services.find((item) => item.id === state.selectedServiceId);
-        if (!service || !state.selectedSlot || !dateInput.value) {
-          selectionSummary.hidden = true;
-          selectionSummary.innerHTML = '';
-          return;
-        }
-
-        const date = new Date(dateInput.value);
-        const formattedDate = date.toLocaleDateString('ru-RU', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long'
-        });
-
-        selectionSummary.hidden = false;
-        selectionSummary.innerHTML = `
-          <div><strong>${service.name}</strong></div>
-          <div>${formattedDate}, ${state.selectedSlot.startTime}</div>
-          <div>${formatCurrency(service.price)}, длительность ${service.duration} мин</div>
-        `;
-      };
-
-      const clearSlots = () => {
-        slotsContainer.innerHTML = '';
-        slotsEmpty.hidden = true;
-        state.selectedSlot = null;
-        renderSelectionSummary();
-      };
-
-      const renderSlots = () => {
-        clearSlots();
-
-        const availableSlots = state.availability.filter((slot) => slot.available);
-        if (!availableSlots.length) {
-          slotsEmpty.hidden = false;
-          return;
-        }
-
-        const fragment = document.createDocumentFragment();
-        availableSlots.forEach((slot) => {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'slot-button';
-          button.dataset.start = slot.startTime;
-          button.textContent = slot.startTime;
-
-          button.addEventListener('click', () => {
-            state.selectedSlot = slot;
-            document.querySelectorAll('.slot-button').forEach((el) => el.classList.remove('selected'));
-            button.classList.add('selected');
-            renderSelectionSummary();
-          });
-
-          fragment.appendChild(button);
-        });
-
-        slotsContainer.appendChild(fragment);
-      };
-
-      const fetchAvailability = async () => {
-        if (!state.selectedServiceId || !dateInput.value) {
-          availabilityHint.textContent = 'Выберите услугу и дату, чтобы увидеть свободные слоты.';
-          availabilityHint.classList.remove('error');
-          clearSlots();
-          return;
-        }
-
-const masterId = bookingMasterSelect.value;
-if (!masterId) {
-  availabilityHint.textContent = 'Сначала выберите мастера.';
-  availabilityHint.classList.add('error');
-  clearSlots();
-  return;
-}
-const params = new URLSearchParams({
-  serviceId: state.selectedServiceId,
-  date: dateInput.value,
-  masterId
-});
-
-        try {
-          const response = await fetch(`/api/availability?${params.toString()}`);
-          if (!response.ok) {
-            const payload = await response.json().catch(() => ({ error: 'Не удалось получить слоты' }));
-            availabilityHint.textContent = payload.error || 'Не удалось получить слоты';
-            availabilityHint.classList.add('error');
-            clearSlots();
-            return;
-          }
-
-          const data = await response.json();
-          state.availability = Array.isArray(data.slots) ? data.slots : [];
-          state.serviceDuration = data.meta?.serviceDuration ?? state.serviceDuration;
-          availabilityHint.textContent = `Доступно свободных окон: ${state.availability.filter((slot) => slot.available).length}`;
-          availabilityHint.classList.remove('error');
-          renderSlots();
-        } catch (error) {
-          console.error(error);
-          availabilityHint.textContent = 'Не удалось получить слоты';
-          availabilityHint.classList.add('error');
-          clearSlots();
-        }
-      };
-
-      const loadServices = async () => {
-        try {
-          const response = await fetch('/api/services');
-          if (!response.ok) {
-            throw new Error('services request failed');
-          }
-          const services = await response.json();
-          state.services = services;
-
-          if (!services.length) {
-            serviceSelect.innerHTML = '<option value="" disabled selected>Нет доступных услуг</option>';
-            serviceSelect.disabled = true;
-            return;
-          }
-
-          const options = ['<option value="" disabled selected>Выберите услугу</option>'];
-          services.forEach((service) => {
-            options.push(
-              `<option value="${service.id}">${service.name} · ${service.duration} мин · ${formatCurrency(service.price)}</option>`
-            );
-          });
-          serviceSelect.innerHTML = options.join('');
-          serviceSelect.disabled = false;
-        } catch (error) {
-          console.error(error);
-          serviceSelect.innerHTML = '<option value="" disabled selected>Не удалось загрузить услуги</option>';
-          serviceSelect.disabled = true;
-        }
-      };
-
-      const initDate = () => {
-        const today = new Date();
-        const iso = today.toISOString().split('T')[0];
-        dateInput.min = iso;
-        dateInput.value = iso;
-      };
-
-      serviceSelect.addEventListener('change', (event) => {
-        state.selectedServiceId = Number(event.target.value);
-        renderServiceSummary();
-        fetchAvailability();
+    async function fetchAvailability(){
+      clearSlots();
+      if(!serviceSelect.value || !dateInput.value || !bookingMasterSelect.value){
+        availabilityHint.textContent='Выберите услугу, мастера и дату.';
+        availabilityHint.classList.add('error');
+        return;
+      }
+      availabilityHint.textContent='Ищу свободные слоты…';
+      availabilityHint.classList.remove('error');
+      const params = new URLSearchParams({
+        serviceId: serviceSelect.value,
+        date: dateInput.value,
+        masterId: bookingMasterSelect.value
       });
-
-      dateInput.addEventListener('change', fetchAvailability);
-      masterInput.addEventListener('change', fetchAvailability);
-
-      bookingForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-
-        if (!state.selectedServiceId) {
-          showBanner('Выберите услугу', 'error');
-          return;
-        }
-
-        if (!state.selectedSlot) {
-          showBanner('Выберите свободное время', 'error');
-          return;
-        }
-
-        const masterId = bookingMasterSelect.value;
-if (!masterId) { showBanner('Пожалуйста, выберите мастера', 'error'); return; }
-
-        const payload = {
-          clientName: clientNameInput.value.trim(),
-          clientPhone: clientPhoneInput.value.trim(),
-          notes: clientNotesInput.value.trim(),
-          serviceId: state.selectedServiceId,
-          date: dateInput.value,
-          startTime: state.selectedSlot.startTime,
-          duration: state.serviceDuration,
-          masterId: masterInput.value.trim() || null
-        };
-
-        if (!payload.clientName || !payload.clientPhone) {
-          showBanner('Заполните контакты', 'error');
-          return;
-        }
-
-        try {
-          const response = await fetch('/api/bookings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-
-          if (!response.ok) {
-            const data = await response.json().catch(() => ({ error: 'Не удалось создать запись' }));
-            showBanner(data.error || 'Не удалось создать запись', 'error');
-            await fetchAvailability();
-            return;
-          }
-
-          await response.json();
-          showBanner('Запись подтверждена!');
-          bookingForm.reset();
-          initDate();
-          state.selectedServiceId = null;
-          state.selectedSlot = null;
-          serviceSummary.hidden = true;
-          selectionSummary.hidden = true;
-          serviceSelect.selectedIndex = 0;
-          fetchAvailability();
-        } catch (error) {
-          console.error(error);
-          showBanner('Не удалось создать запись', 'error');
-        }
+      const r = await fetch('/api/availability?'+params.toString());
+      if(!r.ok){ availabilityHint.textContent='Ошибка загрузки слотов'; availabilityHint.classList.add('error'); return; }
+      const data = await r.json();
+      const slots = (data && data.slots) || [];
+      if(!slots.length){ slotsEmpty.hidden = false; availabilityHint.textContent='Свободных слотов нет'; return; }
+      slotsEmpty.hidden = true; availabilityHint.textContent='Выберите удобное время';
+      slots.forEach(s=>{
+        const btn = document.createElement('button');
+        btn.type='button'; btn.className='slot-button'; btn.textContent = `${s.startTime}–${s.endTime}`;
+        btn.disabled = !s.available;
+        btn.addEventListener('click',()=>{
+          document.querySelectorAll('.slot-button.selected').forEach(b=>b.classList.remove('selected'));
+          btn.classList.add('selected'); btn.dataset.value = s.startTime;
+        });
+        slotsContainer.appendChild(btn);
       });
+    }
 
-      initDate();
-      loadServices().then(fetchAvailability);
-      prefillFromContact();
-      fetchMasters().then(list => { mastersCache = list||[]; updateAllowedDaysUI(); });
+    // Step events & validation
+    next1.addEventListener('click', ()=>{
+      const name = clientNameInput.value.trim();
+      const phone = clientPhoneInput.value.trim();
+      if(!name){ showBanner('Укажите имя', 'error'); return; }
+      if(!phone){ showBanner('Укажите номер телефона', 'error'); return; }
+      go(2);
     });
+    back2.addEventListener('click', ()=> go(1));
+    next2.addEventListener('click', ()=>{
+      if(!serviceSelect.value){ showBanner('Выберите услугу', 'error'); return; }
+      const opt = serviceSelect.selectedOptions[0];
+      const price = opt?.dataset?.price;
+      const duration = opt?.dataset?.duration;
+      serviceSummary.hidden = false;
+      serviceSummary.innerHTML = `<b>${opt.textContent}</b><span class=\"muted\">Длительность: ${duration} мин · Цена: ${price}₽</span>`;
+      go(3); fetchAvailability();
+    });
+    back3.addEventListener('click', ()=> go(2));
+
+    bookingMasterSelect.addEventListener('change', ()=>{ if(dateInput.value) fetchAvailability(); });
+    dateInput.addEventListener('change', ()=> fetchAvailability());
+
+    // Submit
+    submitBtn.addEventListener('click', async ()=>{
+      const name = clientNameInput.value.trim();
+      const phone = clientPhoneInput.value.trim();
+      const serviceId = Number(serviceSelect.value);
+      const masterId = bookingMasterSelect.value;
+      const date = dateInput.value;
+      const slotBtn = document.querySelector('.slot-button.selected');
+      const startTime = slotBtn && slotBtn.dataset.value;
+      if(!name){ showBanner('Укажите имя', 'error'); go(1); return; }
+      if(!phone){ showBanner('Укажите номер телефона', 'error'); go(1); return; }
+      if(!serviceId){ showBanner('Выберите услугу', 'error'); go(2); return; }
+      if(!masterId){ showBanner('Выберите мастера', 'error'); go(3); return; }
+      if(!date){ showBanner('Выберите дату', 'error'); go(3); return; }
+      if(!startTime){ showBanner('Выберите время', 'error'); go(3); return; }
+      const payload = { clientName:name, clientPhone:phone, notes: clientNotesInput.value.trim(), serviceId, masterId, date, startTime };
+      const r = await fetch('/api/bookings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if(!r.ok){ const j = await r.json().catch(()=>({})); showBanner(j.error||'Ошибка сохранения', 'error'); return; }
+      showBanner('Запись создана! Мы свяжемся с вами в Telegram.');
+      setTimeout(()=>{ try { const tg = window.Telegram && window.Telegram.WebApp; tg && tg.close && tg.close(); } catch(_){} }, 1400);
+    });
+
+    // Init
+    prefill();
+    loadServices();
+    loadMasters();
+  });
   </script>
 </body>
 </html>
-EOF
 
 # --- admin.html ---
 # ADMIN UI template will be copied below
