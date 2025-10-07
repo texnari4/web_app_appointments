@@ -1763,7 +1763,7 @@ cat <<'EOF' >  public/client.html
     header h1 { margin:0; font-size:clamp(26px,5vw,36px); font-weight:700; letter-spacing:-0.02em; }
     header p { margin:0 auto; max-width:520px; color:#4b5563; font-size:16px; line-height:1.5; }
     *, *::before, *::after { box-sizing: border-box; }
-    .step .form-grid, .step .controls { max-width: 100%; margin: 0; }
+    .step .form-grid, .step .controls { max-width: 100%; margin: 0; padding: 0 4px; }
     input, select, textarea { width: 100%; }
 
     /* Wizard */
@@ -1771,10 +1771,10 @@ cat <<'EOF' >  public/client.html
     .steps  { display:flex; transition:transform .35s ease; will-change: transform; }
     @media (max-width: 420px) {
   body { padding: 20px 12px 32px; }
-  .step { padding: 18px 14px; }
-  .step .form-grid, .step .controls { max-width: 100%; }
+  .step { padding: 16px; }
+  .step .form-grid, .step .controls { max-width: 100%; padding: 0 4px; }
 }
-    .step { width:100%; flex:0 0 100%; padding:24px 20px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); }
+    .step { width:100%; flex:0 0 100%; padding:20px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); }
     .step h2 { margin:0 0 12px; font-size:22px; font-weight:600; }
     .form-grid { display:grid; gap:14px; }
     label { display:grid; gap:6px; font-size:14px; color:#4b5563; }
@@ -1823,7 +1823,7 @@ cat <<'EOF' >  public/client.html
               <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" required />
             </label>
           </div>
-          <div class="controls" style="justify-content:flex-start;">
+          <div class="controls">
             <button id="next1" class="btn primary" type="button">Продолжить</button>
           </div>
         </section>
