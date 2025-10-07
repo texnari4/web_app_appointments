@@ -1752,134 +1752,133 @@ cat <<'EOF' >  public/client.html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Запись в салон — Beauty Appointments</title>
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Запись в салон — Beauty Appointments</title>
   <style>
-    :root { color-scheme: light; font-family: 'SF Pro Display','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
-    body { margin:0; padding:32px 16px 48px; background:linear-gradient(180deg,#f6f7fb 0%,#f0f3f8 45%,#eef1f7 100%); color:#111827; min-height:100vh; overflow-x:hidden; }
-    main { max-width:720px; margin:0 auto; display:grid; gap:18px; }
-    header { text-align:center; display:grid; gap:8px; }
-    header h1 { margin:0; font-size:clamp(26px,5vw,36px); font-weight:700; letter-spacing:-0.02em; }
-    header p { margin:0 auto; max-width:520px; color:#4b5563; font-size:16px; line-height:1.5; }
+    /* Reset & base */
     *, *::before, *::after { box-sizing: border-box; }
-    .step .form-grid, .step .controls { max-width:100%; margin:0; padding:0; }
-    input, select, textarea { width: 100%; }
+    html, body { height: 100%; }
+    body { margin:0; -webkit-text-size-adjust:100%; font-family: 'SF Pro Display','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background:linear-gradient(180deg,#f6f7fb 0%,#f0f3f8 45%,#eef1f7 100%); color:#111827; overflow-x:hidden; }
 
-    /* Wizard */
-    .wizard { position:relative; overflow:hidden; border-radius:20px; max-width:720px; margin:0 auto; padding:0 8px; }
-    .steps  { display:flex; transition:transform .35s ease; will-change: transform; }
-    @media (max-width: 420px) {
-  body { padding: 20px 10px 28px; }
-  .step { padding:16px; }
-}
-    .step { width:100%; flex:0 0 100%; padding:18px 16px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); box-sizing:border-box; }
-    .step h2 { margin:0 0 12px; font-size:22px; font-weight:600; }
-    .form-grid { display:grid; gap:14px; }
-    label { display:grid; gap:6px; font-size:14px; color:#4b5563; }
-    input, select, textarea { border:1px solid rgba(148,163,184,.45); border-radius:12px; padding:12px 14px; font-size:15px; font-family:inherit; background:rgba(255,255,255,.95); transition:border-color .2s, box-shadow .2s; }
-    input:focus, select:focus, textarea:focus { outline:none; border-color:rgba(99,102,241,.9); box-shadow:0 0 0 3px rgba(99,102,241,.18); background:#fff; }
-    textarea { min-height:90px; resize:vertical; }
-    .muted { color:#6b7280; font-size:13px; }
+    /* Layout */
+    .container { max-width: 720px; margin: 0 auto; padding: 24px 12px calc(28px + env(safe-area-inset-bottom,0)); }
+    header { text-align: center; display: grid; gap: 8px; margin-bottom: 12px; }
+    header h1 { margin: 0; font-weight: 800; letter-spacing: -0.02em; font-size: clamp(24px, 5vw, 34px); }
+    header p { margin: 0 auto; max-width: 520px; color:#4b5563; font-size: 15px; line-height: 1.5; }
 
-    .controls { display:grid; grid-template-columns: 1fr; gap:12px; margin-top:14px; }
-    .btn { display:block; padding:12px 18px; border-radius:12px; border:1px solid rgba(148,163,184,.45); background:#fff; color:#111827; font-weight:700; cursor:pointer; width:100%; box-sizing:border-box; }
-    .btn.primary { border:none; background:linear-gradient(135deg,#5ec5ff,#007aff); color:#fff; box-shadow:0 24px 40px -28px rgba(0,122,255,.55); }
+    .card { position: relative; background: #fff; border: 1px solid rgba(209,213,219,.5); border-radius: 16px; box-shadow: 0 30px 60px -40px rgba(15,23,42,.35); padding: 16px; }
+
+    /* Steps (simple show/hide, no wide carousels => нет горизонтального скролла) */
+    .step { display: none; }
+    .step.active { display: block; }
+
+    .step h2 { margin: 0 0 12px; font-size: 20px; font-weight: 700; }
+
+    .form-grid { display: grid; gap: 12px; }
+    label { display: grid; gap: 6px; font-size: 14px; color:#4b5563; }
+    input, select, textarea { width:100%; padding: 12px 14px; border: 1px solid rgba(148,163,184,.45); border-radius: 12px; font: inherit; background:#fff; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: rgba(99,102,241,.9); box-shadow: 0 0 0 3px rgba(99,102,241,.18); }
+    textarea { min-height: 90px; resize: vertical; }
+
+    .actions { display: grid; gap: 10px; margin-top: 12px; }
+    .btn { display: block; width: 100%; padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(148,163,184,.45); background: #fff; color:#111827; font-weight: 700; cursor: pointer; }
+    .btn.primary { border: none; background: linear-gradient(135deg,#5ec5ff,#007aff); color:#fff; box-shadow: 0 24px 40px -28px rgba(0,122,255,.55); }
     .btn[disabled] { opacity:.6; cursor:not-allowed; }
-    .required { color:#dc2626; margin-left:4px; }
 
-    .slot-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:12px; margin-top:6px; }
-    .slot-button { padding:12px; border-radius:14px; border:1px solid rgba(148,163,184,.4); background:rgba(255,255,255,.92); cursor:pointer; font-size:15px; font-weight:500; display:grid; gap:4px; justify-items:center; transition:transform .2s, box-shadow .2s, border-color .2s; }
-    .slot-button:hover { transform:translateY(-2px); box-shadow:0 20px 34px -26px rgba(15,23,42,.38); }
+    .muted { color:#6b7280; font-size: 13px; }
+
+    .slot-grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(120px,1fr)); gap:12px; margin-top:6px; }
+    .slot-button { padding:12px; border-radius:14px; border:1px solid rgba(148,163,184,.4); background:rgba(255,255,255,.92); cursor:pointer; font-size:15px; font-weight:500; display:grid; gap:4px; justify-items:center; }
     .slot-button.selected { border-color:transparent; background:linear-gradient(130deg,#4ade80,#34c759); color:#fff; box-shadow:0 24px 32px -24px rgba(52,199,89,.55); }
     .slot-button[disabled] { cursor:not-allowed; opacity:.45; }
 
-    .summary-card { border-radius:18px; border:1px solid rgba(209,213,219,.5); background:rgba(249,250,251,.9); padding:12px 14px; display:grid; gap:6px; font-size:15px; color:#374151; }
-    .banner { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); padding:14px 22px; border-radius:14px; background:linear-gradient(135deg, rgba(94,197,255,.95), rgba(0,122,255,.95)); color:#fff; font-weight:600; box-shadow:0 32px 48px -32px rgba(0,122,255,.55); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; }
-    .banner.show { opacity:1; transform:translate(-50%,-6px); }
-    .banner.error { background:linear-gradient(135deg, rgba(255,95,95,.95), rgba(244,63,94,.95)); box-shadow:0 32px 48px -32px rgba(244,63,94,.6); }
+    .summary { border:1px solid rgba(209,213,219,.5); background:rgba(249,250,251,.9); border-radius: 14px; padding:10px 12px; display:grid; gap:6px; }
+
+    .banner { position:fixed; left:0; right:0; bottom: calc(18px + env(safe-area-inset-bottom,0)); margin: 0 auto; max-width: 720px; padding: 12px 16px; border-radius: 12px; background: linear-gradient(135deg, rgba(94,197,255,.95), rgba(0,122,255,.95)); color:#fff; font-weight:700; box-shadow:0 32px 48px -32px rgba(0,122,255,.55); text-align:center; opacity:0; pointer-events:none; transform: translateY(6px); transition: opacity .2s ease, transform .2s ease; }
+    .banner.show { opacity:1; transform: translateY(0); }
+    .banner.error { background: linear-gradient(135deg, rgba(255,95,95,.95), rgba(244,63,94,.95)); box-shadow:0 32px 48px -32px rgba(244,63,94,.6); }
   </style>
 </head>
 <body>
-  <main>
+  <div class="container">
     <header>
       <h1>Запишитесь в любимый салон</h1>
       <p>Три шага: контакты → услуга → дата и мастер. Мы напомним вам о визите в Telegram.</p>
     </header>
 
+    <div class="card">
+      <!-- Шаг 1 -->
+      <section class="step active" id="step1">
+        <h2>Шаг 1 из 3 — Контакты</h2>
+        <div class="form-grid">
+          <label>Как к вам обращаться
+            <input type="text" id="clientName" placeholder="Имя и фамилия" required />
+          </label>
+          <label>Телефон
+            <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" required />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="next1" class="btn primary" type="button">Продолжить</button>
+        </div>
+      </section>
 
+      <!-- Шаг 2 -->
+      <section class="step" id="step2">
+        <h2>Шаг 2 из 3 — Услуга</h2>
+        <div class="form-grid">
+          <label>Услуга
+            <select id="serviceSelect" required>
+              <option value="" disabled selected>Загружаю список…</option>
+            </select>
+          </label>
+          <label>Комментарий для мастера (необязательно)
+            <textarea id="clientNotes" placeholder="Например: хочу нежный пастельный оттенок"></textarea>
+          </label>
+          <div class="summary" id="serviceSummary" hidden></div>
+        </div>
+        <div class="actions">
+          <button id="back2" class="btn" type="button">Назад</button>
+          <button id="next2" class="btn primary" type="button">Далее</button>
+        </div>
+      </section>
 
-    <div class="wizard">
-      <div id="steps" class="steps" data-step="1" style="transform: translateX(0%)">
-        <!-- Шаг 1: Контакты -->
-        <section class="step" data-name="contacts">
-          <h2>Шаг 1 из 3 — Контакты</h2>
-          <div class="form-grid">
-            <label>Как к вам обращаться
-              <input type="text" id="clientName" placeholder="Имя и фамилия" required />
-            </label>
-            <label>Телефон
-              <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" required />
-            </label>
-          </div>
-          <div class="controls">
-            <button id="next1" class="btn primary" type="button">Продолжить</button>
-          </div>
-        </section>
-
-        <!-- Шаг 2: Услуга и комментарий -->
-        <section class="step" data-name="service">
-          <h2>Шаг 2 из 3 — Услуга</h2>
-          <div class="form-grid">
-            <label>Услуга
-              <select id="serviceSelect" required>
-                <option value="" disabled selected>Загружаю список…</option>
-              </select>
-            </label>
-            <label>Комментарий для мастера (необязательно)
-              <textarea id="clientNotes" placeholder="Например: хочу нежный пастельный оттенок"></textarea>
-            </label>
-            <div class="summary-card" id="serviceSummary" hidden></div>
-          </div>
-          <div class="controls">
-            <button id="back2" class="btn">Назад</button>
-            <button id="next2" class="btn primary">Далее</button>
-          </div>
-        </section>
-
-        <!-- Шаг 3: Дата и мастер -->
-        <section class="step" data-name="datetime">
-          <h2>Шаг 3 из 3 — Дата и мастер</h2>
-          <div class="form-grid">
-            <label>Мастер <span class="required">*</span>
-              <select id="bookingMaster" required></select>
-            </label>
-            <label>Дата визита
-              <input type="date" id="dateInput" required />
-            </label>
-            <p class="muted" id="availabilityHint">Выберите услугу и дату, чтобы увидеть свободные слоты.</p>
-          </div>
-          <div id="slotsContainer" class="slot-grid"></div>
-          <p class="muted" id="slotsEmpty" hidden>На выбранный день пока нет свободных окон. Попробуйте другую дату.</p>
-          <div class="controls">
-            <button id="back3" class="btn">Назад</button>
-            <button id="submit" class="btn primary">Подтвердить запись</button>
-          </div>
-        </section>
-      </div>
+      <!-- Шаг 3 -->
+      <section class="step" id="step3">
+        <h2>Шаг 3 из 3 — Дата и мастер</h2>
+        <div class="form-grid">
+          <label>Мастер <span style="color:#dc2626">*</span>
+            <select id="bookingMaster" required></select>
+          </label>
+          <label>Дата визита
+            <input type="date" id="dateInput" required />
+          </label>
+          <p class="muted" id="availabilityHint">Выберите услугу и дату, чтобы увидеть свободные слоты.</p>
+        </div>
+        <div id="slotsContainer" class="slot-grid"></div>
+        <p class="muted" id="slotsEmpty" hidden>На выбранный день пока нет свободных окон. Попробуйте другую дату.</p>
+        <div class="actions">
+          <button id="back3" class="btn" type="button">Назад</button>
+          <button id="submit" class="btn primary" type="button">Подтвердить запись</button>
+        </div>
+      </section>
     </div>
 
     <div class="banner" id="banner" hidden></div>
-  </main>
+  </div>
 
   <script>
   document.addEventListener('DOMContentLoaded', () => {
-    // Telegram WebApp bootstrap (cookie auth, если открыт внутри Telegram)
-    try { const tg = window.Telegram && window.Telegram.WebApp; if (tg) { tg.ready && tg.ready(); tg.expand && tg.expand(); } } catch(_){}
+    // Telegram WebApp adjustments
+    try { const tg = window.Telegram && window.Telegram.WebApp; if (tg) { tg.ready && tg.ready(); tg.expand && tg.expand(); } } catch(_){ }
 
     // Elements
-    const steps = document.getElementById('steps');
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const step3 = document.getElementById('step3');
     const banner = document.getElementById('banner');
+
     const next1 = document.getElementById('next1');
     const back2 = document.getElementById('back2');
     const next2 = document.getElementById('next2');
@@ -1897,79 +1896,72 @@ cat <<'EOF' >  public/client.html
     const slotsContainer = document.getElementById('slotsContainer');
     const slotsEmpty = document.getElementById('slotsEmpty');
 
-    function showBanner(msg, type){
+    function showBanner(msg, type) {
       banner.textContent = msg;
-      banner.classList.toggle('error', type==='error');
-      banner.hidden = false; requestAnimationFrame(()=> banner.classList.add('show'));
-      setTimeout(()=>{ banner.classList.remove('show'); setTimeout(()=> banner.hidden=true, 200); }, 2600);
+      banner.classList.toggle('error', type === 'error');
+      banner.hidden = false; requestAnimationFrame(() => banner.classList.add('show'));
+      setTimeout(() => { banner.classList.remove('show'); setTimeout(() => banner.hidden = true, 180); }, 2200);
     }
 
-    function go(step){
-      steps.dataset.step = String(step);
-      // force reflow for smoother animation in Telegram WebView
-      void steps.offsetWidth;
-      steps.style.transform = `translateX(${(step-1)*-100}%)`;
+    function setStep(n){
+      step1.classList.toggle('active', n===1);
+      step2.classList.toggle('active', n===2);
+      step3.classList.toggle('active', n===3);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // Prefill from saved contact (если есть cookie tg_id)
+    function isValidPhone(p){
+      const v = String(p||'').trim();
+      const digits = v.replace(/\D/g,'');
+      if (digits.length < 10) return false;
+      return /^\+?[\d\s\-()]{10,}$/.test(v);
+    }
+
+    // Prefill contact by cookie tg_id if available
     async function prefill(){
       try{
-        const r = await fetch('/api/contacts/me');
-        if(!r.ok) return;
-        const {contact:c} = await r.json();
-        if(!c) return;
-        if(!clientNameInput.value && (c.first_name||c.last_name))
-          clientNameInput.value = [c.first_name||'', c.last_name||''].join(' ').trim();
-        if(!clientPhoneInput.value && c.phone)
-          clientPhoneInput.value = c.phone;
+        const r = await fetch('/api/contacts/me'); if(!r.ok) return;
+        const j = await r.json(); const c = j.contact;
+        if(c){
+          if(!clientNameInput.value && (c.first_name||c.last_name)) clientNameInput.value = [c.first_name||'', c.last_name||''].join(' ').trim();
+          if(!clientPhoneInput.value && c.phone) clientPhoneInput.value = c.phone;
+        }
       }catch{}
     }
 
-    // Load services
     async function loadServices(){
       const r = await fetch('/api/services');
       const list = r.ok ? await r.json() : [];
-      serviceSelect.innerHTML = '<option value=\"\" disabled selected>Выберите услугу…</option>' +
-        list.map(s=>`<option value=\"${s.id}\" data-duration=\"${s.duration}\" data-price=\"${s.price}\">${s.name}</option>`).join('');
+      serviceSelect.innerHTML = '<option value="" disabled selected>Выберите услугу…</option>' +
+        list.map(s=>`<option value="${s.id}" data-duration="${s.duration}" data-price="${s.price}">${s.name}</option>`).join('');
       return list;
     }
 
-    // Load masters
     async function loadMasters(){
       const r = await fetch('/api/masters');
       const list = r.ok ? await r.json() : [];
-      bookingMasterSelect.innerHTML = '<option value=\"\" disabled selected>Выберите мастера…</option>' +
-        list.map(m=>`<option value=\"${m.id}\">${m.name}</option>`).join('');
+      bookingMasterSelect.innerHTML = '<option value="" disabled selected>Выберите мастера…</option>' +
+        list.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
       return list;
     }
 
-    // Slots
-    function clearSlots(){ slotsContainer.innerHTML=''; slotsEmpty.hidden = true; }
+    function clearSlots(){ slotsContainer.innerHTML = ''; slotsEmpty.hidden = true; }
 
     async function fetchAvailability(){
       clearSlots();
       if(!serviceSelect.value || !dateInput.value || !bookingMasterSelect.value){
-        availabilityHint.textContent='Выберите услугу, мастера и дату.';
-        availabilityHint.classList.add('error');
-        return;
+        availabilityHint.textContent = 'Выберите услугу, мастера и дату.'; return;
       }
-      availabilityHint.textContent='Ищу свободные слоты…';
-      availabilityHint.classList.remove('error');
-      const params = new URLSearchParams({
-        serviceId: serviceSelect.value,
-        date: dateInput.value,
-        masterId: bookingMasterSelect.value
-      });
-      const r = await fetch('/api/availability?'+params.toString());
-      if(!r.ok){ availabilityHint.textContent='Ошибка загрузки слотов'; availabilityHint.classList.add('error'); return; }
-      const data = await r.json();
-      const slots = (data && data.slots) || [];
-      if(!slots.length){ slotsEmpty.hidden = false; availabilityHint.textContent='Свободных слотов нет'; return; }
-      slotsEmpty.hidden = true; availabilityHint.textContent='Выберите удобное время';
+      availabilityHint.textContent = 'Ищу свободные слоты…';
+      const params = new URLSearchParams({ serviceId: serviceSelect.value, date: dateInput.value, masterId: bookingMasterSelect.value });
+      const r = await fetch('/api/availability?' + params.toString());
+      if(!r.ok){ availabilityHint.textContent = 'Ошибка загрузки слотов'; return; }
+      const data = await r.json(); const slots = data?.slots || [];
+      if(!slots.length){ slotsEmpty.hidden = false; availabilityHint.textContent = 'Свободных слотов нет'; return; }
+      availabilityHint.textContent = 'Выберите удобное время';
       slots.forEach(s=>{
         const btn = document.createElement('button');
-        btn.type='button'; btn.className='slot-button'; btn.textContent = `${s.startTime}–${s.endTime}`;
-        btn.disabled = !s.available;
+        btn.type='button'; btn.className='slot-button'; btn.textContent = `${s.startTime}–${s.endTime}`; btn.disabled = !s.available;
         btn.addEventListener('click',()=>{
           document.querySelectorAll('.slot-button.selected').forEach(b=>b.classList.remove('selected'));
           btn.classList.add('selected'); btn.dataset.value = s.startTime;
@@ -1978,62 +1970,45 @@ cat <<'EOF' >  public/client.html
       });
     }
 
-    // Step events & validation
-    function isValidPhone(p){
-      // Допускаем форматы: +375 29 123-45-67, +7(999)999-99-99, 8 029 1234567 и т.п.
-      const v = String(p||'').trim();
-      if(!v) return false;
-      // Должно быть не меньше 10 цифр суммарно
-      const digits = v.replace(/\D/g,'');
-      if(digits.length < 10) return false;
-      // Базовая проверка на допустимые символы
-      return /^\+?[\d\s\-()]{10,}$/.test(v);
-    }
-
-    next1.addEventListener('click', ()=>{
+    // Step 1
+    next1.addEventListener('click', () => {
       const name = clientNameInput.value.trim();
       const phone = clientPhoneInput.value.trim();
       if(!name){ showBanner('Укажите имя', 'error'); return; }
       if(!phone){ showBanner('Укажите номер телефона', 'error'); return; }
       if(!isValidPhone(phone)){ showBanner('Проверьте формат номера телефона', 'error'); return; }
-      go(2);
+      setStep(2);
     });
-    back2.addEventListener('click', ()=> go(1));
-    next2.addEventListener('click', ()=>{
+
+    // Step 2
+    back2.addEventListener('click', () => setStep(1));
+    next2.addEventListener('click', () => {
       if(!serviceSelect.value){ showBanner('Выберите услугу', 'error'); return; }
       const opt = serviceSelect.selectedOptions[0];
-      const price = opt?.dataset?.price;
-      const duration = opt?.dataset?.duration;
-      serviceSummary.hidden = false;
-      serviceSummary.innerHTML = `<b>${opt.textContent}</b><span class=\"muted\">Длительность: ${duration} мин · Цена: ${price}₽</span>`;
-      go(3); fetchAvailability();
+      const price = opt?.dataset?.price; const duration = opt?.dataset?.duration;
+      serviceSummary.hidden = false; serviceSummary.innerHTML = `<b>${opt.textContent}</b><span class="muted">Длительность: ${duration} мин · Цена: ${price}₽</span>`;
+      setStep(3); fetchAvailability();
     });
-    back3.addEventListener('click', ()=> go(2));
 
-    bookingMasterSelect.addEventListener('change', ()=>{ if(dateInput.value) fetchAvailability(); });
-    dateInput.addEventListener('change', ()=> fetchAvailability());
+    // Step 3
+    back3.addEventListener('click', () => setStep(2));
+    bookingMasterSelect.addEventListener('change', () => { if(dateInput.value) fetchAvailability(); });
+    dateInput.addEventListener('change', () => fetchAvailability());
 
-    // Submit
-    submitBtn.addEventListener('click', async ()=>{
+    submitBtn.addEventListener('click', async () => {
       const name = clientNameInput.value.trim();
       const phone = clientPhoneInput.value.trim();
+      if(!name || !phone || !isValidPhone(phone)){ setStep(1); showBanner('Проверьте контакты', 'error'); return; }
       const serviceId = Number(serviceSelect.value);
-      const masterId = bookingMasterSelect.value;
-      const date = dateInput.value;
-      const slotBtn = document.querySelector('.slot-button.selected');
-      const startTime = slotBtn && slotBtn.dataset.value;
-      if(!name){ showBanner('Укажите имя', 'error'); go(1); return; }
-      if(!phone){ showBanner('Укажите номер телефона', 'error'); go(1); return; }
-      if(!isValidPhone(phone)){ showBanner('Проверьте формат номера телефона', 'error'); go(1); return; }
-      if(!serviceId){ showBanner('Выберите услугу', 'error'); go(2); return; }
-      if(!masterId){ showBanner('Выберите мастера', 'error'); go(3); return; }
-      if(!date){ showBanner('Выберите дату', 'error'); go(3); return; }
-      if(!startTime){ showBanner('Выберите время', 'error'); go(3); return; }
+      const masterId = bookingMasterSelect.value; const date = dateInput.value;
+      const slotBtn = document.querySelector('.slot-button.selected'); const startTime = slotBtn && slotBtn.dataset.value;
+      if(!serviceId){ setStep(2); showBanner('Выберите услугу', 'error'); return; }
+      if(!masterId || !date || !startTime){ setStep(3); showBanner('Выберите мастера, дату и время', 'error'); return; }
       const payload = { clientName:name, clientPhone:phone, notes: clientNotesInput.value.trim(), serviceId, masterId, date, startTime };
-      const r = await fetch('/api/bookings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const r = await fetch('/api/bookings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       if(!r.ok){ const j = await r.json().catch(()=>({})); showBanner(j.error||'Ошибка сохранения', 'error'); return; }
       showBanner('Запись создана! Мы свяжемся с вами в Telegram.');
-      setTimeout(()=>{ try { const tg = window.Telegram && window.Telegram.WebApp; tg && tg.close && tg.close(); } catch(_){} }, 1400);
+      setTimeout(()=>{ try{ const tg = window.Telegram && window.Telegram.WebApp; tg && tg.close && tg.close(); }catch(_){} }, 1400);
     });
 
     // Init
