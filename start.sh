@@ -2517,6 +2517,35 @@ cat <<'EOF' >  templates/managel.html
     .tabs{display:flex;justify-content:space-around;gap:6px}
     .tab{display:grid;justify-items:center;gap:4px;color:#6b7280;font-size:12px}
     .tab.active{color:#007aff;font-weight:700}
+
+    /* Modal */
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.4);display:none;align-items:center;justify-content:center;z-index:40;padding:12px}
+.modal.show{display:flex}
+.modal-card{width:100%;max-width:560px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 30px 60px -40px rgba(15,23,42,.4);padding:14px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.modal-title{font-weight:800}
+.xbtn{border:none;background:transparent;font-size:22px;cursor:pointer;color:#6b7280}
+.form{display:grid;gap:10px}
+label{display:grid;gap:6px;font-size:14px;color:#4b5563}
+input,select,textarea{width:100%;padding:12px 14px;border:1px solid rgba(148,163,184,.45);border-radius:12px;font:inherit;font-size:16px;line-height:1.2;background:#fff}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>.col{flex:1 1 180px}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid rgba(148,163,184,.45);background:#fff;color:#111827;font-weight:700;cursor:pointer;font-size:16px}
+.btn.primary{border:none;background:#007aff;color:#fff;box-shadow:0 20px 32px -20px rgba(0,122,255,.5)}
+
+/* Multi-views */
+.hidden{display:none}
+.grid-week{display:grid;grid-template-columns:64px repeat(7,1fr);gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 24px 40px -32px rgba(15,23,42,.25);padding:10px}
+.day-col{position:relative;border-left:1px dashed #e5e7eb;min-height:56px}
+.grid-month{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 24px 40px -32px rgba(15,23,42,.25);padding:10px}
+.month-cell{border:1px solid #e5e7eb;border-radius:10px;min-height:88px;padding:6px;display:grid;gap:4px}
+.month-cell .d{font-size:12px;color:#6b7280}
+.pill{display:inline-block;padding:2px 6px;border-radius:999px;background:#eef6ff;border:1px solid #c7ddff;font-size:12px}
+.list-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 24px 40px -32px rgba(15,23,42,.25);padding:10px}
+.list-item{display:flex;gap:10px;padding:10px;border-bottom:1px solid #eef2f7}
+.list-item:last-child{border-bottom:none}
+
   </style>
 </head>
 <body>
@@ -2536,10 +2565,30 @@ cat <<'EOF' >  templates/managel.html
 
   <main>
     <div class="date-label" id="dateLabel"></div>
-    <div class="grid">
-      <div class="hours" id="hoursCol"></div>
-      <div class="lane" id="lane"></div>
-    </div>
+
+<!-- Day view -->
+<div id="viewDayWrap" class="grid">
+  <div class="hours" id="hoursCol"></div>
+  <div class="lane" id="lane"></div>
+</div>
+
+<!-- Week view -->
+<div id="viewWeekWrap" class="grid-week hidden">
+  <div class="hours" id="hoursColW"></div>
+  <div class="day-col" id="w0"></div>
+  <div class="day-col" id="w1"></div>
+  <div class="day-col" id="w2"></div>
+  <div class="day-col" id="w3"></div>
+  <div class="day-col" id="w4"></div>
+  <div class="day-col" id="w5"></div>
+  <div class="day-col" id="w6"></div>
+</div>
+
+<!-- Month view -->
+<div id="viewMonthWrap" class="grid-month hidden"></div>
+
+<!-- List view -->
+<div id="viewListWrap" class="list-wrap hidden"><div id="listBody"></div></div>
   </main>
 
   <nav class="bottom">
@@ -2552,6 +2601,54 @@ cat <<'EOF' >  templates/managel.html
   </nav>
 </div>
 
+<div class="modal" id="modalAdd">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div class="modal-title">Новая запись</div>
+      <button class="xbtn" id="closeAdd">×</button>
+    </div>
+    <div class="form">
+      <div class="row">
+        <div class="col"><label>Имя клиента
+          <input id="abName" type="text" placeholder="Иван Иванов" required>
+        </label></div>
+        <div class="col"><label>Телефон
+          <input id="abPhone" type="tel" placeholder="+375 .." required>
+        </label></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Услуга
+          <select id="abService" required>
+            <option value="" disabled selected>Выберите услугу…</option>
+          </select>
+        </label></div>
+        <div class="col"><label>Мастер
+          <select id="abMaster" required>
+            <option value="" disabled selected>Все мастера</option>
+          </select>
+        </label></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Дата
+          <input id="abDate" type="date" required>
+        </label></div>
+        <div class="col"><label>Время
+          <select id="abTime" required>
+            <option value="" disabled selected>Сначала выберите дату</option>
+          </select>
+        </label></div>
+      </div>
+      <label>Комментарий
+        <textarea id="abNotes" placeholder="Пожелания для мастера (необязательно)"></textarea>
+      </label>
+      <div class="actions">
+        <button class="btn" id="abCancel" type="button">Отмена</button>
+        <button class="btn primary" id="abSave" type="button">Создать</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <button class="fab" id="fabAdd" title="Добавить запись">+</button>
 
 <script>
@@ -2560,20 +2657,57 @@ cat <<'EOF' >  templates/managel.html
   try{ const tg=window.Telegram&&window.Telegram.WebApp; if(tg){ tg.ready&&tg.ready(); tg.expand&&tg.expand(); } }catch{}
   ensureTgAuth();
 
-  let cursor = new Date();
-  const hours=[...Array(12)].map((_,i)=> i+9);
+  let cursor = new Date(); // selected anchor day
+  let currentView = 'day';
+  const hours=[...Array(12)].map((_,i)=> i+9); // 09..20
+
+  // Elements
   const daysScroller=document.getElementById('daysScroller');
   const dateLabel=document.getElementById('dateLabel');
   const hoursCol=document.getElementById('hoursCol');
   const lane=document.getElementById('lane');
+  const hoursColW=document.getElementById('hoursColW');
+  const weekCols=[...Array(7)].map((_,i)=>document.getElementById('w'+i));
+  const monthWrap=document.getElementById('viewMonthWrap');
+  const listBody=document.getElementById('listBody');
+  const dayWrap=document.getElementById('viewDayWrap');
+  const weekWrap=document.getElementById('viewWeekWrap');
+  const listWrap=document.getElementById('viewListWrap');
+
+  // Modal elements
+  const modal = document.getElementById('modalAdd');
+  const openFab = document.getElementById('fabAdd');
+  const closeBtn = document.getElementById('closeAdd');
+  const cancelBtn = document.getElementById('abCancel');
+  const saveBtn = document.getElementById('abSave');
+  const fName = document.getElementById('abName');
+  const fPhone = document.getElementById('abPhone');
+  const fService = document.getElementById('abService');
+  const fMaster = document.getElementById('abMaster');
+  const fDate = document.getElementById('abDate');
+  const fTime = document.getElementById('abTime');
+  const fNotes = document.getElementById('abNotes');
 
   function ymd(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const da=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${da}`; }
   function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+  function addMonths(d,n){ const x=new Date(d); x.setMonth(x.getMonth()+n); return x; }
+  function startOfWeek(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
   function toMin(t){ const [h,m]=String(t||'00:00').split(':').map(Number); return h*60+m; }
 
-  function renderHours(){ hoursCol.innerHTML=''; hours.forEach(h=>{ const c=document.createElement('div'); c.className='hcell'; c.textContent=String(h).padStart(2,'0')+':00'; hoursCol.appendChild(c); }); lane.style.minHeight=(hours.length*56)+'px'; }
+  function setView(v){
+    currentView=v;
+    document.querySelectorAll('.views .chip').forEach(c=>c.classList.toggle('active', c.dataset.view===v));
+    dayWrap.classList.toggle('hidden', v!=='day');
+    weekWrap.classList.toggle('hidden', v!=='week');
+    monthWrap.classList.toggle('hidden', v!=='month');
+    listWrap.classList.toggle('hidden', v!=='list');
+    update();
+  }
+  document.querySelectorAll('.views .chip').forEach(c=>c.addEventListener('click',()=>setView(c.dataset.view)));
 
-  function renderDays(){
+  function renderHours(container){ container.innerHTML=''; hours.forEach(h=>{ const c=document.createElement('div'); c.className='hcell'; c.textContent=String(h).padStart(2,'0')+':00'; container.appendChild(c); }); }
+
+  function renderDaysStrip(){
     daysScroller.innerHTML='';
     for(let i=-3;i<=3;i++){
       const d=addDays(cursor,i); const el=document.createElement('div'); el.className='day';
@@ -2585,27 +2719,139 @@ cat <<'EOF' >  templates/managel.html
     }
   }
 
-  function renderTitle(){ dateLabel.textContent = 'Выбрано: ' + cursor.toLocaleDateString('ru-RU',{weekday:'long', day:'numeric', month:'long', year:'numeric'}); }
+  function renderTitle(){
+    const opt = currentView==='week' ? { day:'numeric', month:'long' } : currentView==='month' ? { month:'long', year:'numeric' } : { weekday:'long', day:'numeric', month:'long', year:'numeric' };
+    dateLabel.textContent = 'Выбрано: ' + cursor.toLocaleDateString('ru-RU', opt);
+  }
 
-  async function renderEvents(){
-    lane.innerHTML='';
-    const from=ymd(cursor); const to=from;
-    const r=await fetch('/api/bookings?from='+from+'&to='+to);
-    const list=r.ok?await r.json():[];
+  async function fetchBookings(from,to){
+    const r=await fetch(`/api/bookings?from=${from}&to=${to}`);
+    return r.ok?await r.json():[];
+  }
+
+  function renderDay(bookings){
+    lane.innerHTML=''; renderHours(hoursCol); lane.style.minHeight=(hours.length*56)+'px';
     const perMin=56/60;
-    list.forEach(b=>{
-      const start = Math.max(0,(toMin(b.startTime)-(9*60))*perMin);
+    bookings.forEach(b=>{
+      const top = Math.max(0,(toMin(b.startTime)-(9*60))*perMin);
       const dur = Number(b.duration||b.serviceDuration||30);
       const h = Math.max(36, Math.round(dur*perMin));
-      const ev=document.createElement('div'); ev.className='event'; ev.style.top=start+'px'; ev.style.height=h+'px';
+      const ev=document.createElement('div'); ev.className='event'; ev.style.top=top+'px'; ev.style.height=h+'px';
       ev.innerHTML = `<div class='t'>${b.startTime} • ${b.clientName||''}</div><div class='m'>${b.serviceName||''} · ${b.masterId||''}</div>`;
       lane.appendChild(ev);
     });
   }
 
-  function update(){ renderDays(); renderTitle(); renderHours(); renderEvents(); }
+  function renderWeek(weekBookings){
+    weekCols.forEach(c=>c.innerHTML=''); renderHours(hoursColW); const perMin=56/60; const wkStart=startOfWeek(cursor);
+    const map = new Map();
+    for(const b of weekBookings){ if(!map.has(b.date)) map.set(b.date, []); map.get(b.date).push(b); }
+    for(let i=0;i<7;i++){
+      const d=addDays(wkStart,i); const key=ymd(d); const col=weekCols[i]; col.style.minHeight=(hours.length*56)+'px';
+      const list=map.get(key)||[];
+      list.forEach(b=>{
+        const top = Math.max(0,(toMin(b.startTime)-(9*60))*perMin);
+        const dur = Number(b.duration||b.serviceDuration||30);
+        const h = Math.max(32, Math.round(dur*perMin));
+        const ev=document.createElement('div'); ev.className='event'; ev.style.top=top+'px'; ev.style.height=h+'px';
+        ev.innerHTML = `<div class='t'>${b.startTime}</div><div class='m'>${b.clientName||''}</div>`;
+        col.appendChild(ev);
+      });
+    }
+  }
 
-  document.getElementById('fabAdd').addEventListener('click', ()=>{ alert('Открыть форму создания записи'); });
+  function renderMonth(monthBookings){
+    monthWrap.innerHTML='';
+    const first=new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const start = startOfWeek(first);
+    for(let i=0;i<42;i++){
+      const d=addDays(start,i); const cell=document.createElement('div'); cell.className='month-cell';
+      cell.innerHTML = `<div class="d">${d.getDate()}</div>`;
+      const key=ymd(d); const items=monthBookings.filter(b=>b.date===key);
+      if(items.length){ cell.innerHTML += `<div class="pill">${items.length} запись(и)</div>`; }
+      monthWrap.appendChild(cell);
+    }
+  }
+
+  function renderList(list){
+    listBody.innerHTML='';
+    list.sort((a,b)=> (a.date.localeCompare(b.date)) || (a.startTime||'').localeCompare(b.startTime||''));
+    for(const b of list){
+      const el=document.createElement('div'); el.className='list-item';
+      el.innerHTML = `<div style="min-width:86px"><b>${b.date}</b><div class='muted'>${b.startTime}</div></div>
+      <div style="flex:1 1 auto"><div><b>${b.clientName||''}</b></div><div class='muted'>${b.serviceName||''}${b.masterId?` · ${b.masterId}`:''}</div></div>`;
+      listBody.appendChild(el);
+    }
+  }
+
+  async function update(){
+    renderDaysStrip(); renderTitle();
+    if(currentView==='day'){
+      const from=ymd(cursor); const list = await fetchBookings(from,from); renderDay(list);
+    } else if(currentView==='week'){
+      const start = startOfWeek(cursor); const from=ymd(start); const to=ymd(addDays(start,6)); const list=await fetchBookings(from,to); renderWeek(list);
+    } else if(currentView==='month'){
+      const first=new Date(cursor.getFullYear(), cursor.getMonth(), 1); const last=new Date(cursor.getFullYear(), cursor.getMonth()+1, 0);
+      const from=ymd(first); const to=ymd(last); const list=await fetchBookings(from,to); renderMonth(list);
+    } else {
+      const from=ymd(addDays(cursor,-14)); const to=ymd(addDays(cursor,14)); const list=await fetchBookings(from,to); renderList(list);
+    }
+  }
+
+  // ==== Modal logic ====
+  function openModal(){ modal.classList.add('show'); fDate.value = ymd(cursor); fTime.innerHTML='<option value=\"\" disabled selected>Загружаю слоты…</option>'; ensureRefs().then(loadAvailability); }
+  function closeModal(){ modal.classList.remove('show'); }
+  openFab.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+  cancelBtn.addEventListener('click', closeModal);
+
+  // Load services & masters once
+  let cachedServices=[]; let cachedMasters=[];
+  async function ensureRefs(){
+    if(!cachedServices.length){
+      const r=await fetch('/api/services'); cachedServices = r.ok ? await r.json() : [];
+      fService.innerHTML='<option value=\"\" disabled selected>Выберите услугу…</option>'+cachedServices.map(s=>`<option value=\"${s.id}\">${s.name} • ${s.duration} мин</option>`).join('');
+    }
+    if(!cachedMasters.length){
+      const r=await fetch('/api/masters'); cachedMasters = r.ok ? await r.json() : [];
+      fMaster.innerHTML='<option value=\"\" selected>Все мастера</option>'+cachedMasters.map(m=>`<option value=\"${m.id}\">${m.name}</option>`).join('');
+    }
+  }
+
+  async function loadAvailability(){
+    const date = fDate.value; const serviceId=fService.value; const masterId=fMaster.value||'';
+    if(!date || !serviceId){ fTime.innerHTML='<option value=\"\" disabled selected>Выберите услугу и дату</option>'; return; }
+    const url = new URL('/api/availability', location.origin);
+    url.searchParams.set('date', date); url.searchParams.set('serviceId', serviceId); if(masterId) url.searchParams.set('masterId', masterId);
+    const r=await fetch(url); const j=r.ok?await r.json():{slots:[]};
+    const slots = (j.slots||[]).filter(s=>s.available);
+    if(!slots.length){ fTime.innerHTML='<option value=\"\" disabled selected>Нет доступных слотов</option>'; return; }
+    fTime.innerHTML = '<option value=\"\" disabled selected>Выберите время…</option>' + slots.map(s=>`<option value=\"${s.startTime}\">${s.startTime}</option>`).join('');
+  }
+  fService.addEventListener('change', loadAvailability);
+  fMaster.addEventListener('change', loadAvailability);
+  fDate.addEventListener('change', loadAvailability);
+
+  async function createBooking(){
+    const payload = {
+      clientName: fName.value.trim(),
+      clientPhone: fPhone.value.trim(),
+      serviceId: Number(fService.value),
+      masterId: fMaster.value || null,
+      date: fDate.value,
+      startTime: fTime.value,
+      notes: fNotes.value.trim()
+    };
+    if(!payload.clientName || !payload.clientPhone || !payload.serviceId || !payload.date || !payload.startTime){
+      alert('Заполните обязательные поля'); return;
+    }
+    const res = await fetch('/api/bookings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if(!res.ok){ const err=await res.json().catch(()=>({})); alert(err.error||'Не удалось создать запись'); return; }
+    closeModal(); update();
+  }
+  saveBtn.addEventListener('click', createBooking);
+
+  // Init
   update();
 })();
 </script>
