@@ -1707,8 +1707,8 @@ cat <<'EOF' >  public/client.html
     input, select, textarea { width: 100%; }
 
     /* Wizard */
-    .wizard { position:relative; overflow:hidden; border-radius:20px; }
-    .steps { display:flex; width:300%; transition:transform .35s ease; }
+    .wizard { position:relative; overflow:hidden; border-radius:20px; max-width: 720px; margin: 0 auto; }
+    .steps { display:flex; transition:transform .35s ease; will-change: transform; }
     .step { width:100%; flex:0 0 100%; padding:24px 20px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); }
     .step h2 { margin:0 0 12px; font-size:22px; font-weight:600; }
     .form-grid { display:grid; gap:14px; }
@@ -1843,6 +1843,8 @@ cat <<'EOF' >  public/client.html
 
     function go(step){
       steps.dataset.step = String(step);
+      // force reflow for smoother animation in Telegram WebView
+      void steps.offsetWidth;
       steps.style.transform = `translateX(${(step-1)*-100}%)`;
     }
 
