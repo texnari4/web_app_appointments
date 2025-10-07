@@ -702,6 +702,7 @@ const server = createServer(async (req, res) => {
 <ul>
 <li><a href="/client">/client</a></li>
 <li><a href="/admin">/admin</a></li>
+<li><a href="/manager">/manager</a></li>
 <li><a href="/api/backup/export">/api/backup/export</a> (zip)</li>
 </ul>
 </section>
@@ -1061,23 +1062,21 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
 
       const bookings = readJSON(bookingsFile, []);
       const { date, masterId, serviceId, status } = query;
-      const filtered = bookings.filter((booking) => {
-        if (date && booking.date !== date) {
-          return false;
-        }
-        if (masterId && String(booking.masterId ?? '') !== String(masterId)) {
-          return false;
-        }
-        if (serviceId && String(booking.serviceId) !== String(serviceId)) {
-          return false;
-        }
-        if (status && booking.status !== status) {
-          return false;
-        }
-        return true;
-      });
+      const from = (query.from||'').trim();
+      const to = (query.to||'').trim();
+      const q = String(query.q||'').trim().toLowerCase();
 
-      sendJSON(res, 200, filtered);
+      let out = bookings.slice();
+      if (date) out = out.filter(b => b.date === date);
+      if (from) out = out.filter(b => b.date >= from);
+      if (to) out = out.filter(b => b.date <= to);
+      if (masterId) out = out.filter(b => String(b.masterId ?? '') === String(masterId));
+      if (serviceId) out = out.filter(b => String(b.serviceId) === String(serviceId));
+      if (status) out = out.filter(b => b.status === status);
+      if (q) out = out.filter(b => (b.clientName||'').toLowerCase().includes(q) || (b.clientPhone||'').toLowerCase().includes(q) || (b.serviceName||'').toLowerCase().includes(q));
+
+      out.sort((a,b)=> (a.date.localeCompare(b.date)) || ((a.startTime||'').localeCompare(b.startTime||'')) );
+      sendJSON(res, 200, out);
       return;
     }
 
@@ -1302,6 +1301,20 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
       const html = readFileSync(join(__dirname, 'public', 'client.html'), 'utf-8');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
+      return;
+    }
+
+    // Manager UI
+    if (pathname === '/manager' || pathname === '/manager/') {
+      const tpl = join(__dirname, 'templates', 'managel.html');
+      try {
+        const html = readFileSync(tpl, 'utf-8');
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      } catch {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<!doctype html><meta charset="utf-8"><title>Manager</title><p>Файл templates/managel.html не найден.</p>');
+      }
       return;
     }
 
@@ -1798,6 +1811,7 @@ server.listen(PORT, async () => {
         `<b>Health:</b> ${PUBLIC_BASE_URL}/health\n` +
         `<b>Client:</b> ${PUBLIC_BASE_URL}/client\n` +
         `<b>Admin:</b> ${PUBLIC_BASE_URL}/admin\n` +
+        `<b>Manager:</b> ${PUBLIC_BASE_URL}/manager\n` +
         `<b>Backup Export:</b> ${PUBLIC_BASE_URL}/api/backup/export`;
       await fetch(`${TG_API}/sendMessage`, {
         method: 'POST',
