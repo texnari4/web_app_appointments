@@ -8,6 +8,7 @@ echo ">>> 🚀 Развёртывание мини-приложения (сер�
 # --- Подготовка директорий ---
 # mkdir -p app/data - создаётся автоматически при первом запуске, включить при первом деплое
 mkdir -p app/public
+mkdir -p app/templates
 
 # --- Проверка Node.js ---
 if ! command -v node &>/dev/null; then
@@ -2460,3 +2461,154 @@ EOF
       sendJSON(res, 200, { ok: true });
       return;
     }
+#
+# --- manager.html ---
+cat <<'EOF' >  templates/managel.html
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Менеджер — Записи</title>
+  <style>
+    /* Base */
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f6f7fb;color:#111827;}
+    .wrap{min-height:100%;display:grid;grid-template-rows:auto 1fr auto}
+    a{color:#007aff;text-decoration:none}
+
+    /* Top bar */
+    header{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;z-index:20}
+    .header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px}
+    .brand{font-weight:800;letter-spacing:-.02em}
+
+    /* View switcher */
+    .views{display:flex;gap:8px}
+    .views .chip{padding:8px 14px;border-radius:12px;border:1px solid #d1d5db;background:#fff;color:#374151;font-weight:700;cursor:pointer}
+    .views .chip.active{background:#007aff;border-color:#007aff;color:#fff}
+
+    /* Days scroller */
+    .days{display:flex;gap:8px;overflow-x:auto;padding:8px 12px;background:#fff;border-bottom:1px solid #e5e7eb}
+    .day{min-width:64px;text-align:center;border-radius:12px;border:1px solid #e5e7eb;background:#fff;padding:8px 10px;cursor:pointer}
+    .day .dow{font-size:12px;color:#6b7280}
+    .day .num{font-weight:800}
+    .day.active{background:#007aff;border-color:#007aff;color:#fff}
+    .day.active .dow{color:#eef2ff}
+
+    /* Content */
+    main{padding:12px}
+    .date-label{font-weight:800;margin:6px 2px 10px}
+
+    /* Day grid */
+    .grid{display:grid;grid-template-columns:64px 1fr;gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 24px 40px -32px rgba(15,23,42,.25);padding:10px}
+    .hours{display:grid}
+    .hcell{height:56px;color:#6b7280;font-size:12px;display:flex;align-items:flex-start;justify-content:flex-end;padding:8px}
+    .lane{position:relative;border-left:1px dashed #e5e7eb;min-height:56px}
+    .event{position:absolute;left:10px;right:10px;border-radius:12px;padding:8px 10px;background:#eef6ff;border:1px solid #c7ddff}
+    .event .t{font-weight:700}
+    .event .m{color:#374151;font-size:12px}
+
+    /* FAB */
+    .fab{position:fixed;right:18px;bottom:84px;width:56px;height:56px;border-radius:50%;background:#007aff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:0;box-shadow:0 16px 36px -16px rgba(0,122,255,.5);cursor:pointer;border:none}
+
+    /* Bottom nav */
+    .bottom{position:sticky;bottom:0;background:#fff;border-top:1px solid #e5e7eb;padding:8px}
+    .tabs{display:flex;justify-content:space-around;gap:6px}
+    .tab{display:grid;justify-items:center;gap:4px;color:#6b7280;font-size:12px}
+    .tab.active{color:#007aff;font-weight:700}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="header-inner">
+      <div class="brand">Менеджер</div>
+      <div class="views">
+        <button class="chip active" data-view="day">День</button>
+        <button class="chip" data-view="week">Неделя</button>
+        <button class="chip" data-view="month">Месяц</button>
+        <button class="chip" data-view="list">Список</button>
+      </div>
+    </div>
+    <div class="days" id="daysScroller"></div>
+  </header>
+
+  <main>
+    <div class="date-label" id="dateLabel"></div>
+    <div class="grid">
+      <div class="hours" id="hoursCol"></div>
+      <div class="lane" id="lane"></div>
+    </div>
+  </main>
+
+  <nav class="bottom">
+    <div class="tabs">
+      <div class="tab active"><div>📒</div><div>Записи</div></div>
+      <div class="tab"><div>📆</div><div>График</div></div>
+      <div class="tab"><div>🧭</div><div>Управление</div></div>
+      <div class="tab"><div>⚙️</div><div>Настройки</div></div>
+    </div>
+  </nav>
+</div>
+
+<button class="fab" id="fabAdd" title="Добавить запись">+</button>
+
+<script>
+(function(){
+  async function ensureTgAuth(){ try{ const tg=window.Telegram&&window.Telegram.WebApp; if(!tg||!tg.initData||tg.initData.length<10) return; await fetch('/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})}); }catch(e){} }
+  try{ const tg=window.Telegram&&window.Telegram.WebApp; if(tg){ tg.ready&&tg.ready(); tg.expand&&tg.expand(); } }catch{}
+  ensureTgAuth();
+
+  let cursor = new Date();
+  const hours=[...Array(12)].map((_,i)=> i+9);
+  const daysScroller=document.getElementById('daysScroller');
+  const dateLabel=document.getElementById('dateLabel');
+  const hoursCol=document.getElementById('hoursCol');
+  const lane=document.getElementById('lane');
+
+  function ymd(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const da=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${da}`; }
+  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+  function toMin(t){ const [h,m]=String(t||'00:00').split(':').map(Number); return h*60+m; }
+
+  function renderHours(){ hoursCol.innerHTML=''; hours.forEach(h=>{ const c=document.createElement('div'); c.className='hcell'; c.textContent=String(h).padStart(2,'0')+':00'; hoursCol.appendChild(c); }); lane.style.minHeight=(hours.length*56)+'px'; }
+
+  function renderDays(){
+    daysScroller.innerHTML='';
+    for(let i=-3;i<=3;i++){
+      const d=addDays(cursor,i); const el=document.createElement('div'); el.className='day';
+      const dow=d.toLocaleDateString('ru-RU',{weekday:'short'}); const num=d.getDate(); const mon=d.toLocaleDateString('ru-RU',{month:'short'});
+      el.innerHTML=`<div class='dow'>${dow}</div><div class='num'>${num} ${mon}</div>`;
+      if(i===0) el.classList.add('active');
+      el.addEventListener('click',()=>{ cursor=d; update(); });
+      daysScroller.appendChild(el);
+    }
+  }
+
+  function renderTitle(){ dateLabel.textContent = 'Выбрано: ' + cursor.toLocaleDateString('ru-RU',{weekday:'long', day:'numeric', month:'long', year:'numeric'}); }
+
+  async function renderEvents(){
+    lane.innerHTML='';
+    const from=ymd(cursor); const to=from;
+    const r=await fetch('/api/bookings?from='+from+'&to='+to);
+    const list=r.ok?await r.json():[];
+    const perMin=56/60;
+    list.forEach(b=>{
+      const start = Math.max(0,(toMin(b.startTime)-(9*60))*perMin);
+      const dur = Number(b.duration||b.serviceDuration||30);
+      const h = Math.max(36, Math.round(dur*perMin));
+      const ev=document.createElement('div'); ev.className='event'; ev.style.top=start+'px'; ev.style.height=h+'px';
+      ev.innerHTML = `<div class='t'>${b.startTime} • ${b.clientName||''}</div><div class='m'>${b.serviceName||''} · ${b.masterId||''}</div>`;
+      lane.appendChild(ev);
+    });
+  }
+
+  function update(){ renderDays(); renderTitle(); renderHours(); renderEvents(); }
+
+  document.getElementById('fabAdd').addEventListener('click', ()=>{ alert('Открыть форму создания записи'); });
+  update();
+})();
+</script>
+</body>
+</html>
+EOF
