@@ -1144,6 +1144,43 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
 
       bookings.push(newBooking);
       writeJSON(bookingsFile, bookings);
+
+      // Link booking to Telegram user (if opened as WebApp) and notify client
+      try {
+        if (ctx.telegramId) {
+          // 1) Upsert contact using provided name/phone
+          const nameParts = String(payload.clientName||'').trim().split(/\s+/);
+          upsertContact({
+            id: ctx.telegramId,
+            first_name: nameParts[0] || undefined,
+            last_name: nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined,
+            phone: String(payload.clientPhone||'').trim() || undefined
+          });
+
+          // 2) Send Telegram notifications
+          if (TG_API) {
+            const mastersList = readJSON(mastersFile, []);
+            const masterName = newBooking.masterId ? (mastersList.find(m => String(m.id) === String(newBooking.masterId))?.name || 'Мастер') : 'Мастер';
+
+            const ack = '✅ Ваша запись была сформирована, ожидайте подтверждения.';
+            const details = [
+              '🧾 <b>Детали записи</b>',
+              `Услуга: <b>${newBooking.serviceName}</b>`,
+              `Мастер: <b>${masterName}</b>`,
+              `Дата: <b>${newBooking.date}</b>`,
+              `Время: <b>${newBooking.startTime}</b>`,
+              newBooking.serviceDuration ? `Длительность: <b>${newBooking.serviceDuration} мин</b>` : null,
+              Number.isFinite(newBooking.servicePrice) ? `Стоимость: <b>${newBooking.servicePrice}₽</b>` : null
+            ].filter(Boolean).join('\n');
+
+            await tgSendMessage(ctx.telegramId, ack);
+            await tgSendMessage(ctx.telegramId, details, { parse_mode: 'HTML' });
+          }
+        }
+      } catch (e) {
+        console.warn('Notify client failed:', e?.message||e);
+      }
+
       sendJSON(res, 201, newBooking);
       return;
     }
