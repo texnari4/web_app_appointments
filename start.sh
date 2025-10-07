@@ -1948,6 +1948,19 @@ cat <<'EOF' >  public/client.html
     // Telegram WebApp adjustments
     try { const tg = window.Telegram && window.Telegram.WebApp; if (tg) { tg.ready && tg.ready(); tg.expand && tg.expand(); } } catch(_){ }
 
+    async function ensureTgAuth(){
+    try{
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (!tg || !tg.initData || tg.initData.length < 10) return;
+      await fetch('/auth/telegram', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ initData: tg.initData })
+      });
+    }catch(e){}
+  }
+
+
     // Elements
     const step1 = document.getElementById('step1');
     const step2 = document.getElementById('step2');
@@ -2194,6 +2207,7 @@ setStep(4);
 });
 
     // Init
+    ensureTgAuth();
     prefill();
     loadServices();
     loadMasters().then(()=>{ renderCalendar(); });
