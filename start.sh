@@ -1763,18 +1763,17 @@ cat <<'EOF' >  public/client.html
     header h1 { margin:0; font-size:clamp(26px,5vw,36px); font-weight:700; letter-spacing:-0.02em; }
     header p { margin:0 auto; max-width:520px; color:#4b5563; font-size:16px; line-height:1.5; }
     *, *::before, *::after { box-sizing: border-box; }
-    .step .form-grid, .step .controls { max-width: 100%; margin: 0; padding: 0 4px; }
+    .step .form-grid, .step .controls { max-width:100%; margin:0; padding:0; }
     input, select, textarea { width: 100%; }
 
     /* Wizard */
-    .wizard { position:relative; overflow:hidden; border-radius:20px; max-width: 720px; margin: 0 auto; }
+    .wizard { position:relative; overflow:hidden; border-radius:20px; max-width:720px; margin:0 auto; padding:0 8px; }
     .steps  { display:flex; transition:transform .35s ease; will-change: transform; }
     @media (max-width: 420px) {
-  body { padding: 20px 12px 32px; }
-  .step { padding: 16px; }
-  .step .form-grid, .step .controls { max-width: 100%; padding: 0 4px; }
+  body { padding: 20px 10px 28px; }
+  .step { padding:16px; }
 }
-    .step { width:100%; flex:0 0 100%; padding:20px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); }
+    .step { width:100%; flex:0 0 100%; padding:18px 16px; background:rgba(255,255,255,.92); border:1px solid rgba(209,213,219,.4); box-shadow:0 35px 60px -40px rgba(15,23,42,.35); box-sizing:border-box; }
     .step h2 { margin:0 0 12px; font-size:22px; font-weight:600; }
     .form-grid { display:grid; gap:14px; }
     label { display:grid; gap:6px; font-size:14px; color:#4b5563; }
@@ -1784,7 +1783,7 @@ cat <<'EOF' >  public/client.html
     .muted { color:#6b7280; font-size:13px; }
 
     .controls { display:grid; grid-template-columns: 1fr; gap:12px; margin-top:14px; }
-    .btn { display:inline-flex; align-items:center; justify-content:center; padding:12px 18px; border-radius:12px; border:1px solid rgba(148,163,184,.45); background:#fff; color:#111827; font-weight:700; cursor:pointer; width:100%; }
+    .btn { display:block; padding:12px 18px; border-radius:12px; border:1px solid rgba(148,163,184,.45); background:#fff; color:#111827; font-weight:700; cursor:pointer; width:100%; box-sizing:border-box; }
     .btn.primary { border:none; background:linear-gradient(135deg,#5ec5ff,#007aff); color:#fff; box-shadow:0 24px 40px -28px rgba(0,122,255,.55); }
     .btn[disabled] { opacity:.6; cursor:not-allowed; }
     .required { color:#dc2626; margin-left:4px; }
