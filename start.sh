@@ -1720,7 +1720,30 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => console.log(`✅ Сервер запущен на порту ${PORT}`));
+server.listen(PORT, async () => {
+  console.log(`✅ Сервер запущен на порту ${PORT}`);
+  try {
+    if (TG_API) {
+      const chatId = process.env.DEPLOY_NOTIFY_CHAT_ID || '486778995'; // fallback to owner ID
+      const text = `🚀 <b>Успешный деплой</b>\n\n` +
+        `Приложение успешно запущено и доступно.\n\n` +
+        `<b>Health:</b> ${PUBLIC_BASE_URL}/health\n` +
+        `<b>Client:</b> ${PUBLIC_BASE_URL}/client\n` +
+        `<b>Admin:</b> ${PUBLIC_BASE_URL}/admin\n` +
+        `<b>Backup Export:</b> ${PUBLIC_BASE_URL}/api/backup/export`;
+      await fetch(`${TG_API}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true })
+      });
+      console.log('📨 Отправлено уведомление о деплое в Telegram');
+    } else {
+      console.log('⚠️ TG_API не настроен, уведомление о деплое пропущено');
+    }
+  } catch (err) {
+    console.warn('⚠️ Не удалось отправить уведомление о деплое:', err.message);
+  }
+});
 EOF
 
 #
