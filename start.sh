@@ -132,21 +132,15 @@ const DEFAULT_ADMINS = [
 ];
 
 function ensureDataFile(file, fallback) {
+  // 🔒 Persistency-first: only create the file if it does not exist.
+  // Never overwrite existing content during deploy, even if empty or unreadable.
   if (!existsSync(file)) {
-    writeFileSync(file, JSON.stringify(fallback, null, 2));
-    return;
-  }
-
-  try {
-    const raw = readFileSync(file, 'utf-8');
-    if (raw.trim() === '') {
+    try {
       writeFileSync(file, JSON.stringify(fallback, null, 2));
-    } else {
-      JSON.parse(raw);
+    } catch (e) {
+      // As a last resort, attempt to create an empty JSON array/object
+      try { writeFileSync(file, Array.isArray(fallback) ? '[]' : '{}'); } catch {}
     }
-  } catch (err) {
-    console.warn(`⚠️  Не удалось прочитать ${file}. Пересоздаю с тестовыми данными.`);
-    writeFileSync(file, JSON.stringify(fallback, null, 2));
   }
 }
 
@@ -167,6 +161,19 @@ function readJSON(file, fallback = []) {
 }
 
 function writeJSON(file, data) {
+  try {
+    // Make a lightweight timestamped backup before overwriting
+    const bakDir = join(DATA_DIR, '_backup');
+    try { mkdirSync(bakDir, { recursive: true }); } catch {}
+    if (existsSync(file)) {
+      const ts = new Date().toISOString().replace(/[:.]/g,'-');
+      const bakName = file.split('/').pop().replace(/\.json$/, '') + `.${ts}.bak.json`;
+      try {
+        const cur = readFileSync(file);
+        writeFileSync(join(bakDir, bakName), cur);
+      } catch {}
+    }
+  } catch {}
   writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
