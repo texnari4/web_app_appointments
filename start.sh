@@ -1676,17 +1676,46 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
       if (!ensureAuthorized(ctx, res, ['admin'])) return;
       try {
         const AdmZip = (await import('adm-zip')).default;
+        const { readdirSync, statSync, readFileSync: rf } = await import('fs');
+        const { join } = await import('path');
+
+        const dataDir = join(__dirname, 'app', 'data');
         const zip = new AdmZip();
-        zip.addFile('groups.json', Buffer.from(JSON.stringify(readJSON(groupsFile, []), null, 2)));
-        zip.addFile('services.json', Buffer.from(JSON.stringify(readJSON(servicesFile, []), null, 2)));
-        zip.addFile('admins.json', Buffer.from(JSON.stringify(readJSON(adminsFile, []), null, 2)));
-        zip.addFile('masters.json', Buffer.from(JSON.stringify(readJSON(mastersFile, []), null, 2)));
-        zip.addFile('bookings.json', Buffer.from(JSON.stringify(readJSON(bookingsFile, []), null, 2)));
-        zip.addFile('contacts.json', Buffer.from(JSON.stringify(readJSON(contactsFile, []), null, 2)));
-        zip.addFile('manifest.json', Buffer.from(JSON.stringify({ createdAt: new Date().toISOString(), version: 1 }, null, 2)));
+
+        // add every regular file from dataDir (skip hidden and temp files)
+        let added = 0;
+        try {
+          const entries = readdirSync(dataDir, { withFileTypes: true });
+          for (const e of entries) {
+            if (!e.isFile()) continue;
+            if (e.name.startsWith('_') || e.name.startsWith('.')) continue;
+            const full = join(dataDir, e.name);
+            try {
+              const st = statSync(full);
+              if (!st.isFile() || st.size === 0) {
+                // всё равно добавим пустой файл, чтобы была структура
+                zip.addFile(e.name, Buffer.from(''));
+              } else {
+                zip.addFile(e.name, rf(full));
+              }
+              added++;
+            } catch {}
+          }
+        } catch {}
+
+        // always include manifest
+        zip.addFile('manifest.json', Buffer.from(JSON.stringify({
+          createdAt: new Date().toISOString(),
+          version: 2,
+          filesIncluded: added
+        }, null, 2)));
+
         const name = makeBackupName();
         const buf = zip.toBuffer();
-        res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}` });
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}`
+        });
         res.end(buf);
       } catch (e) {
         console.error(e);
