@@ -461,6 +461,30 @@ function buildDailySlots({ date, duration, masterId, bookings }) {
     return [];
   }
 
+  function isMasterWorkingOnDate(master, dateStr) {
+  if (!master || !master.schedule) return true;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return true;
+  const dow = d.getDay();
+  const s = master.schedule;
+  if (s.type === 'weekly') {
+    const days = Array.isArray(s.weekly?.days) ? s.weekly.days : [];
+    return days.includes(dow);
+  }
+  if (s.type === 'shift') {
+    const sh = s.shift || {};
+    const anchor = new Date(sh.anchorDate || new Date().toISOString().slice(0,10));
+    const a0 = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+    const d0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.floor((d0 - a0) / 86400000);
+    const cycle = Number(sh.workDays||2) + Number(sh.restDays||2);
+    if (!Number.isFinite(cycle) || cycle <= 0) return true;
+    const pos = ((diffDays % cycle) + cycle) % cycle;
+    return pos < Number(sh.workDays||2);
+  }
+  return true;
+}
+
   const slotAlignedDuration = alignDurationMinutes(normalizedDuration);
   if (!Number.isFinite(slotAlignedDuration)) {
     return [];
@@ -509,6 +533,10 @@ function validateBookingPayload(payload, services) {
   const startTime = String(payload.startTime ?? '').trim();
   const serviceId = Number(payload.serviceId);
   const masterId = payload.masterId == null || payload.masterId === '' ? null : String(payload.masterId).trim();
+
+  if (!masterId) {
+  return 'Выберите мастера';
+}
 
   if (!clientName) {
     return 'Имя клиента обязательно';
@@ -950,6 +978,13 @@ const server = createServer(async (req, res) => {
       }
 
       const masterId = query.masterId != null && query.masterId !== '' ? String(query.masterId).trim() : null;
+      // Если мастер указан и в этот день не работает — вернуть пустые слоты
+const masters = readJSON(mastersFile, []);
+const master = masterId ? masters.find(m => String(m.id) === String(masterId)) : null;
+if (masterId && master && !isMasterWorkingOnDate(master, date)) {
+  sendJSON(res, 200, { slots: [], meta: { slotStep: SLOT_STEP_MIN, serviceId: service?.id ?? null, serviceDuration: Math.max(SLOT_STEP_MIN, Math.ceil((duration ?? SLOT_STEP_MIN)/SLOT_STEP_MIN)*SLOT_STEP_MIN), businessHours: { open: BUSINESS_OPEN_TIME, close: BUSINESS_CLOSE_TIME } } });
+  return;
+}   
       const bookings = readJSON(bookingsFile, []);
       const alignedDuration = Math.max(
         SLOT_STEP_MIN,
@@ -1272,16 +1307,25 @@ const server = createServer(async (req, res) => {
           const chatId = msg.chat.id;
           const userId = from.id;
           const text = (update.message?.text || update.edited_message?.text || update.callback_query?.data || '').trim();
-          if (update.message && update.message.contact) {
-            const c = update.message.contact;
-            const ownerId = c.user_id || userId;
-            upsertContact({ id: ownerId, phone: c.phone_number });
-            await tgSendMessage(chatId, '✅ Номер получен. Спасибо!');
-          }
-          if (/^\/start\b/.test(text)) {
-            await tgSendMessage(chatId, '👋 Привет! Доступные команды:\n• /client — открыть клиентскую форму\n• /admin — админ-панель\n\nЧтобы мы могли заполнять ваши данные автоматически, поделитесь номером телефона.', {
-              reply_markup: { keyboard: [[{ text: '📱 Поделиться номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
+         if (update.message && update.message.contact) {
+           const c = update.message.contact;
+           const ownerId = c.user_id || userId;
+           const fromUser = from || {};
+            upsertContact({
+            id: ownerId,
+            phone: c.phone_number,
+            username: (fromUser.username||'').replace(/^@/, '') || undefined,
+            first_name: fromUser.first_name || undefined,
+            last_name: fromUser.last_name || undefined
             });
+         await tgSendMessage(chatId, '✅ Контакт получен! Теперь можно перейти к записи.\nОткройте форму записи внутри Telegram:', {
+         reply_markup: { inline_keyboard: [[{ text: '🧾 Открыть форму записи', web_app: { url: `${PUBLIC_BASE_URL}/client` } }]] }
+         });
+         }
+          if (/^\/start\b/.test(text)) {
+          await tgSendMessage(chatId, 'Добро пожаловать в систему записи!\n\nПоделитесь контактными данными для продолжения записи — это поможет нам автоматически подставлять ваш номер телефона и имя.', {
+           reply_markup: { keyboard: [[{ text: '📱 Поделиться номером в чате', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
+          });
           } else if (/^\/client\b/.test(text)) {
             const url = `${PUBLIC_BASE_URL}/client`;
             await tgSendMessage(chatId, `🧾 <b>Клиентская форма</b>\n${url}`);
@@ -1810,6 +1854,7 @@ cat <<'EOF' > public/client.html
     }
 
     .muted.error {
+      .required { color: #dc2626; margin-left: 4px; }
       color: #ef4444;
     }
 
@@ -1913,13 +1958,15 @@ cat <<'EOF' > public/client.html
             Как к вам обращаться
             <input type="text" id="clientName" placeholder="Имя и фамилия" required />
           </label>
-          <label>
-            Телефон
-            <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" required />
-          </label>
-          <div>
-            <button type="button" class="secondary-btn" id="sharePhoneBtn">📱 Поделиться номером в чате</button>
-          </div>
+         <div id="phoneBlock">
+        <label>
+         Телефон
+         <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" />
+         </label>
+         <div>
+           <button type="button" class="secondary-btn" id="sharePhoneBtn">📱 Поделиться номером в чате</button>
+         </div>
+        </div>
           <label>
             Комментарий для мастера (необязательно)
             <textarea id="clientNotes" placeholder="Например: хочу нежный пастельный оттенок"></textarea>
@@ -1938,20 +1985,20 @@ cat <<'EOF' > public/client.html
         <div class="summary-card" id="serviceSummary" hidden></div>
       </section>
 
-      <section>
-        <h2>Дата и специалист</h2>
-        <div class="form-grid">
-          <label>
-            Дата визита
-            <input type="date" id="dateInput" required />
-          </label>
-          <label>
-            Имя мастера 
-            <input type="text" id="masterInput" placeholder="Если хотите записаться к конкретному мастеру" />
-          </label>
-        </div>
-        <p class="muted" id="availabilityHint">Выберите услугу и дату, чтобы увидеть свободные слоты.</p>
-      </section>
+<section>
+  <h2>Дата и специалист</h2>
+  <div class="form-grid">
+    <label>
+      Мастер <span class="required">*</span>
+      <select id="bookingMaster" required></select>
+    </label>
+    <label>
+      Дата визита
+      <input type="date" id="dateInput" required />
+    </label>
+  </div>
+  <p class="muted" id="availabilityHint">Выберите услугу и дату, чтобы увидеть свободные слоты.</p>
+</section>
 
       <section>
         <h2>Свободные слоты</h2>
@@ -1987,7 +2034,12 @@ cat <<'EOF' > public/client.html
       const serviceSelect = document.getElementById('serviceSelect');
       const serviceSummary = document.getElementById('serviceSummary');
       const dateInput = document.getElementById('dateInput');
-      const masterInput = document.getElementById('masterInput');
+    //  const masterInput = document.getElementById('masterInput');
+
+    const bookingMasterSelect = document.getElementById('bookingMaster');
+const allowedDaysHint = document.createElement('div');
+allowedDaysHint.className = 'muted';
+dateInput.parentElement.appendChild(allowedDaysHint);
       const slotsContainer = document.getElementById('slotsContainer');
       const slotsEmpty = document.getElementById('slotsEmpty');
       const selectionSummary = document.getElementById('selectionSummary');
@@ -2019,6 +2071,78 @@ cat <<'EOF' > public/client.html
         setTimeout(prefillFromContact, 4000);
       });
 
+      const fetchMasters = async () => {
+  const r = await fetch('/api/masters');
+  if (!r.ok) return [];
+  const list = await r.json();
+  bookingMasterSelect.innerHTML = '<option value="" disabled selected>Выберите мастера…</option>' + list.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  return list;
+};
+
+let mastersCache = [];
+const weekdayName = (d) => ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d];
+const isWorkingDay = (master, dateObj) => {
+  if (!master || !master.schedule || !dateObj) return true;
+  const s = master.schedule;
+  const dow = dateObj.getDay();
+  if (s.type === 'weekly') {
+    const days = (s.weekly && Array.isArray(s.weekly.days)) ? s.weekly.days : [];
+    return days.includes(dow);
+  }
+  if (s.type === 'shift') {
+    const sh = s.shift || {};
+    const anchor = new Date(sh.anchorDate || new Date().toISOString().slice(0,10));
+    const d0 = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+    const d1 = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+    const diffDays = Math.floor((d1 - d0) / 86400000);
+    const cycle = (Number(sh.workDays||2) + Number(sh.restDays||2));
+    const pos = ((diffDays % cycle) + cycle) % cycle;
+    return pos < Number(sh.workDays||2);
+  }
+  return true;
+};
+
+const updateAllowedDaysUI = () => {
+  const id = Number(bookingMasterSelect.value);
+  const m = mastersCache.find(x=>x.id===id);
+  if (!m || !m.schedule) { allowedDaysHint.textContent = ''; return; }
+  if (m.schedule.type === 'weekly') {
+    const days = (m.schedule.weekly?.days||[]).map(weekdayName).join(', ');
+    allowedDaysHint.textContent = days ? `Рабочие дни: ${days}` : '';
+  } else if (m.schedule.type === 'shift') {
+    const sh = m.schedule.shift||{};
+    allowedDaysHint.textContent = `Смены: ${sh.workDays||'?'} раб / ${sh.restDays||'?'} вых`;
+  } else { allowedDaysHint.textContent = ''; }
+};
+
+bookingMasterSelect.addEventListener('change', () => {
+  updateAllowedDaysUI();
+  if (dateInput.value) {
+    const m = mastersCache.find(x=>String(x.id)===String(bookingMasterSelect.value));
+    const d = new Date(dateInput.value);
+    if (!isWorkingDay(m, d)) {
+      showBanner('В этот день мастер не работает. Выберите другой день.', 'error');
+      dateInput.value = '';
+    } else {
+      fetchAvailability();
+    }
+  }
+});
+
+dateInput.addEventListener('change', () => {
+  const id = bookingMasterSelect.value;
+  const m = mastersCache.find(x=>String(x.id)===String(id));
+  if (!id || !m) { showBanner('Сначала выберите мастера', 'error'); dateInput.value=''; return; }
+  const d = new Date(dateInput.value);
+  if (!isWorkingDay(m, d)) {
+    showBanner('В этот день мастер не работает. Выберите другой день.', 'error');
+    dateInput.value = '';
+    return;
+  }
+  fetchAvailability();
+});
+
+
       const prefillFromContact = async () => {
         try {
           const r = await fetch('/api/contacts/me');
@@ -2033,6 +2157,10 @@ cat <<'EOF' > public/client.html
           if (c.phone && !clientPhoneInput.value) {
             clientPhoneInput.value = c.phone;
           }
+          if (c.phone) {
+  const pb = document.getElementById('phoneBlock');
+  if (pb) pb.style.display = 'none';
+}
           if ((c.username || c.id) && !clientNotesInput.value) {
             const nick = c.username ? '@'+c.username : '';
             clientNotesInput.placeholder = clientNotesInput.placeholder + (nick?` — ${nick}`:'');
@@ -2149,15 +2277,18 @@ cat <<'EOF' > public/client.html
           return;
         }
 
-        availabilityHint.textContent = 'Проверяю доступные окна…';
-        const params = new URLSearchParams({
-          serviceId: state.selectedServiceId,
-          date: dateInput.value
-        });
-
-        if (masterInput.value.trim()) {
-          params.set('masterId', masterInput.value.trim());
-        }
+const masterId = bookingMasterSelect.value;
+if (!masterId) {
+  availabilityHint.textContent = 'Сначала выберите мастера.';
+  availabilityHint.classList.add('error');
+  clearSlots();
+  return;
+}
+const params = new URLSearchParams({
+  serviceId: state.selectedServiceId,
+  date: dateInput.value,
+  masterId
+});
 
         try {
           const response = await fetch(`/api/availability?${params.toString()}`);
@@ -2242,6 +2373,9 @@ cat <<'EOF' > public/client.html
           return;
         }
 
+        const masterId = bookingMasterSelect.value;
+if (!masterId) { showBanner('Пожалуйста, выберите мастера', 'error'); return; }
+
         const payload = {
           clientName: clientNameInput.value.trim(),
           clientPhone: clientPhoneInput.value.trim(),
@@ -2291,6 +2425,7 @@ cat <<'EOF' > public/client.html
       initDate();
       loadServices().then(fetchAvailability);
       prefillFromContact();
+      fetchMasters().then(list => { mastersCache = list||[]; updateAllowedDaysUI(); });
     });
   </script>
 </body>
