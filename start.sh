@@ -1832,6 +1832,19 @@ cat <<'EOF' >  public/client.html
 
     .summary { border:1px solid rgba(209,213,219,.5); background:rgba(249,250,251,.9); border-radius: 14px; padding:10px 12px; display:grid; gap:6px; }
 
+    /* Calendar */
+.cal { display:grid; gap:10px; }
+.cal-head { display:flex; align-items:center; justify-content:space-between; }
+.cal-head b { font-weight:800; letter-spacing:-0.02em; }
+.cal-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; }
+.cal-dow { text-align:center; font-size:12px; color:#6b7280; padding:6px 0; }
+.cal-day { text-align:center; padding:10px 0; border:1px solid rgba(148,163,184,.35); border-radius:10px; background:#fff; cursor:pointer; user-select:none; }
+.cal-day.mute { color:#9ca3af; background:#f3f4f6; border-color:rgba(148,163,184,.25); cursor:not-allowed; }
+.cal-day.today { outline:2px solid rgba(99,102,241,.35); }
+.cal-day.sel { background:linear-gradient(135deg,#5ec5ff,#007aff); color:#fff; border-color:transparent; }
+.cal-nav { display:inline-flex; gap:6px; }
+.cal-btn { border:1px solid rgba(148,163,184,.45); background:#fff; padding:6px 10px; border-radius:10px; cursor:pointer; }
+
     .banner { position:fixed; left:0; right:0; bottom: calc(18px + env(safe-area-inset-bottom,0)); margin: 0 auto; max-width: 720px; padding: 12px 16px; border-radius: 12px; background: linear-gradient(135deg, rgba(94,197,255,.95), rgba(0,122,255,.95)); color:#fff; font-weight:700; box-shadow:0 32px 48px -32px rgba(0,122,255,.55); text-align:center; opacity:0; pointer-events:none; transform: translateY(6px); transition: opacity .2s ease, transform .2s ease; }
     .banner.show { opacity:1; transform: translateY(0); }
     .banner.error { background: linear-gradient(135deg, rgba(255,95,95,.95), rgba(244,63,94,.95)); box-shadow:0 32px 48px -32px rgba(244,63,94,.6); }
@@ -1888,11 +1901,22 @@ cat <<'EOF' >  public/client.html
           <label>Мастер <span style="color:#dc2626">*</span>
             <select id="bookingMaster" required></select>
           </label>
-          <label>Дата визита
-            <input type="date" id="dateInput" required />
-          </label>
-          <p class="muted" id="availabilityHint">Выберите услугу и дату, чтобы увидеть свободные слоты.</p>
-        </div>
+          <input type="date" id="dateInput" required style="display:none" />
+<div id="calendar" class="cal" aria-label="Выбор даты визита">
+  <div class="cal-head">
+    <div class="cal-nav">
+      <button type="button" id="calPrev" class="cal-btn" aria-label="Предыдущий месяц">‹</button>
+      <button type="button" id="calNext" class="cal-btn" aria-label="Следующий месяц">›</button>
+    </div>
+    <b id="calTitle"></b>
+    <span style="width:52px"></span>
+  </div>
+  <div class="cal-grid" id="calGrid"><!-- сюда рендерятся дни --></div>
+</div>
+<p class="muted" id="availabilityHint">Выберите услугу, мастера и дату, чтобы увидеть свободные слоты.</p>
+
+          
+           </div>
         <div id="slotsContainer" class="slot-grid"></div>
         <p class="muted" id="slotsEmpty" hidden>На выбранный день пока нет свободных окон. Попробуйте другую дату.</p>
         <div class="actions">
@@ -1901,6 +1925,17 @@ cat <<'EOF' >  public/client.html
         </div>
       </section>
     </div>
+
+
+<!-- Шаг 4 -->
+<section class="step" id="step4">
+  <h2>Заявка отправлена</h2>
+  <div class="summary" id="finalSummary"></div>
+  <div class="actions">
+    <button id="closeApp" class="btn primary" type="button">Закрыть</button>
+  </div>
+</section>
+
 
     <div class="banner" id="banner" hidden></div>
   </div>
@@ -1932,6 +1967,83 @@ cat <<'EOF' >  public/client.html
     const availabilityHint = document.getElementById('availabilityHint');
     const slotsContainer = document.getElementById('slotsContainer');
     const slotsEmpty = document.getElementById('slotsEmpty');
+
+    bookingMasterSelect.addEventListener('change', ()=>{
+  const id = bookingMasterSelect.value;
+  selectedMaster = mastersCache.find(m=>String(m.id)===String(id)) || null;
+  renderCalendar();
+  if(dateInput.value) fetchAvailability();
+});
+
+    // Calendar state
+let calMonth = new Date(); // текущий показанный месяц
+calMonth.setDate(1);
+let mastersCache = [];
+let selectedMaster = null;
+
+function ymd(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
+
+function isMasterWorkingOnDateLocal(master, dateStr){
+  if(!master || !master.schedule) return true;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return true;
+  const dow = d.getDay();
+  const s = master.schedule;
+  if (s.type === 'weekly') {
+    const days = Array.isArray(s.weekly?.days) ? s.weekly.days : [];
+    return days.includes(dow);
+  }
+  if (s.type === 'shift') {
+    const sh = s.shift || {};
+    const anchor = new Date(sh.anchorDate || new Date().toISOString().slice(0,10));
+    const a0 = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+    const d0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.floor((d0 - a0) / 86400000);
+    const cycle = Number(sh.workDays||2) + Number(sh.restDays||2);
+    if (!Number.isFinite(cycle) || cycle <= 0) return true;
+    const pos = ((diffDays % cycle) + cycle) % cycle;
+    return pos < Number(sh.workDays||2);
+  }
+  return true;
+}
+
+function renderCalendar(){
+  const grid = document.getElementById('calGrid');
+  const title = document.getElementById('calTitle');
+  const m = calMonth.getMonth(); const y = calMonth.getFullYear();
+  title.textContent = calMonth.toLocaleDateString('ru-RU', { month:'long', year:'numeric' });
+  grid.innerHTML = '';
+  // header dow
+  const dows = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  dows.forEach(d=>{ const el=document.createElement('div'); el.className='cal-dow'; el.textContent=d; grid.appendChild(el); });
+  const firstDay = new Date(y, m, 1);
+  const startIndex = (firstDay.getDay()+6)%7; // monday=0
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  // blanks
+  for(let i=0;i<startIndex;i++){ grid.appendChild(document.createElement('div')); }
+  const todayStr = ymd(new Date());
+  for(let day=1; day<=daysInMonth; day++){
+    const d = new Date(y, m, day);
+    const ds = ymd(d);
+    const btn = document.createElement('button');
+    btn.type='button'; btn.className='cal-day'; btn.textContent=String(day);
+    const isPast = ds < todayStr;
+    const works = selectedMaster ? isMasterWorkingOnDateLocal(selectedMaster, ds) : true;
+    if(isPast || !works){ btn.classList.add('mute'); btn.disabled = true; }
+    if(ds === todayStr) btn.classList.add('today');
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.cal-day.sel').forEach(x=>x.classList.remove('sel'));
+      btn.classList.add('sel');
+      dateInput.value = ds;
+      fetchAvailability();
+    });
+    grid.appendChild(btn);
+  }
+}
+
+document.getElementById('calPrev').addEventListener('click', ()=>{ calMonth.setMonth(calMonth.getMonth()-1); renderCalendar(); });
+document.getElementById('calNext').addEventListener('click', ()=>{ calMonth.setMonth(calMonth.getMonth()+1); renderCalendar(); });
+
 
     function showBanner(msg, type) {
       banner.textContent = msg;
@@ -1974,13 +2086,15 @@ cat <<'EOF' >  public/client.html
       return list;
     }
 
-    async function loadMasters(){
-      const r = await fetch('/api/masters');
-      const list = r.ok ? await r.json() : [];
-      bookingMasterSelect.innerHTML = '<option value="" disabled selected>Выберите мастера…</option>' +
-        list.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
-      return list;
-    }
+async function loadMasters(){
+  const r = await fetch('/api/masters');
+  mastersCache = r.ok ? await r.json() : [];
+  bookingMasterSelect.innerHTML = '<option value="" disabled selected>Выберите мастера…</option>' +
+   
+   
+    mastersCache.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  return mastersCache;
+}
 
     function clearSlots(){ slotsContainer.innerHTML = ''; slotsEmpty.hidden = true; }
 
@@ -1993,18 +2107,20 @@ cat <<'EOF' >  public/client.html
       const params = new URLSearchParams({ serviceId: serviceSelect.value, date: dateInput.value, masterId: bookingMasterSelect.value });
       const r = await fetch('/api/availability?' + params.toString());
       if(!r.ok){ availabilityHint.textContent = 'Ошибка загрузки слотов'; return; }
-      const data = await r.json(); const slots = data?.slots || [];
-      if(!slots.length){ slotsEmpty.hidden = false; availabilityHint.textContent = 'Свободных слотов нет'; return; }
-      availabilityHint.textContent = 'Выберите удобное время';
-      slots.forEach(s=>{
-        const btn = document.createElement('button');
-        btn.type='button'; btn.className='slot-button'; btn.textContent = `${s.startTime}–${s.endTime}`; btn.disabled = !s.available;
-        btn.addEventListener('click',()=>{
-          document.querySelectorAll('.slot-button.selected').forEach(b=>b.classList.remove('selected'));
-          btn.classList.add('selected'); btn.dataset.value = s.startTime;
-        });
-        slotsContainer.appendChild(btn);
-      });
+      
+      const data = await r.json(); const raw = data?.slots || [];
+const slots = raw.filter(s => s.available === true);
+if(!slots.length){ slotsEmpty.hidden = false; availabilityHint.textContent = 'Свободных слотов нет'; return; }
+availabilityHint.textContent = 'Выберите удобное время';
+slots.forEach(s=>{
+  const btn = document.createElement('button');
+  btn.type='button'; btn.className='slot-button'; btn.textContent = `${s.startTime}–${s.endTime}`;
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.slot-button.selected').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected'); btn.dataset.value = s.startTime;
+  });
+  slotsContainer.appendChild(btn);
+});
     }
 
     // Step 1
@@ -2044,14 +2160,33 @@ cat <<'EOF' >  public/client.html
       const payload = { clientName:name, clientPhone:phone, notes: clientNotesInput.value.trim(), serviceId, masterId, date, startTime };
       const r = await fetch('/api/bookings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       if(!r.ok){ const j = await r.json().catch(()=>({})); showBanner(j.error||'Ошибка сохранения', 'error'); return; }
-      showBanner('Запись создана! Мы свяжемся с вами в Telegram.');
+      const opt = serviceSelect.selectedOptions[0];
+const chosenService = opt ? opt.textContent : '';
+const chosenMaster = (bookingMasterSelect.selectedOptions[0]||{}).textContent || '';
+const final = document.getElementById('finalSummary');
+final.innerHTML = [
+  `<b>Спасибо! Заявка отправлена</b>`,
+  `Имя: <b>${name}</b>`,
+  `Телефон: <b>${phone}</b>`,
+  `Услуга: <b>${chosenService}</b>`,
+  `Мастер: <b>${chosenMaster}</b>`,
+  `Дата: <b>${date}</b>`,
+  `Время: <b>${startTime}</b>`
+].join('<br>');
+setStep(4);
       setTimeout(()=>{ try{ const tg = window.Telegram && window.Telegram.WebApp; tg && tg.close && tg.close(); }catch(_){} }, 1400);
     });
+
+    document.getElementById('closeApp').addEventListener('click', ()=>{
+  try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && tg.close) { tg.close(); return; } } catch(_){}
+  window.location.replace('/client');
+});
 
     // Init
     prefill();
     loadServices();
-    loadMasters();
+    loadMasters().then(()=>{ renderCalendar(); });
+
   });
   </script>
 </body>
