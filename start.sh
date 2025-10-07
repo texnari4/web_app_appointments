@@ -1311,35 +1311,37 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
            const c = update.message.contact;
            const ownerId = c.user_id || userId;
            const fromUser = from || {};
-            upsertContact({
-            id: ownerId,
-            phone: c.phone_number,
-            username: (fromUser.username||'').replace(/^@/, '') || undefined,
-            first_name: fromUser.first_name || undefined,
-            last_name: fromUser.last_name || undefined
-            });
-         await tgSendMessage(chatId, '✅ Контакт получен! Теперь можно перейти к записи.\nОткройте форму записи внутри Telegram:', {
-         reply_markup: { inline_keyboard: [[{ text: '🧾 Открыть форму записи', web_app: { url: `${PUBLIC_BASE_URL}/client` } }]] }
-         });
+           upsertContact({
+             id: ownerId,
+             phone: c.phone_number,
+             username: (fromUser.username||'').replace(/^@/, '') || undefined,
+             first_name: fromUser.first_name || undefined,
+             last_name: fromUser.last_name || undefined
+           });
+           await tgSendMessage(chatId, '✅ Контакт получен! Теперь можно перейти к записи.\nОткройте форму записи внутри Telegram:', {
+             reply_markup: { inline_keyboard: [[{ text: '🧾 Открыть форму записи', web_app: { url: `${PUBLIC_BASE_URL}/client` } }]] }
+           });
+           // ✅ Important: stop further processing so we don't send fallback messages
+           sendJSON(res, 200, { ok: true });
+           return;
+         } else if (/^\/start\b/.test(text)) {
+           await tgSendMessage(chatId, 'Добро пожаловать в систему записи!\n\nПоделитесь контактными данными для продолжения записи — это поможет нам автоматически подставлять ваш номер телефона и имя.', {
+             reply_markup: { keyboard: [[{ text: '📱 Поделиться номером в чате', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
+           });
+         } else if (/^\/client\b/.test(text)) {
+           const url = `${PUBLIC_BASE_URL}/client`;
+           await tgSendMessage(chatId, `🧾 <b>Клиентская форма</b>\n${url}`);
+         } else if (/^\/admin\b/.test(text)) {
+           const url = `${PUBLIC_BASE_URL}/admin`;
+           // Send both text and a Web App button to open inside Telegram
+           await tgSendMessage(chatId, `🛠 <b>Админ-панель</b>\nОткройте внутри Telegram для авто‑входа.\n${url}`, {
+             reply_markup: {
+               inline_keyboard: [ [ { text: 'Открыть админку', web_app: { url } } ] ]
+             }
+           });
+         } else {
+           await tgSendMessage(chatId, 'Не знаю эту команду. Попробуйте /client или /admin');
          }
-          if (/^\/start\b/.test(text)) {
-          await tgSendMessage(chatId, 'Добро пожаловать в систему записи!\n\nПоделитесь контактными данными для продолжения записи — это поможет нам автоматически подставлять ваш номер телефона и имя.', {
-           reply_markup: { keyboard: [[{ text: '📱 Поделиться номером в чате', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
-          });
-          } else if (/^\/client\b/.test(text)) {
-            const url = `${PUBLIC_BASE_URL}/client`;
-            await tgSendMessage(chatId, `🧾 <b>Клиентская форма</b>\n${url}`);
-          } else if (/^\/admin\b/.test(text)) {
-            const url = `${PUBLIC_BASE_URL}/admin`;
-            // Send both text and a Web App button to open inside Telegram
-            await tgSendMessage(chatId, `🛠 <b>Админ-панель</b>\nОткройте внутри Telegram для авто‑входа.\n${url}`, {
-              reply_markup: {
-                inline_keyboard: [ [ { text: 'Открыть админку', web_app: { url } } ] ]
-              }
-            });
-          } else {
-            await tgSendMessage(chatId, 'Не знаю эту команду. Попробуйте /client или /admin');
-          }
         }
         sendJSON(res, 200, { ok: true });
       } catch (e) {
