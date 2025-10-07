@@ -334,6 +334,19 @@ function parseTelegramId(req) {
     }
   } catch {}
 
+  // Ensure Telegram WebApp auth cookie is set so server knows chat id
+async function ensureTgAuth(){
+  try{
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (!tg || !tg.initData || tg.initData.length < 10) return;
+    await fetch('/auth/telegram', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ initData: tg.initData })
+    });
+  }catch(e){}
+}
+
   // 2) Custom headers (for reverse-proxy or future use)
   const headerId = req.headers['x-telegram-id'] ?? req.headers['x-telegram-user-id'];
   if (headerId != null) {
@@ -1092,6 +1105,53 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
         return;
       }
 
+      // === Confirm booking (admin) ===
+if (pathname.startsWith('/api/bookings/') && pathname.endsWith('/confirm') && req.method === 'POST') {
+  if (!ensureAuthorized(ctx, res, ['admin'])) return;
+  try {
+    const idPart = pathname.slice('/api/bookings/'.length, -('/confirm'.length));
+    const bid = String(idPart).trim();
+    const bookings = readJSON(bookingsFile, []);
+    const idx = bookings.findIndex(b => String(b.id) === bid);
+    if (idx === -1) { sendJSON(res, 404, { error: 'booking not found' }); return; }
+
+    const mastersList = readJSON(mastersFile, []);
+    const servicesList = readJSON(servicesFile, []);
+
+    const b = bookings[idx];
+    b.status = 'confirmed';
+    b.updatedAt = new Date().toISOString();
+    writeJSON(bookingsFile, bookings);
+
+    // Уведомляем клиента
+    try {
+      if (TG_API && b.telegramId) {
+        const masterName = b.masterId ? (mastersList.find(m => String(m.id) === String(b.masterId))?.name || 'Мастер') : 'Мастер';
+        const svcName = b.serviceName || (servicesList.find(s=> Number(s.id)===Number(b.serviceId))?.name) || 'Услуга';
+        const title = '✅ Ваша запись подтверждена';
+        const details = [
+          '🧾 <b>Детали записи</b>',
+          `Услуга: <b>${svcName}</b>`,
+          `Мастер: <b>${masterName}</b>`,
+          `Дата: <b>${b.date}</b>`,
+          `Время: <b>${b.startTime}</b>`,
+          b.serviceDuration ? `Длительность: <b>${b.serviceDuration} мин</b>` : null,
+          Number.isFinite(b.servicePrice) ? `Стоимость: <b>${b.servicePrice}₽</b>` : null
+        ].filter(Boolean).join('\n');
+        await tgSendMessage(b.telegramId, title);
+        await tgSendMessage(b.telegramId, details, { parse_mode: 'HTML' });
+      }
+    } catch (e) {
+      console.warn('Notify on confirm failed:', e?.message||e);
+    }
+
+    sendJSON(res, 200, { ok: true });
+  } catch (e) {
+    sendJSON(res, 500, { error: String(e.message||e) });
+  }
+  return;
+}
+
       const service = services.find((item) => item.id === Number(payload.serviceId));
       const bookings = readJSON(bookingsFile, []);
 
@@ -1142,7 +1202,9 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
             : String(payload.masterId).trim(),
         date: payload.date,
         startTime: minutesToTime(startMinutes),
-        duration: durationMinutes
+        duration: durationMinutes,
+        telegramId: ctx.telegramId || null
+
       };
 
       bookings.push(newBooking);
@@ -2010,6 +2072,12 @@ cat <<'EOF' >  public/client.html
       try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && tg.close) { tg.close(); return; } } catch(_){}
       window.location.replace('/client');
     });
+
+    const closeBtn = document.getElementById('closeApp');
+if (closeBtn) closeBtn.addEventListener('click', ()=>{
+  try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && tg.close) { tg.close(); return; } } catch(_){}
+  window.location.replace('/client');
+});
 
     const clientNameInput = document.getElementById('clientName');
     const clientPhoneInput = document.getElementById('clientPhone');
