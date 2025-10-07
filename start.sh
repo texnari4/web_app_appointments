@@ -1952,6 +1952,7 @@ cat <<'EOF' >  public/client.html
     const step1 = document.getElementById('step1');
     const step2 = document.getElementById('step2');
     const step3 = document.getElementById('step3');
+    const step4 = document.getElementById('step4');
     const banner = document.getElementById('banner');
 
     const next1 = document.getElementById('next1');
@@ -2065,6 +2066,7 @@ document.getElementById('calNext').addEventListener('click', ()=>{ calMonth.setM
       step1.classList.toggle('active', n===1);
       step2.classList.toggle('active', n===2);
       step3.classList.toggle('active', n===3);
+      step4.classList.toggle('active', n===4);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
