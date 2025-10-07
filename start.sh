@@ -85,10 +85,13 @@ const DEFAULT_GROUPS = [
 
 function makeBackupName() {
   const d = new Date();
-  const dd = String(d.getDate()).padStart(2,'0');
-  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
-  return `time:${dd}.${mm}.${yyyy}.zip`;
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `backup_${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}.zip`;
 }
 
 const DEFAULT_SERVICES = [
@@ -1677,27 +1680,26 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
       try {
         const AdmZip = (await import('adm-zip')).default;
         const { readdirSync, statSync, readFileSync: rf } = await import('fs');
-        const { join } = await import('path');
+        const { join, dirname, basename } = await import('path');
 
-        const dataDir = join(__dirname, 'app', 'data');
+        // Detect the real data directory from any known file path we already use
+        const detectedDataDir = dirname(groupsFile); // same dir as groups.json, matches /health
+        const dataDir = detectedDataDir;
         const zip = new AdmZip();
 
-        // add every regular file from dataDir (skip hidden and temp files)
+        // Add every regular file from dataDir (no filtering),
+        // so the archive mirrors the real /app/data contents
         let added = 0;
         try {
           const entries = readdirSync(dataDir, { withFileTypes: true });
           for (const e of entries) {
             if (!e.isFile()) continue;
-            if (e.name.startsWith('_') || e.name.startsWith('.')) continue;
             const full = join(dataDir, e.name);
             try {
               const st = statSync(full);
-              if (!st.isFile() || st.size === 0) {
-                // всё равно добавим пустой файл, чтобы была структура
-                zip.addFile(e.name, Buffer.from(''));
-              } else {
-                zip.addFile(e.name, rf(full));
-              }
+              if (!st.isFile()) continue;
+              const content = st.size > 0 ? rf(full) : Buffer.from('');
+              zip.addFile(basename(full), content);
               added++;
             } catch {}
           }
