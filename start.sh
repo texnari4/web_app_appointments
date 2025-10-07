@@ -1740,7 +1740,7 @@ cat <<'EOF' >  public/client.html
     header h1 { margin:0; font-size:clamp(26px,5vw,36px); font-weight:700; letter-spacing:-0.02em; }
     header p { margin:0 auto; max-width:520px; color:#4b5563; font-size:16px; line-height:1.5; }
     *, *::before, *::after { box-sizing: border-box; }
-    .step .form-grid, .step .controls { max-width: 640px; margin: 0 auto; }
+    .step .form-grid, .step .controls { max-width: 100%; margin: 0; }
     input, select, textarea { width: 100%; }
 
     /* Wizard */
@@ -1760,8 +1760,8 @@ cat <<'EOF' >  public/client.html
     textarea { min-height:90px; resize:vertical; }
     .muted { color:#6b7280; font-size:13px; }
 
-    .controls { display:flex; gap:10px; justify-content:space-between; margin-top:14px; }
-    .btn { display:inline-flex; align-items:center; justify-content:center; padding:12px 18px; border-radius:12px; border:1px solid rgba(148,163,184,.45); background:#fff; color:#111827; font-weight:700; cursor:pointer; }
+    .controls { display:grid; grid-template-columns: 1fr; gap:12px; margin-top:14px; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; padding:12px 18px; border-radius:12px; border:1px solid rgba(148,163,184,.45); background:#fff; color:#111827; font-weight:700; cursor:pointer; width:100%; }
     .btn.primary { border:none; background:linear-gradient(135deg,#5ec5ff,#007aff); color:#fff; box-shadow:0 24px 40px -28px rgba(0,122,255,.55); }
     .btn[disabled] { opacity:.6; cursor:not-allowed; }
     .required { color:#dc2626; margin-left:4px; }
