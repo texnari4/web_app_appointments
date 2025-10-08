@@ -2158,4 +2158,13 @@ masterGroupAddBtn?.addEventListener('click', () => {
       });
 
 </script>
+      // ===== INITIALIZE APP =====
+      const initialId = detectTelegramId();
+      if (initialId) {
+        authState.telegramId = initialId;
+      }
+      updateAuthStatus();
+      refreshAccess();
+      switchTab(state.activeTab);
+    }); // end of DOMContentLoaded
 </body>
