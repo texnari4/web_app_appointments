@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Менеджер — Beauty</title>
+  <style>
+    /* Base */
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#f6f7fb 0%,#f0f3f8 45%,#eef1f7 100%);color:#111827;}
+    a{color:#007aff;text-decoration:none}
+    .container{max-width:1100px;margin:0 auto;padding:16px 12px 28px}
+
+    /* Header / Tabs */
+    header{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;z-index:10}
+    .header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;max-width:1100px;margin:0 auto}
+    .brand{font-weight:800;letter-spacing:-.02em}
+    .tabs{display:flex;gap:6px}
+    .tab{padding:8px 14px;border-radius:10px;font-weight:700;color:#374151;cursor:pointer;user-select:none;border:1px solid rgba(148,163,184,.35);background:#fff}
+    .tab.active{border-color:#007aff;background:#007aff;color:#fff;box-shadow:0 10px 24px -12px rgba(0,122,255,.4)}
+
+    /* Layout */
+    main{padding:16px 0}
+    section.view{display:none}
+    section.view.active{display:block}
+
+    /* Cards / Inputs */
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 30px 60px -40px rgba(15,23,42,.25);padding:16px;margin-bottom:16px}
+    h2{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:-.01em}
+    .muted{color:#6b7280}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .grow{flex:1 1 240px}
+
+    input,select,textarea{width:100%;padding:12px 14px;border:1px solid rgba(148,163,184,.45);border-radius:12px;font:inherit;font-size:16px;line-height:1.2;background:#fff}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid rgba(148,163,184,.45);background:#fff;color:#111827;font-weight:700;cursor:pointer;font-size:16px}
+    .btn.primary{border:none;background:#007aff;color:#fff;box-shadow:0 20px 32px -20px rgba(0,122,255,.5)}
+    .btn.ghost{background:#fff}
+
+    /* Tables */
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid #eef2f7;vertical-align:middle}
+    th{color:#6b7280;font-weight:700;text-align:left;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+    tr:hover td{background:#fafbff}
+
+    /* Toolbar */
+    .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+    .search{position:relative;min-width:220px}
+    .search input{padding-left:38px}
+    .search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:.55}
+
+    /* Banner */
+    .banner{position:fixed;left:0;right:0;bottom:18px;margin:0 auto;max-width:900px;padding:12px 16px;border-radius:12px;background:linear-gradient(135deg,rgba(94,197,255,.95),rgba(0,122,255,.95));color:#fff;font-weight:700;text-align:center;opacity:0;pointer-events:none;transform:translateY(6px);transition:opacity .2s,transform .2s}
+    .banner.show{opacity:1;transform:translateY(0)}
+    .banner.error{background:linear-gradient(135deg,rgba(255,95,95,.95),rgba(244,63,94,.95))}
+
+    /* Calendar grid */
+    .hour-col{display:grid;gap:8px}
+    .time-cell{height:44px;color:#6b7280;font-size:12px;display:flex;align-items:flex-start;justify-content:flex-end;padding:6px 8px}
+    .slot-col{position:relative;border-left:1px dashed #e5e7eb}
+    .event{position:absolute;left:8px;right:8px;border-radius:10px;padding:8px 10px;background:#eef6ff;border:1px solid #c7ddff}
+    .event .t{font-weight:700}
+    .event .m{color:#374151;font-size:12px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">Менеджер</div>
+      <nav class="tabs" id="navTabs">
+        <div class="tab active" data-tab="bookings">Записи</div>
+        <div class="tab" data-tab="clients">Клиенты</div>
+        <div class="tab" data-tab="services">Услуги</div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <main>
+      <!-- Записи -->
+      <section id="view-bookings" class="view active">
+        <div class="card">
+          <h2>Записи</h2>
+          <div class="toolbar">
+            <div class="search grow"><input id="searchBookings" placeholder="Поиск по клиенту/услуге" /><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 21l-3.5-3.5" stroke="#111827" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="11" r="7" stroke="#111827" stroke-width="2" fill="none"/></svg></div>
+            <select id="filterMaster" class="btn ghost"><option value="">Все мастера</option></select>
+            <select id="filterStatus" class="btn ghost">
+              <option value="">Все статусы</option>
+              <option value="pending">Новые</option>
+              <option value="confirmed">Подтверждённые</option>
+              <option value="done">Выполнено</option>
+              <option value="canceled">Отменено</option>
+            </select>
+            <button id="addBooking" class="btn primary">+ Новая запись</button>
+          </div>
+
+          <div class="row" style="align-items:center;justify-content:space-between;margin-top:6px">
+            <div class="row" style="gap:8px">
+              <button class="btn ghost" id="calPrev">‹</button>
+              <div id="calTitle" style="font-weight:800"></div>
+              <button class="btn ghost" id="calNext">›</button>
+            </div>
+            <div class="row" style="gap:6px">
+              <button class="btn ghost" data-view="day" id="viewDay">День</button>
+              <button class="btn ghost" data-view="week" id="viewWeek">Неделя</button>
+            </div>
+          </div>
+
+          <div class="card" style="padding:0;margin:0;border:none;box-shadow:none">
+            <table id="tblBookings">
+              <thead><tr>
+                <th>Дата</th><th>Время</th><th>Клиент</th><th>Телефон</th><th>Услуга</th><th>Мастер</th><th>Статус</th><th></th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div id="calendarBoard" class="card" style="margin-top:10px">
+            <div id="dayGrid" style="display:grid;grid-template-columns:80px 1fr;gap:8px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Клиенты -->
+      <section id="view-clients" class="view">
+        <div class="card">
+          <h2>Клиенты</h2>
+          <div class="toolbar">
+            <div class="search grow"><input id="searchClients" placeholder="Поиск клиента" /><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 21l-3.5-3.5" stroke="#111827" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="11" r="7" stroke="#111827" stroke-width="2" fill="none"/></svg></div>
+            <button id="addClient" class="btn primary">+ Новый клиент</button>
+          </div>
+          <div class="card" style="padding:0;margin:0;border:none;box-shadow:none">
+            <table id="tblClients">
+              <thead><tr>
+                <th>Имя</th><th>Телефон</th><th>Telegram</th><th>Заметки</th><th></th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Услуги -->
+      <section id="view-services" class="view">
+        <div class="card">
+          <h2>Услуги</h2>
+          <div class="toolbar">
+            <div class="search grow"><input id="searchServices" placeholder="Поиск услуги" /><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 21l-3.5-3.5" stroke="#111827" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="11" r="7" stroke="#111827" stroke-width="2" fill="none"/></svg></div>
+            <button id="addService" class="btn primary">+ Новая услуга</button>
+          </div>
+          <div class="card" style="padding:0;margin:0;border:none;box-shadow:none">
+            <table id="tblServices">
+              <thead><tr>
+                <th>Название</th><th>Категория</th><th>Длительность</th><th>Цена</th><th>Онлайн</th><th></th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="banner" id="banner" hidden></div>
+
+<script>
+(function(){
+  // Tabs
+  const tabs = document.getElementById('navTabs');
+  tabs.addEventListener('click', (e)=>{
+    const el = e.target.closest('.tab'); if(!el) return;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t===el));
+    const tab = el.dataset.tab;
+    document.querySelectorAll('section.view').forEach(v=>v.classList.toggle('active', v.id === 'view-'+tab));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // Telegram WebApp auth cookie (SSO)
+  async function ensureTgAuth(){
+    try{
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (!tg || !tg.initData || tg.initData.length < 10) return;
+      await fetch('/auth/telegram', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ initData: tg.initData }) });
+    }catch(e){ /* noop */ }
+  }
+  try{ const tg = window.Telegram && window.Telegram.WebApp; if(tg){ tg.ready&&tg.ready(); tg.expand&&tg.expand(); } }catch{}
+  ensureTgAuth();
+
+  // Minimal bootstrap data loads (placeholders)
+  async function loadMasters(){ try{ const r=await fetch('/api/masters'); const list=r.ok?await r.json():[]; const sel=document.getElementById('filterMaster'); sel.innerHTML='<option value="">Все мастера</option>'+ list.map(m=>`<option value="${m.id}">${m.name}</option>`).join(''); }catch{} }
+  async function loadBookings(){ try{ const r=await fetch('/api/bookings'); const list=r.ok?await r.json():[]; const tb=document.querySelector('#tblBookings tbody'); tb.innerHTML=list.map(b=>`<tr><td>${b.date||''}</td><td>${b.startTime||''}</td><td>${b.clientName||''}</td><td>${b.clientPhone||''}</td><td>${b.serviceName||b.serviceId||''}</td><td>${b.masterId||''}</td><td>${b.status||''}</td><td><button class='btn ghost' data-id='${b.id}'>⋯</button></td></tr>`).join(''); }catch{} }
+  async function loadClients(){ try{ const r=await fetch('/api/clients'); const list=r.ok?await r.json():[]; const tb=document.querySelector('#tblClients tbody'); tb.innerHTML=list.map(c=>`<tr><td>${(c.first_name||'')+' '+(c.last_name||'')}</td><td>${c.phone||''}</td><td>${c.id||''}</td><td>${c.notes||''}</td><td><button class='btn ghost' data-id='${c.id}'>⋯</button></td></tr>`).join(''); }catch{} }
+  async function loadServices(){ try{ const r=await fetch('/api/services'); const list=r.ok?await r.json():[]; const tb=document.querySelector('#tblServices tbody'); tb.innerHTML=list.map(s=>`<tr><td>${s.name||''}</td><td>${s.groupId||''}</td><td>${s.duration||''} мин</td><td>${s.price??''}</td><td>${s.onlineEnabled? 'Да':'Нет'}</td><td><button class='btn ghost' data-id='${s.id}'>⋯</button></td></tr>`).join(''); }catch{} }
+
+  loadMasters();
+  loadBookings();
+  loadClients();
+  loadServices();
+
+  // --- Simple calendar (Day/Week) ---
+  const calTitle = document.getElementById('calTitle');
+  const calPrev = document.getElementById('calPrev');
+  const calNext = document.getElementById('calNext');
+  const dayGrid = document.getElementById('dayGrid');
+  let view = 'day';
+  let cursor = new Date(); // current day/week start
+
+  function ymd(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const da=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${da}`; }
+  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+  function toMin(t){ const [h,m]=String(t||'00:00').split(':').map(Number); return h*60+m; }
+
+  function renderDay(bookings){
+    dayGrid.innerHTML='';
+    const hours=[]; for(let h=9; h<=21; h++){ hours.push(`${String(h).padStart(2,'0')}:00`); }
+    const hourCol=document.createElement('div'); hourCol.className='hour-col';
+    hours.forEach(h=>{ const c=document.createElement('div'); c.className='time-cell'; c.textContent=h; hourCol.appendChild(c); });
+    const slotCol=document.createElement('div'); slotCol.className='slot-col'; slotCol.style.minHeight=(hours.length*44)+'px';
+
+    // draw events (simple vertical stacking by time)
+    const perMin=44/60; // px per minute
+    bookings.forEach(b=>{
+      const top = Math.round((toMin(b.startTime)-(9*60))*perMin);
+      const dur = Number(b.duration||b.serviceDuration||30);
+      const height = Math.max(36, Math.round(dur*perMin));
+      const ev = document.createElement('div'); ev.className='event'; ev.style.top= (top<0?0:top)+'px'; ev.style.height=height+'px';
+      ev.innerHTML = `<div class='t'>${b.startTime} • ${b.clientName||''}</div><div class='m'>${b.serviceName||''} · ${b.masterId||''}</div>`;
+      slotCol.appendChild(ev);
+    });
+
+    dayGrid.appendChild(hourCol);
+    dayGrid.appendChild(slotCol);
+  }
+
+  async function refreshCalendar(){
+    const from = ymd(cursor);
+    const to = ymd(cursor);
+    calTitle.textContent = new Date(from).toLocaleDateString('ru-RU',{weekday:'long', day:'numeric', month:'long'});
+    const params = new URLSearchParams({ from, to, masterId: document.getElementById('filterMaster').value||'' , status: document.getElementById('filterStatus').value||'' , q: document.getElementById('searchBookings').value||'' });
+    const r = await fetch('/api/bookings?'+params.toString());
+    const list = r.ok ? await r.json() : [];
+    renderDay(list);
+  }
+
+  calPrev.addEventListener('click', ()=>{ cursor = addDays(cursor, view==='day'?-1:-7); refreshCalendar(); });
+  calNext.addEventListener('click', ()=>{ cursor = addDays(cursor, view==='day'?+1:+7); refreshCalendar(); });
+  document.getElementById('viewDay').addEventListener('click', ()=>{ view='day'; refreshCalendar(); });
+  document.getElementById('viewWeek').addEventListener('click', ()=>{ view='week'; /* future: week grid */ refreshCalendar(); });
+
+  // react to filters
+  document.getElementById('filterMaster').addEventListener('change', refreshCalendar);
+  document.getElementById('filterStatus').addEventListener('change', refreshCalendar);
+  document.getElementById('searchBookings').addEventListener('input', ()=>{ clearTimeout(window.__srch); window.__srch=setTimeout(refreshCalendar, 250); });
+
+  // first paint
+  refreshCalendar();
+})();
+</script>
+</body>
+</html>
