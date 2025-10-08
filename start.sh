@@ -1934,7 +1934,7 @@ cat <<'EOF' > templates/managel.html
     function renderDayStrip(anchor = new Date(state.date)){
       const daysEl = document.getElementById('days');
       daysEl.innerHTML = '';
-      for(let i=-3;i<=3;i++){
+      for(let i=-10;i<=10;i++){
         const d = new Date(anchor); d.setDate(d.getDate()+i);
         const iso = toISO(d);
         const el = document.createElement('div');
