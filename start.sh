@@ -1838,61 +1838,115 @@ cat <<'EOF' > templates/managel.html
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Записи — Менеджер</title>
+  <title>Менеджер — Записи</title>
   <style>
     :root{
       --bg:#f7f8fb;--card:#ffffff;--muted:#6b7280;--text:#0f172a;
       --line:#e5e7eb;--primary:#2563eb;--primary-weak:#eff6ff;
-      --accent:#111827;--tab:#111827;--tab-muted:#9ca3af;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:var(--bg);color:var(--text)}
     .wrap{display:grid;grid-template-rows:auto auto auto 1fr auto;min-height:100dvh}
-    /* Top view switcher */
+
+    /* Переключатель видов */
     .views{display:flex;gap:8px;align-items:center;padding:10px 12px;position:sticky;top:0;background:var(--bg);z-index:10}
-    .chip{padding:8px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer;color:var(--tab-muted);background:#fff}
+    .chip{padding:8px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer;color:#111827;background:#fff}
     .chip.active{border-color:var(--primary);color:#fff;background:var(--primary)}
-    /* Day scroller */
+
+    /* Лента дней (±1 месяц) */
     .days{display:flex;gap:8px;overflow-x:auto;padding:8px 12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#fff}
-    .day{flex:0 0 auto;min-width:64px;padding:8px;border:1px solid var(--line);border-radius:10px;text-align:center;cursor:pointer;color:#0f172a;background:var(--primary-weak)}
+    .day{flex:0 0 auto;min-width:68px;padding:8px;border:1px solid var(--line);border-radius:10px;text-align:center;cursor:pointer;color:#0f172a;background:var(--primary-weak)}
     .day .dow{font-size:12px;color:var(--muted)}
     .day.active{background:var(--primary);border-color:var(--primary);color:#fff}
     .sel-date{padding:10px 16px;font-weight:700}
-    /* Timeline */
-    .timeline{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 12px 12px;height:calc(100dvh - 320px);min-height:420px;overflow:auto}
+
+    /* Панели */
+    .panel{display:none}
+    .panel.active{display:block}
+
+    /* День — таймлайн */
+    .timeline{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 12px 12px;min-height:420px;overflow:auto}
     .hour{position:relative;height:64px;border-top:1px solid var(--line);padding-left:56px;display:flex;align-items:flex-start}
     .hour:first-child{border-top:none}
     .hour .label{position:absolute;left:8px;top:6px;font-size:12px;color:var(--muted)}
     .events{position:absolute;inset:0;padding-left:56px}
     .booking{position:absolute;left:64px;right:12px;border:1px solid rgba(37,99,235,.25);background:#e8f0fe;border-left:4px solid var(--primary);border-radius:10px;padding:8px 10px;font-size:14px;line-height:1.2;overflow:hidden}
     .booking .title{font-weight:700}
-    /* FAB */
+
+    /* Неделя */
+    .week{margin:0 12px 12px;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+    .week-head{display:grid;grid-template-columns:56px repeat(7,1fr);background:#f9fafb;border-bottom:1px solid var(--line)}
+    .week-head div{padding:8px 6px;font-size:12px;color:var(--muted);text-align:center}
+    .week-grid{display:grid;grid-template-columns:56px repeat(7,1fr)}
+    .week-hour{height:56px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;align-items:flex-start;justify-content:center;padding-top:6px}
+    .week-cell{position:relative;border-top:1px solid var(--line);border-left:1px solid var(--line);height:56px}
+    .pill{position:absolute;left:4px;right:4px;top:4px;border-radius:8px;padding:4px 6px;background:#e8f0fe;border:1px solid rgba(37,99,235,.25);font-size:12px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+    /* Месяц */
+    .month{margin:0 12px 12px;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+    .month-head{display:grid;grid-template-columns:repeat(7,1fr);background:#f9fafb;border-bottom:1px solid var(--line)}
+    .month-head div{padding:8px 6px;font-size:12px;color:var(--muted);text-align:center}
+    .month-grid{display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:90px}
+    .mcell{border-top:1px solid var(--line);border-left:1px solid var(--line);padding:6px;position:relative}
+    .mcell .dnum{font-size:12px;color:#111827}
+    .mcell .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#2563eb;margin-right:4px}
+
+    /* Список */
+    .list{margin:0 12px 12px;background:#fff;border:1px solid var(--line);border-radius:14px}
+    .li-day{border-top:1px solid var(--line);padding:8px 12px}
+    .li-day:first-child{border-top:none}
+    .li-title{font-weight:700;margin-bottom:6px}
+    .li-item{display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px dashed #eef}
+    .li-item:first-child{border-top:none}
+    .badge{font-size:12px;border:1px solid rgba(37,99,235,.25);background:#e8f0fe;border-radius:8px;padding:2px 6px}
+
+    /* FAB / bottom nav */
     .fab{position:fixed;right:18px;bottom:calc(88px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:#fff;border:none;font-size:28px;box-shadow:0 20px 40px -10px rgba(37,99,235,.4);cursor:pointer}
-    /* Bottom nav */
     .nav{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 6px}
-    .nav a{display:grid;gap:4px;justify-items:center;text-decoration:none;color:var(--muted);font-size:12px}
+    .nav a{display:grid;gap:4px;justify-items:center;text-decoration:none;color:#6b7280;font-size:12px}
     .nav a.active{color:var(--primary)}
     .nav .dot{width:24px;height:24px;border-radius:8px;border:1px solid var(--line);display:grid;place-items:center}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <!-- View switcher -->
+    <!-- Переключатель -->
     <div class="views">
       <button class="chip active" data-view="day">День</button>
       <button class="chip" data-view="week">Неделя</button>
       <button class="chip" data-view="month">Месяц</button>
       <button class="chip" data-view="list">Список</button>
     </div>
-    <!-- Day scroller -->
+
+    <!-- Лента дней -->
     <div class="days" id="days"></div>
     <div class="sel-date" id="selDate"></div>
-    <!-- Timeline -->
-    <div class="timeline" id="timeline">
-      <div class="events" id="events"></div>
+
+    <!-- Панели -->
+    <div id="panel-day" class="panel active">
+      <div class="timeline" id="timeline"><div class="events" id="events"></div></div>
     </div>
-    <!-- Bottom nav -->
+
+    <div id="panel-week" class="panel">
+      <div class="week">
+        <div class="week-head" id="week-head"></div>
+        <div class="week-grid" id="week-grid"></div>
+      </div>
+    </div>
+
+    <div id="panel-month" class="panel">
+      <div class="month">
+        <div class="month-head" id="month-head"></div>
+        <div class="month-grid" id="month-grid"></div>
+      </div>
+    </div>
+
+    <div id="panel-list" class="panel">
+      <div class="list" id="list"></div>
+    </div>
+
+    <!-- Нижняя навигация -->
     <nav class="nav">
       <a href="#" class="active"><div class="dot">📄</div><span>Записи</span></a>
       <a href="/manager?schedule"><div class="dot">📆</div><span>График</span></a>
@@ -1903,107 +1957,94 @@ cat <<'EOF' > templates/managel.html
   <button class="fab" id="fab" title="Добавить запись">+</button>
 
   <script>
-    // --- Utils ---
+    // --- Утилиты ---
     const pad = n => String(n).padStart(2,'0');
     const toISO = d => d.toISOString().slice(0,10);
+    const fromISO = s => { const [y,m,dd]=s.split('-').map(Number); return new Date(y,m-1,dd); };
+    const addDays = (d, n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
     const fmtRu = d => d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    const fmtShort = d => d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});
+    const fmtDow = d => d.toLocaleDateString('ru-RU',{weekday:'short'});
 
+    const today = new Date();
+
+    // --- Состояние ---
     let state = {
-      date: toISO(new Date()),
-      open: 9*60, close: 21*60, step: 60, // fallback
-      bookings: []
+      view: 'day',
+      date: toISO(today),
+      daysRange: { start: toISO(addDays(today,-31)), end: toISO(addDays(today,31)) },
+      open: 9*60, close: 21*60, step: 60,
+      bookings: [],
+      rangeBookings: []
     };
 
+    // --- Старт ---
     init();
-
     async function init(){
-      renderDayStrip();
-      await loadMeta();     // get business hours/slots
-      await loadBookings(); // admin-only; silently ignore if forbidden
-      renderAll();
+      buildDaysStrip(true);
+      await loadMeta();
+      await loadDay();
+      render();
       document.getElementById('fab').onclick = ()=> location.href='/client';
       document.querySelectorAll('.chip').forEach(b=>b.onclick = onChangeView);
     }
 
-    function onChangeView(e){
+    // --- Переключение видов ---
+    async function onChangeView(e){
       const v = e.currentTarget.dataset.view;
+      state.view = v;
       document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active', x.dataset.view===v));
-      // Пока реализован только вид "День"
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      document.getElementById('panel-'+v).classList.add('active');
+      if(v==='day'){ await loadDay(); } else { await loadRangeForView(); }
+      render();
     }
 
-    function renderDayStrip(anchor = new Date(state.date)){
+    // --- Лента дней (окно ±1 месяц) ---
+    const daysDiff = (a,b)=> Math.round( (fromISO(b) - fromISO(a)) / 86400000 );
+    const clampToRange = (iso)=>{
+      const s = fromISO(state.daysRange.start), e = fromISO(state.daysRange.end);
+      const d = fromISO(iso);
+      if (d < s) return toISO(s);
+      if (d > e) return toISO(e);
+      return iso;
+    };
+
+    function buildDaysStrip(center=false){
       const daysEl = document.getElementById('days');
       daysEl.innerHTML = '';
-      for(let i=-10;i<=10;i++){
-        const d = new Date(anchor); d.setDate(d.getDate()+i);
+      const start = fromISO(state.daysRange.start);
+      const total = daysDiff(state.daysRange.start, state.daysRange.end) + 1;
+      for(let i=0;i<total;i++){
+        const d = addDays(start,i);
         const iso = toISO(d);
         const el = document.createElement('div');
         el.className = 'day'+(iso===state.date?' active':'');
-        el.innerHTML = '<div class="dow">'+d.toLocaleDateString('ru-RU',{weekday:'short'})+'</div>'+
-                       '<div><b>'+d.getDate()+'</b> '+d.toLocaleDateString('ru-RU',{month:'short'})+'</div>';
-        el.onclick = ()=>{ state.date = iso; onDateChange(); };
+        el.dataset.iso = iso;
+        el.innerHTML = '<div class="dow">'+fmtDow(d)+'</div><div><b>'+d.getDate()+'</b> '+d.toLocaleDateString('ru-RU',{month:'short'})+'</div>';
+        el.onclick = ()=> selectDate(iso);
         daysEl.appendChild(el);
       }
-      document.getElementById('selDate').textContent = 'Выбрано: '+fmtRu(new Date(state.date));
-    }
-
-    async function onDateChange(){
-      renderDayStrip();
-      await loadBookings();
-      renderAll();
-    }
-
-    function renderAll(){
-      renderTimelineGrid();
-      renderEvents();
-    }
-
-    function renderTimelineGrid(){
-      const wrap = document.getElementById('timeline');
-      wrap.querySelectorAll('.hour').forEach(n=>n.remove());
-      const hoursCount = Math.ceil((state.close - state.open)/60);
-      for(let h=0; h<=hoursCount; h++){
-        const m = state.open + h*60;
-        const label = pad(Math.floor(m/60))+':'+pad(m%60);
-        const row = document.createElement('div');
-        row.className = 'hour';
-        row.style.top = (h*64)+'px';
-        const lab = document.createElement('div'); lab.className='label'; lab.textContent = label;
-        row.appendChild(lab);
-        wrap.appendChild(row);
+      if(center){
+        const active = [...daysEl.children].find(c=>c.dataset.iso===state.date);
+        if(active) daysEl.scrollLeft = active.offsetLeft - (daysEl.clientWidth/2 - active.clientWidth/2);
       }
-      wrap.style.setProperty('--hours', hoursCount+1);
-      wrap.style.height = Math.max(420, (hoursCount+1)*64)+'px';
-      document.getElementById('selDate').textContent = 'Выбрано: '+fmtRu(new Date(state.date));
+      updateSelectedDateLabel();
     }
 
-    function renderEvents(){
-      const ev = document.getElementById('events');
-      ev.innerHTML = '';
-      const dayStart = state.open;
-      const pxPerMin = 64/60;
-      state.bookings.forEach(b=>{
-        const start = toMin(b.startTime);
-        const dur = Number(b.duration)||state.step;
-        const top = ( (start - dayStart) * pxPerMin );
-        const height = dur * pxPerMin;
-        if (height <= 0) return;
-        const el = document.createElement('div');
-        el.className='booking';
-        el.style.top = Math.max(0, top)+'px';
-        el.style.height = height+'px';
-        el.innerHTML = '<div class="title">'+(b.serviceName||'Услуга')+'</div>'
-                     + '<div>'+ (b.clientName||'Клиент') +'</div>'
-                     + '<div>'+ b.startTime +' · '+ dur +' мин</div>';
-        ev.appendChild(el);
-      });
+    function updateSelectedDateLabel(){
+      document.getElementById('selDate').textContent = 'Выбрано: '+fmtRu(fromISO(state.date));
     }
 
-    function toMin(t){
-      const [hh,mm] = String(t).split(':').map(Number);
-      return hh*60 + (mm||0);
+    async function selectDate(iso){
+      state.date = clampToRange(iso);
+      [...document.querySelectorAll('.day')].forEach(d=>d.classList.toggle('active', d.dataset.iso===state.date));
+      updateSelectedDateLabel();
+      if(state.view==='day'){ await loadDay(); } else { await loadRangeForView(); }
+      render();
     }
 
+    // --- Загрузка данных ---
     async function loadMeta(){
       try{
         const r = await fetch('/api/availability?date='+encodeURIComponent(state.date));
@@ -2018,7 +2059,7 @@ cat <<'EOF' > templates/managel.html
       }catch(e){}
     }
 
-    async function loadBookings(){
+    async function loadDay(){
       state.bookings = [];
       try{
         const r = await fetch('/api/bookings?date='+encodeURIComponent(state.date));
@@ -2026,440 +2067,184 @@ cat <<'EOF' > templates/managel.html
         state.bookings = await r.json();
       }catch(e){}
     }
-  </script>
-</body>
-</html>
-EOF
 
-# --- client.html ---
-cat <<'EOF' > public/client.html
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Запись в салон — Beauty Appointments</title>
-  <style>
-    /* Reset & base */
-    *, *::before, *::after { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { margin:0; -webkit-text-size-adjust:100%; font-family: 'SF Pro Display','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background:linear-gradient(180deg,#f6f7fb 0%,#f0f3f8 45%,#eef1f7 100%); color:#111827; overflow-x:hidden; }
-
-    /* Layout */
-    .container { max-width: 720px; margin: 0 auto; padding: 24px 12px calc(28px + env(safe-area-inset-bottom,0)); }
-    header { text-align: center; display: grid; gap: 8px; margin-bottom: 12px; }
-    header h1 { margin: 0; font-weight: 800; letter-spacing: -0.02em; font-size: clamp(24px, 5vw, 34px); }
-    header p { margin: 0 auto; max-width: 520px; color:#4b5563; font-size: 15px; line-height: 1.5; }
-
-    .card { position: relative; background: #fff; border: 1px solid rgba(209,213,219,.5); border-radius: 16px; box-shadow: 0 30px 60px -40px rgba(15,23,42,.35); padding: 16px; overflow:hidden; }
-
-    /* Steps (simple show/hide, no wide carousels => нет горизонтального скролла) */
-    .step { display: none; }
-    .step.active { display: block; }
-
-    .step h2 { margin: 0 0 12px; font-size: 20px; font-weight: 700; }
-    .step { padding: 2px 0; }
-
-    .form-grid { display: grid; gap: 12px; }
-    label { display: grid; gap: 6px; font-size: 14px; color:#4b5563; }
-    input, select, textarea {
-      width:100%; padding: 12px 14px; border: 1px solid rgba(148,163,184,.45); border-radius: 12px;
-      font: inherit; font-size:16px; line-height:1.2; background:#fff;
-    }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: rgba(99,102,241,.9); box-shadow: 0 0 0 3px rgba(99,102,241,.18); }
-    textarea { min-height: 90px; resize: vertical; }
-
-    .actions { display: grid; gap: 10px; margin-top: 12px; }
-    .btn { display: block; width: 100%; padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(148,163,184,.45); background: #fff; color:#111827; font-weight: 700; cursor: pointer; font-size:16px; }
-    .btn.primary { border: none; background: linear-gradient(135deg,#5ec5ff,#007aff); color:#fff; box-shadow: 0 24px 40px -28px rgba(0,122,255,.55); }
-    .btn[disabled] { opacity:.6; cursor:not-allowed; }
-
-    .muted { color:#6b7280; font-size: 13px; }
-
-    .slot-grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(120px,1fr)); gap:12px; margin-top:6px; }
-    .slot-button { padding:12px; border-radius:14px; border:1px solid rgba(148,163,184,.4); background:rgba(255,255,255,.92); cursor:pointer; font-size:15px; font-weight:500; display:grid; gap:4px; justify-items:center; }
-    .slot-button.selected { border-color:transparent; background:linear-gradient(130deg,#4ade80,#34c759); color:#fff; box-shadow:0 24px 32px -24px rgba(52,199,89,.55); }
-    .slot-button[disabled] { cursor:not-allowed; opacity:.45; }
-
-    .summary { border:1px solid rgba(209,213,219,.5); background:rgba(249,250,251,.9); border-radius: 14px; padding:10px 12px; display:grid; gap:6px; }
-
-    /* Calendar */
-.cal { display:grid; gap:10px; }
-.cal-head { display:flex; align-items:center; justify-content:space-between; }
-.cal-head b { font-weight:800; letter-spacing:-0.02em; }
-.cal-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; }
-.cal-dow { text-align:center; font-size:12px; color:#6b7280; padding:6px 0; }
-.cal-day { text-align:center; padding:10px 0; border:1px solid rgba(148,163,184,.35); border-radius:10px; background:#fff; cursor:pointer; user-select:none; }
-.cal-day.mute { color:#9ca3af; background:#f3f4f6; border-color:rgba(148,163,184,.25); cursor:not-allowed; }
-.cal-day.today { outline:2px solid rgba(99,102,241,.35); }
-.cal-day.sel { background:linear-gradient(135deg,#5ec5ff,#007aff); color:#fff; border-color:transparent; }
-.cal-nav { display:inline-flex; gap:6px; }
-.cal-btn { border:1px solid rgba(148,163,184,.45); background:#fff; padding:6px 10px; border-radius:10px; cursor:pointer; }
-
-    .banner { position:fixed; left:0; right:0; bottom: calc(18px + env(safe-area-inset-bottom,0)); margin: 0 auto; max-width: 720px; padding: 12px 16px; border-radius: 12px; background: linear-gradient(135deg, rgba(94,197,255,.95), rgba(0,122,255,.95)); color:#fff; font-weight:700; box-shadow:0 32px 48px -32px rgba(0,122,255,.55); text-align:center; opacity:0; pointer-events:none; transform: translateY(6px); transition: opacity .2s ease, transform .2s ease; }
-    .banner.show { opacity:1; transform: translateY(0); }
-    .banner.error { background: linear-gradient(135deg, rgba(255,95,95,.95), rgba(244,63,94,.95)); box-shadow:0 32px 48px -32px rgba(244,63,94,.6); }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header>
-      <h1>Запишитесь в любимый салон</h1>
-      <p>Три шага: контакты → услуга → дата и мастер. Мы напомним вам о визите в Telegram.</p>
-    </header>
-
-    <div class="card">
-      <!-- Шаг 1 -->
-      <section class="step active" id="step1">
-        <h2>Шаг 1 из 3 — Контакты</h2>
-        <div class="form-grid">
-          <label>Как к вам обращаться
-            <input type="text" id="clientName" placeholder="Имя и фамилия" required />
-          </label>
-          <label>Телефон
-            <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" required />
-          </label>
-        </div>
-        <div class="actions">
-          <button id="next1" class="btn primary" type="button">Продолжить</button>
-        </div>
-      </section>
-
-      <!-- Шаг 2 -->
-      <section class="step" id="step2">
-        <h2>Шаг 2 из 3 — Услуга</h2>
-        <div class="form-grid">
-          <label>Услуга
-            <select id="serviceSelect" required>
-              <option value="" disabled selected>Загружаю список…</option>
-            </select>
-          </label>
-          <label>Комментарий для мастера (необязательно)
-            <textarea id="clientNotes" placeholder="Например: хочу нежный пастельный оттенок"></textarea>
-          </label>
-          <div class="summary" id="serviceSummary" hidden></div>
-        </div>
-        <div class="actions">
-          <button id="back2" class="btn" type="button">Назад</button>
-          <button id="next2" class="btn primary" type="button">Далее</button>
-        </div>
-      </section>
-
-      <!-- Шаг 3 -->
-      <section class="step" id="step3">
-        <h2>Шаг 3 из 3 — Дата и мастер</h2>
-        <div class="form-grid">
-          <label>Мастер <span style="color:#dc2626">*</span>
-            <select id="bookingMaster" required></select>
-          </label>
-          <input type="date" id="dateInput" required style="display:none" />
-<div id="calendar" class="cal" aria-label="Выбор даты визита">
-  <div class="cal-head">
-    <div class="cal-nav">
-      <button type="button" id="calPrev" class="cal-btn" aria-label="Предыдущий месяц">‹</button>
-      <button type="button" id="calNext" class="cal-btn" aria-label="Следующий месяц">›</button>
-    </div>
-    <b id="calTitle"></b>
-    <span style="width:52px"></span>
-  </div>
-  <div class="cal-grid" id="calGrid"><!-- сюда рендерятся дни --></div>
-</div>
-<p class="muted" id="availabilityHint">Выберите услугу, мастера и дату, чтобы увидеть свободные слоты.</p>
-
-          
-           </div>
-        <div id="slotsContainer" class="slot-grid"></div>
-        <p class="muted" id="slotsEmpty" hidden>На выбранный день пока нет свободных окон. Попробуйте другую дату.</p>
-        <div class="actions">
-          <button id="back3" class="btn" type="button">Назад</button>
-          <button id="submit" class="btn primary" type="button">Подтвердить запись</button>
-        </div>
-      </section>
-
-      <!-- Шаг 4 -->
-      <section class="step" id="step4">
-        <h2>Заявка отправлена</h2>
-        <div class="summary" id="finalSummary"></div>
-        <div class="actions">
-          <button id="closeApp" class="btn primary" type="button">Закрыть</button>
-        </div>
-      </section>
-    </div>
-
-
-    <div class="banner" id="banner" hidden></div>
-  </div>
-
-  <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    // Telegram WebApp adjustments
-    try { const tg = window.Telegram && window.Telegram.WebApp; if (tg) { tg.ready && tg.ready(); tg.expand && tg.expand(); } } catch(_){ }
-
-    async function ensureTgAuth(){
-    try{
-      const tg = window.Telegram && window.Telegram.WebApp;
-      if (!tg || !tg.initData || tg.initData.length < 10) return;
-      await fetch('/auth/telegram', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ initData: tg.initData })
-      });
-    }catch(e){}
-  }
-
-
-    // Elements
-    const step1 = document.getElementById('step1');
-    const step2 = document.getElementById('step2');
-    const step3 = document.getElementById('step3');
-    const step4 = document.getElementById('step4');
-    const banner = document.getElementById('banner');
-
-    const next1 = document.getElementById('next1');
-    const back2 = document.getElementById('back2');
-    const next2 = document.getElementById('next2');
-    const back3 = document.getElementById('back3');
-    const submitBtn = document.getElementById('submit');
-    // Re-bind close button for step 4 (works regardless of DOM order)
-    const closeBtn = document.getElementById('closeApp');
-    if (closeBtn) closeBtn.addEventListener('click', ()=>{
-      try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && tg.close) { tg.close(); return; } } catch(_){}
-      window.location.replace('/client');
-    });
-
-    const clientNameInput = document.getElementById('clientName');
-    const clientPhoneInput = document.getElementById('clientPhone');
-    const clientNotesInput = document.getElementById('clientNotes');
-    const serviceSelect = document.getElementById('serviceSelect');
-    const serviceSummary = document.getElementById('serviceSummary');
-    const bookingMasterSelect = document.getElementById('bookingMaster');
-    const dateInput = document.getElementById('dateInput');
-    const availabilityHint = document.getElementById('availabilityHint');
-    const slotsContainer = document.getElementById('slotsContainer');
-    const slotsEmpty = document.getElementById('slotsEmpty');
-
-    bookingMasterSelect.addEventListener('change', ()=>{
-  const id = bookingMasterSelect.value;
-  selectedMaster = mastersCache.find(m=>String(m.id)===String(id)) || null;
-  renderCalendar();
-  if(dateInput.value) fetchAvailability();
-});
-
-    // Calendar state
-let calMonth = new Date(); // текущий показанный месяц
-calMonth.setDate(1);
-let mastersCache = [];
-let selectedMaster = null;
-
-function ymd(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
-
-function isMasterWorkingOnDateLocal(master, dateStr){
-  if(!master || !master.schedule) return true;
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return true;
-  const dow = d.getDay();
-  const s = master.schedule;
-  if (s.type === 'weekly') {
-    const days = Array.isArray(s.weekly?.days) ? s.weekly.days : [];
-    return days.includes(dow);
-  }
-  if (s.type === 'shift') {
-    const sh = s.shift || {};
-    const anchor = new Date(sh.anchorDate || new Date().toISOString().slice(0,10));
-    const a0 = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
-    const d0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const diffDays = Math.floor((d0 - a0) / 86400000);
-    const cycle = Number(sh.workDays||2) + Number(sh.restDays||2);
-    if (!Number.isFinite(cycle) || cycle <= 0) return true;
-    const pos = ((diffDays % cycle) + cycle) % cycle;
-    return pos < Number(sh.workDays||2);
-  }
-  return true;
-}
-
-function renderCalendar(){
-  const grid = document.getElementById('calGrid');
-  const title = document.getElementById('calTitle');
-  const m = calMonth.getMonth(); const y = calMonth.getFullYear();
-  title.textContent = calMonth.toLocaleDateString('ru-RU', { month:'long', year:'numeric' });
-  grid.innerHTML = '';
-  // header dow
-  const dows = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-  dows.forEach(d=>{ const el=document.createElement('div'); el.className='cal-dow'; el.textContent=d; grid.appendChild(el); });
-  const firstDay = new Date(y, m, 1);
-  const startIndex = (firstDay.getDay()+6)%7; // monday=0
-  const daysInMonth = new Date(y, m+1, 0).getDate();
-  // blanks
-  for(let i=0;i<startIndex;i++){ grid.appendChild(document.createElement('div')); }
-  const todayStr = ymd(new Date());
-  for(let day=1; day<=daysInMonth; day++){
-    const d = new Date(y, m, day);
-    const ds = ymd(d);
-    const btn = document.createElement('button');
-    btn.type='button'; btn.className='cal-day'; btn.textContent=String(day);
-    const isPast = ds < todayStr;
-    const works = selectedMaster ? isMasterWorkingOnDateLocal(selectedMaster, ds) : true;
-    if(isPast || !works){ btn.classList.add('mute'); btn.disabled = true; }
-    if(ds === todayStr) btn.classList.add('today');
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.cal-day.sel').forEach(x=>x.classList.remove('sel'));
-      btn.classList.add('sel');
-      dateInput.value = ds;
-      fetchAvailability();
-    });
-    grid.appendChild(btn);
-  }
-}
-
-document.getElementById('calPrev').addEventListener('click', ()=>{ calMonth.setMonth(calMonth.getMonth()-1); renderCalendar(); });
-document.getElementById('calNext').addEventListener('click', ()=>{ calMonth.setMonth(calMonth.getMonth()+1); renderCalendar(); });
-
-
-    function showBanner(msg, type) {
-      banner.textContent = msg;
-      banner.classList.toggle('error', type === 'error');
-      banner.hidden = false; requestAnimationFrame(() => banner.classList.add('show'));
-      setTimeout(() => { banner.classList.remove('show'); setTimeout(() => banner.hidden = true, 180); }, 2200);
-    }
-
-    function setStep(n){
-      step1.classList.toggle('active', n===1);
-      step2.classList.toggle('active', n===2);
-      step3.classList.toggle('active', n===3);
-      step4.classList.toggle('active', n===4);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function isValidPhone(p){
-      const v = String(p||'').trim();
-      const digits = v.replace(/\D/g,'');
-      if (digits.length < 10) return false;
-      return /^\+?[\d\s\-()]{10,}$/.test(v);
-    }
-
-    // Prefill contact by cookie tg_id if available
-    async function prefill(){
+    async function loadRangeForView(){
+      const {from,to} = currentRange();
+      state.rangeBookings = [];
       try{
-        const r = await fetch('/api/contacts/me'); if(!r.ok) return;
-        const j = await r.json(); const c = j.contact;
-        if(c){
-          if(!clientNameInput.value && (c.first_name||c.last_name)) clientNameInput.value = [c.first_name||'', c.last_name||''].join(' ').trim();
-          if(!clientPhoneInput.value && c.phone) clientPhoneInput.value = c.phone;
-        }
-      }catch{}
+        const r = await fetch('/api/bookings?from='+from+'&to='+to);
+        if(!r.ok) return;
+        state.rangeBookings = await r.json();
+      }catch(e){}
     }
 
-    async function loadServices(){
-      const r = await fetch('/api/services');
-      const list = r.ok ? await r.json() : [];
-      serviceSelect.innerHTML = '<option value="" disabled selected>Выберите услугу…</option>' +
-        list.map(s=>`<option value="${s.id}" data-duration="${s.duration}" data-price="${s.price}">${s.name}</option>`).join('');
-      return list;
-    }
-
-async function loadMasters(){
-  const r = await fetch('/api/masters');
-  mastersCache = r.ok ? await r.json() : [];
-  bookingMasterSelect.innerHTML = '<option value="" disabled selected>Выберите мастера…</option>' +
-   
-   
-    mastersCache.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
-  return mastersCache;
-}
-
-    function clearSlots(){ slotsContainer.innerHTML = ''; slotsEmpty.hidden = true; }
-
-    async function fetchAvailability(){
-      clearSlots();
-      if(!serviceSelect.value || !dateInput.value || !bookingMasterSelect.value){
-        availabilityHint.textContent = 'Выберите услугу, мастера и дату.'; return;
+    function currentRange(){
+      const d = fromISO(state.date);
+      if(state.view==='week'){
+        const dow = (d.getDay()+6)%7; // Monday=0
+        const start = addDays(d,-dow);
+        const end = addDays(start,6);
+        return { from: toISO(start), to: toISO(end) };
       }
-      availabilityHint.textContent = 'Ищу свободные слоты…';
-      const params = new URLSearchParams({ serviceId: serviceSelect.value, date: dateInput.value, masterId: bookingMasterSelect.value });
-      const r = await fetch('/api/availability?' + params.toString());
-      if(!r.ok){ availabilityHint.textContent = 'Ошибка загрузки слотов'; return; }
-      
-      const data = await r.json(); const raw = data?.slots || [];
-const slots = raw.filter(s => s.available === true);
-if(!slots.length){ slotsEmpty.hidden = false; availabilityHint.textContent = 'Свободных слотов нет'; return; }
-availabilityHint.textContent = 'Выберите удобное время';
-slots.forEach(s=>{
-  const btn = document.createElement('button');
-  btn.type='button'; btn.className='slot-button'; btn.textContent = `${s.startTime}–${s.endTime}`;
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('.slot-button.selected').forEach(b=>b.classList.remove('selected'));
-    btn.classList.add('selected'); btn.dataset.value = s.startTime;
-  });
-  slotsContainer.appendChild(btn);
-});
+      if(state.view==='month'){
+        const start = new Date(d.getFullYear(), d.getMonth(), 1);
+        const end = new Date(d.getFullYear(), d.getMonth()+1, 0);
+        return { from: toISO(start), to: toISO(end) };
+      }
+      // list: 14 дней вокруг выбранной даты
+      const start = addDays(d,-7), end = addDays(d,7);
+      return { from: toISO(start), to: toISO(end) };
     }
 
-    // Step 1
-    next1.addEventListener('click', () => {
-      const name = clientNameInput.value.trim();
-      const phone = clientPhoneInput.value.trim();
-      if(!name){ showBanner('Укажите имя', 'error'); return; }
-      if(!phone){ showBanner('Укажите номер телефона', 'error'); return; }
-      if(!isValidPhone(phone)){ showBanner('Проверьте формат номера телефона', 'error'); return; }
-      setStep(2);
-    });
+    // --- Рендеринг ---
+    function render(){
+      if(state.view==='day'){ renderDay(); }
+      else if(state.view==='week'){ renderWeek(); }
+      else if(state.view==='month'){ renderMonth(); }
+      else { renderList(); }
+    }
 
-    // Step 2
-    back2.addEventListener('click', () => setStep(1));
-    next2.addEventListener('click', () => {
-      if(!serviceSelect.value){ showBanner('Выберите услугу', 'error'); return; }
-      const opt = serviceSelect.selectedOptions[0];
-      const price = opt?.dataset?.price; const duration = opt?.dataset?.duration;
-      serviceSummary.hidden = false; serviceSummary.innerHTML = `<b>${opt.textContent}</b><span class="muted">Длительность: ${duration} мин · Цена: ${price}₽</span>`;
-      setStep(3); fetchAvailability();
-    });
+    // День
+    function renderDay(){
+      renderTimelineGrid();
+      renderEvents();
+    }
 
-    // Step 3
-    back3.addEventListener('click', () => setStep(2));
-    bookingMasterSelect.addEventListener('change', () => { if(dateInput.value) fetchAvailability(); });
-    dateInput.addEventListener('change', () => fetchAvailability());
+    function renderTimelineGrid(){
+      const wrap = document.getElementById('timeline');
+      wrap.style.height = Math.max(420, Math.ceil((state.close - state.open)/60 + 1)*64)+'px';
+      wrap.querySelectorAll('.hour').forEach(n=>n.remove());
+      const hoursCount = Math.ceil((state.close - state.open)/60);
+      for(let h=0; h<=hoursCount; h++){
+        const m = state.open + h*60;
+        const label = pad(Math.floor(m/60))+':'+pad(m%60);
+        const row = document.createElement('div');
+        row.className = 'hour';
+        row.style.top = (h*64)+'px';
+        const lab = document.createElement('div'); lab.className='label'; lab.textContent = label;
+        row.appendChild(lab);
+        wrap.appendChild(row);
+      }
+    }
 
-    submitBtn.addEventListener('click', async () => {
-      const name = clientNameInput.value.trim();
-      const phone = clientPhoneInput.value.trim();
-      if(!name || !phone || !isValidPhone(phone)){ setStep(1); showBanner('Проверьте контакты', 'error'); return; }
-      const serviceId = Number(serviceSelect.value);
-      const masterId = bookingMasterSelect.value; const date = dateInput.value;
-      const slotBtn = document.querySelector('.slot-button.selected'); const startTime = slotBtn && slotBtn.dataset.value;
-      if(!serviceId){ setStep(2); showBanner('Выберите услугу', 'error'); return; }
-      if(!masterId || !date || !startTime){ setStep(3); showBanner('Выберите мастера, дату и время', 'error'); return; }
-      const payload = { clientName:name, clientPhone:phone, notes: clientNotesInput.value.trim(), serviceId, masterId, date, startTime };
-      const r = await fetch('/api/bookings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if(!r.ok){ const j = await r.json().catch(()=>({})); showBanner(j.error||'Ошибка сохранения', 'error'); return; }
-      const opt = serviceSelect.selectedOptions[0];
-const chosenService = opt ? opt.textContent : '';
-const chosenMaster = (bookingMasterSelect.selectedOptions[0]||{}).textContent || '';
-const final = document.getElementById('finalSummary');
-final.innerHTML = [
-  `<b>Спасибо! Заявка отправлена</b>`,
-  `Имя: <b>${name}</b>`,
-  `Телефон: <b>${phone}</b>`,
-  `Услуга: <b>${chosenService}</b>`,
-  `Мастер: <b>${chosenMaster}</b>`,
-  `Дата: <b>${date}</b>`,
-  `Время: <b>${startTime}</b>`
-].join('<br>');
-setStep(4);
-      setTimeout(()=>{ try{ const tg = window.Telegram && window.Telegram.WebApp; tg && tg.close && tg.close(); }catch(_){} }, 1400);
-    });
+    function renderEvents(){
+      const ev = document.getElementById('events');
+      ev.innerHTML = '';
+      const dayStart = state.open;
+      const pxPerMin = 64/60;
+      state.bookings.filter(b=>b.date===state.date).forEach(b=>{
+        const start = toMin(b.startTime);
+        const dur = Number(b.duration)||state.step;
+        const top = ((start - dayStart) * pxPerMin);
+        const height = dur * pxPerMin;
+        if (!Number.isFinite(top) || height <= 0) return;
+        const el = document.createElement('div');
+        el.className='booking';
+        el.style.top = Math.max(0, top)+'px';
+        el.style.height = height+'px';
+        el.innerHTML = '<div class="title">'+(b.serviceName||'Услуга')+'</div>'
+                     + '<div>'+(b.clientName||'Клиент')+'</div>'
+                     + '<div>'+ (b.startTime||'') +' · '+ dur +' мин</div>';
+        ev.appendChild(el);
+      });
+    }
 
-    document.getElementById('closeApp').addEventListener('click', ()=>{
-  try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && tg.close) { tg.close(); return; } } catch(_){}
-  window.location.replace('/client');
-});
+    // Неделя
+    function renderWeek(){
+      const head = document.getElementById('week-head');
+      const grid = document.getElementById('week-grid');
+      head.innerHTML = '<div></div>';
+      grid.innerHTML = '';
+      const {from,to} = currentRange();
+      const start = fromISO(from);
+      for(let i=0;i<7;i++){
+        const d = addDays(start,i);
+        head.insertAdjacentHTML('beforeend', '<div>'+fmtDow(d)+'<br><b>'+fmtShort(d)+'</b></div>');
+      }
+      const hours = [];
+      for(let m=state.open; m<=state.close; m+=60){ hours.push(pad(Math.floor(m/60))+':00'); }
+      hours.forEach((label,ri)=>{
+        grid.insertAdjacentHTML('beforeend','<div class="week-hour">'+label+'</div>');
+        for(let c=0;c<7;c++){ grid.insertAdjacentHTML('beforeend','<div class="week-cell" data-col="'+c+'" data-row="'+ri+'"></div>'); }
+      });
+      state.rangeBookings.forEach(b=>{
+        const d = fromISO(b.date);
+        const col = Math.floor((d - start)/86400000);
+        if(col<0 || col>6) return;
+        const r = Math.floor((toMin(b.startTime)-state.open)/60);
+        const cell = grid.querySelector('.week-cell[data-col="'+col+'"][data-row="'+(r>=0?r:0)+'"]');
+        if(!cell) return;
+        const el = document.createElement('div');
+        el.className='pill';
+        el.textContent = (b.startTime||'')+' '+(b.serviceName||'')+' · '+(b.clientName||'');
+        cell.appendChild(el);
+      });
+    }
 
-    // Init
-    ensureTgAuth();
-    prefill();
-    loadServices();
-    loadMasters().then(()=>{ renderCalendar(); });
+    // Месяц
+    function renderMonth(){
+      const head = document.getElementById('month-head');
+      const grid = document.getElementById('month-grid');
+      head.innerHTML = '';
+      grid.innerHTML = '';
+      ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(w=> head.insertAdjacentHTML('beforeend','<div>'+w+'</div>'));
+      const d = fromISO(state.date);
+      const first = new Date(d.getFullYear(), d.getMonth(), 1);
+      const startDow = (first.getDay()+6)%7; // Monday=0
+      const start = addDays(first, -startDow);
+      for(let i=0;i<42;i++){
+        const day = addDays(start,i);
+        const iso = toISO(day);
+        const inMonth = day.getMonth()===d.getMonth();
+        const cell = document.createElement('div');
+        cell.className='mcell';
+        if(!inMonth) cell.style.opacity = .45;
+        cell.innerHTML = '<div class="dnum">'+day.getDate()+'</div><div class="dots" id="dots-'+iso+'"></div>';
+        cell.onclick = ()=> selectDate(iso);
+        grid.appendChild(cell);
+      }
+      const counts = {};
+      state.rangeBookings.forEach(b=>{ counts[b.date]=(counts[b.date]||0)+1; });
+      Object.keys(counts).forEach(iso=>{
+        const dots = Math.min(3, counts[iso]);
+        const wrap = document.getElementById('dots-'+iso);
+        if(!wrap) return;
+        for(let i=0;i<dots;i++){ const dot=document.createElement('span'); dot.className='dot'; wrap.appendChild(dot); }
+      });
+    }
 
-  });
+    // Список
+    function renderList(){
+      const box = document.getElementById('list');
+      box.innerHTML = '';
+      const byDate = new Map();
+      state.rangeBookings.forEach(b=>{
+        if(!byDate.has(b.date)) byDate.set(b.date, []);
+        byDate.get(b.date).push(b);
+      });
+      const keys = [...byDate.keys()].sort();
+      keys.forEach(k=>{
+        const day = fromISO(k);
+        const items = byDate.get(k).sort((a,b)=> (a.startTime||'').localeCompare(b.startTime||'') );
+        const sec = document.createElement('div');
+        sec.className = 'li-day';
+        sec.innerHTML = '<div class="li-title">'+fmtRu(day)+'</div>';
+        items.forEach(b=>{
+          const row = document.createElement('div');
+          row.className='li-item';
+          row.innerHTML = '<span class="badge">'+(b.startTime||'')+'</span>'
+                        + '<div><b>'+(b.serviceName||'Услуга')+'</b><br><span class="muted">'+(b.clientName||'Клиент')+'</span></div>';
+          sec.appendChild(row);
+        });
+        box.appendChild(sec);
+      });
+    }
+
+    // helpers
+    function toMin(t){
+      const [hh,mm] = String(t||'').split(':').map(Number);
+      return (Number.isFinite(hh)?hh:0)*60 + (Number.isFinite(mm)?mm:0);
+    }
   </script>
 </body>
 </html>
