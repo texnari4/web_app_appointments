@@ -2462,8 +2462,8 @@ EOF
       return;
     }
 #
-# --- manager.html ---
-cat <<'EOF' >  templates/managel.html
+# --- manager (templates/managel.html) ---
+cat <<'EOF' > templates/managel.html
 <!doctype html>
 <html lang="ru">
 <head>
@@ -2471,388 +2471,145 @@ cat <<'EOF' >  templates/managel.html
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Менеджер — Записи</title>
   <style>
-    /* Base */
     *,*::before,*::after{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f6f7fb;color:#111827;}
-    .wrap{min-height:100%;display:grid;grid-template-rows:auto 1fr auto}
-    a{color:#007aff;text-decoration:none}
-
-    /* Top bar */
-    header{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;z-index:20}
-    .header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px}
-    .brand{font-weight:800;letter-spacing:-.02em}
-
-    /* View switcher */
-    .views{display:flex;gap:8px}
-    .views .chip{padding:8px 14px;border-radius:12px;border:1px solid #d1d5db;background:#fff;color:#374151;font-weight:700;cursor:pointer}
-    .views .chip.active{background:#007aff;border-color:#007aff;color:#fff}
-
-    /* Days scroller */
-    .days{display:flex;gap:8px;overflow-x:auto;padding:8px 12px;background:#fff;border-bottom:1px solid #e5e7eb}
-    .day{min-width:64px;text-align:center;border-radius:12px;border:1px solid #e5e7eb;background:#fff;padding:8px 10px;cursor:pointer}
-    .day .dow{font-size:12px;color:#6b7280}
-    .day .num{font-weight:800}
-    .day.active{background:#007aff;border-color:#007aff;color:#fff}
-    .day.active .dow{color:#eef2ff}
-
-    /* Content */
-    main{padding:12px}
-    .date-label{font-weight:800;margin:6px 2px 10px}
-
-    /* Day grid */
-    .grid{display:grid;grid-template-columns:64px 1fr;gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 24px 40px -32px rgba(15,23,42,.25);padding:10px}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f6f7fb;color:#111827}
+    header{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;z-index:10}
+    .top{display:flex;align-items:center;justify-content:space-between;padding:12px}
+    .chips{display:flex;gap:8px}
+    .chip{padding:8px 12px;border:1px solid #d1d5db;border-radius:12px;background:#fff;cursor:pointer;font-weight:700}
+    .chip.active{background:#007aff;color:#fff;border-color:#007aff}
+    main{padding:12px;display:grid;gap:12px}
+    .grid{display:grid;grid-template-columns:64px 1fr;gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:10px;box-shadow:0 24px 40px -32px rgba(15,23,42,.25)}
     .hours{display:grid}
-    .hcell{height:56px;color:#6b7280;font-size:12px;display:flex;align-items:flex-start;justify-content:flex-end;padding:8px}
+    .h{height:56px;font-size:12px;color:#6b7280;display:flex;align-items:flex-start;justify-content:flex-end;padding:8px}
     .lane{position:relative;border-left:1px dashed #e5e7eb;min-height:56px}
     .event{position:absolute;left:10px;right:10px;border-radius:12px;padding:8px 10px;background:#eef6ff;border:1px solid #c7ddff}
-    .event .t{font-weight:700}
-    .event .m{color:#374151;font-size:12px}
-
-    /* FAB */
-    .fab{position:fixed;right:18px;bottom:84px;width:56px;height:56px;border-radius:50%;background:#007aff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:0;box-shadow:0 16px 36px -16px rgba(0,122,255,.5);cursor:pointer;border:none}
-
-    /* Bottom nav */
-    .bottom{position:sticky;bottom:0;background:#fff;border-top:1px solid #e5e7eb;padding:8px}
-    .tabs{display:flex;justify-content:space-around;gap:6px}
-    .tab{display:grid;justify-items:center;gap:4px;color:#6b7280;font-size:12px}
-    .tab.active{color:#007aff;font-weight:700}
-
-    /* Modal */
-.modal{position:fixed;inset:0;background:rgba(15,23,42,.4);display:none;align-items:center;justify-content:center;z-index:40;padding:12px}
-.modal.show{display:flex}
-.modal-card{width:100%;max-width:560px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 30px 60px -40px rgba(15,23,42,.4);padding:14px}
-.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.modal-title{font-weight:800}
-.xbtn{border:none;background:transparent;font-size:22px;cursor:pointer;color:#6b7280}
-.form{display:grid;gap:10px}
-label{display:grid;gap:6px;font-size:14px;color:#4b5563}
-input,select,textarea{width:100%;padding:12px 14px;border:1px solid rgba(148,163,184,.45);border-radius:12px;font:inherit;font-size:16px;line-height:1.2;background:#fff}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-.row>.col{flex:1 1 180px}
-.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid rgba(148,163,184,.45);background:#fff;color:#111827;font-weight:700;cursor:pointer;font-size:16px}
-.btn.primary{border:none;background:#007aff;color:#fff;box-shadow:0 20px 32px -20px rgba(0,122,255,.5)}
-
-/* Multi-views */
-.hidden{display:none}
-.grid-week{display:grid;grid-template-columns:64px repeat(7,1fr);gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 24px 40px -32px rgba(15,23,42,.25);padding:10px}
-.day-col{position:relative;border-left:1px dashed #e5e7eb;min-height:56px}
-.grid-month{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 24px 40px -32px rgba(15,23,42,.25);padding:10px}
-.month-cell{border:1px solid #e5e7eb;border-radius:10px;min-height:88px;padding:6px;display:grid;gap:4px}
-.month-cell .d{font-size:12px;color:#6b7280}
-.pill{display:inline-block;padding:2px 6px;border-radius:999px;background:#eef6ff;border:1px solid #c7ddff;font-size:12px}
-.list-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 24px 40px -32px rgba(15,23,42,.25);padding:10px}
-.list-item{display:flex;gap:10px;padding:10px;border-bottom:1px solid #eef2f7}
-.list-item:last-child{border-bottom:none}
-
+    .fab{position:fixed;right:18px;bottom:84px;width:56px;height:56px;border-radius:50%;background:#007aff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:0;border:none;box-shadow:0 16px 36px -16px rgba(0,122,255,.5);cursor:pointer}
+    .modal{position:fixed;inset:0;background:rgba(15,23,42,.4);display:none;align-items:center;justify-content:center;z-index:40;padding:12px}
+    .modal.show{display:flex}
+    .card{width:100%;max-width:520px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 30px 60px -40px rgba(15,23,42,.4);padding:14px}
+    label{display:grid;gap:6px;font-size:14px;color:#4b5563;margin:6px 0}
+    input,select,textarea{width:100%;padding:12px 14px;border:1px solid rgba(148,163,184,.45);border-radius:12px;font:inherit;background:#fff}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .row>.col{flex:1 1 180px}
+    .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid rgba(148,163,184,.45);background:#fff;font-weight:700;cursor:pointer}
+    .primary{border:none;background:#007aff;color:#fff}
   </style>
 </head>
 <body>
-<div class="wrap">
   <header>
-    <div class="header-inner">
-      <div class="brand">Менеджер</div>
-      <div class="views">
+    <div class="top">
+      <div style="font-weight:800">Менеджер</div>
+      <div class="chips">
         <button class="chip active" data-view="day">День</button>
         <button class="chip" data-view="week">Неделя</button>
         <button class="chip" data-view="month">Месяц</button>
         <button class="chip" data-view="list">Список</button>
       </div>
     </div>
-    <div class="days" id="daysScroller"></div>
   </header>
-
   <main>
-    <div class="date-label" id="dateLabel"></div>
-
-<!-- Day view -->
-<div id="viewDayWrap" class="grid">
-  <div class="hours" id="hoursCol"></div>
-  <div class="lane" id="lane"></div>
-</div>
-
-<!-- Week view -->
-<div id="viewWeekWrap" class="grid-week hidden">
-  <div class="hours" id="hoursColW"></div>
-  <div class="day-col" id="w0"></div>
-  <div class="day-col" id="w1"></div>
-  <div class="day-col" id="w2"></div>
-  <div class="day-col" id="w3"></div>
-  <div class="day-col" id="w4"></div>
-  <div class="day-col" id="w5"></div>
-  <div class="day-col" id="w6"></div>
-</div>
-
-<!-- Month view -->
-<div id="viewMonthWrap" class="grid-month hidden"></div>
-
-<!-- List view -->
-<div id="viewListWrap" class="list-wrap hidden"><div id="listBody"></div></div>
+    <div id="dateLabel" style="font-weight:800"></div>
+    <div id="viewDay" class="grid">
+      <div id="hours" class="hours"></div>
+      <div id="lane" class="lane"></div>
+    </div>
+    <div id="viewWeek" class="grid" style="display:none">
+      <div id="hoursW" class="hours"></div>
+      <div id="laneW" class="lane"></div>
+    </div>
+    <div id="viewMonth" style="display:none">(Заглушка «Месяц»)</div>
+    <div id="viewList" style="display:none">(Заглушка «Список»)</div>
   </main>
+  <button class="fab" id="fab">+</button>
 
-  <nav class="bottom">
-    <div class="tabs">
-      <div class="tab active"><div>📒</div><div>Записи</div></div>
-      <div class="tab"><div>📆</div><div>График</div></div>
-      <div class="tab"><div>🧭</div><div>Управление</div></div>
-      <div class="tab"><div>⚙️</div><div>Настройки</div></div>
-    </div>
-  </nav>
-</div>
-
-<div class="modal" id="modalAdd">
-  <div class="modal-card">
-    <div class="modal-head">
-      <div class="modal-title">Новая запись</div>
-      <button class="xbtn" id="closeAdd">×</button>
-    </div>
-    <div class="form">
+  <div class="modal" id="modal">
+    <div class="card">
+      <h3 style="margin:0 0 8px">Новая запись</h3>
       <div class="row">
-        <div class="col"><label>Имя клиента
-          <input id="abName" type="text" placeholder="Иван Иванов" required>
-        </label></div>
-        <div class="col"><label>Телефон
-          <input id="abPhone" type="tel" placeholder="+375 .." required>
-        </label></div>
+        <div class="col"><label>Имя<input id="bName" type="text" placeholder="Иван Иванов"></label></div>
+        <div class="col"><label>Телефон<input id="bPhone" type="tel" placeholder="+375..."></label></div>
       </div>
       <div class="row">
-        <div class="col"><label>Услуга
-          <select id="abService" required>
-            <option value="" disabled selected>Выберите услугу…</option>
-          </select>
-        </label></div>
-        <div class="col"><label>Мастер
-          <select id="abMaster" required>
-            <option value="" disabled selected>Все мастера</option>
-          </select>
-        </label></div>
+        <div class="col"><label>Услуга<select id="bService"></select></label></div>
+        <div class="col"><label>Мастер<select id="bMaster"><option value=\"\">Все мастера</option></select></label></div>
       </div>
       <div class="row">
-        <div class="col"><label>Дата
-          <input id="abDate" type="date" required>
-        </label></div>
-        <div class="col"><label>Время
-          <select id="abTime" required>
-            <option value="" disabled selected>Сначала выберите дату</option>
-          </select>
-        </label></div>
+        <div class="col"><label>Дата<input id="bDate" type="date"></label></div>
+        <div class="col"><label>Время<select id="bTime"></select></label></div>
       </div>
-      <label>Комментарий
-        <textarea id="abNotes" placeholder="Пожелания для мастера (необязательно)"></textarea>
-      </label>
+      <label>Комментарий<textarea id="bNotes"></textarea></label>
       <div class="actions">
-        <button class="btn" id="abCancel" type="button">Отмена</button>
-        <button class="btn primary" id="abSave" type="button">Создать</button>
+        <button class="btn" id="bCancel" type="button">Отмена</button>
+        <button class="btn primary" id="bSave" type="button">Создать</button>
       </div>
     </div>
   </div>
-</div>
-
-<button class="fab" id="fabAdd" title="Добавить запись">+</button>
 
 <script>
 (function(){
-  async function ensureTgAuth(){ try{ const tg=window.Telegram&&window.Telegram.WebApp; if(!tg||!tg.initData||tg.initData.length<10) return; await fetch('/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})}); }catch(e){} }
-  try{ const tg=window.Telegram&&window.Telegram.WebApp; if(tg){ tg.ready&&tg.ready(); tg.expand&&tg.expand(); } }catch{}
-  ensureTgAuth();
-
-  let cursor = new Date(); // selected anchor day
-  let currentView = 'day';
-  const hours=[...Array(12)].map((_,i)=> i+9); // 09..20
-
-  // Elements
-  const daysScroller=document.getElementById('daysScroller');
+  const chips=document.querySelectorAll('.chip');
+  const views={day:document.getElementById('viewDay'), week:document.getElementById('viewWeek'), month:document.getElementById('viewMonth'), list:document.getElementById('viewList')};
   const dateLabel=document.getElementById('dateLabel');
-  const hoursCol=document.getElementById('hoursCol');
+  const hours=document.getElementById('hours');
   const lane=document.getElementById('lane');
-  const hoursColW=document.getElementById('hoursColW');
-  const weekCols=[...Array(7)].map((_,i)=>document.getElementById('w'+i));
-  const monthWrap=document.getElementById('viewMonthWrap');
-  const listBody=document.getElementById('listBody');
-  const dayWrap=document.getElementById('viewDayWrap');
-  const weekWrap=document.getElementById('viewWeekWrap');
-  const listWrap=document.getElementById('viewListWrap');
-
-  // Modal elements
-  const modal = document.getElementById('modalAdd');
-  const openFab = document.getElementById('fabAdd');
-  const closeBtn = document.getElementById('closeAdd');
-  const cancelBtn = document.getElementById('abCancel');
-  const saveBtn = document.getElementById('abSave');
-  const fName = document.getElementById('abName');
-  const fPhone = document.getElementById('abPhone');
-  const fService = document.getElementById('abService');
-  const fMaster = document.getElementById('abMaster');
-  const fDate = document.getElementById('abDate');
-  const fTime = document.getElementById('abTime');
-  const fNotes = document.getElementById('abNotes');
-
-  function ymd(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const da=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${da}`; }
-  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-  function addMonths(d,n){ const x=new Date(d); x.setMonth(x.getMonth()+n); return x; }
-  function startOfWeek(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
-  function toMin(t){ const [h,m]=String(t||'00:00').split(':').map(Number); return h*60+m; }
-
-  function setView(v){
-    currentView=v;
-    document.querySelectorAll('.views .chip').forEach(c=>c.classList.toggle('active', c.dataset.view===v));
-    dayWrap.classList.toggle('hidden', v!=='day');
-    weekWrap.classList.toggle('hidden', v!=='week');
-    monthWrap.classList.toggle('hidden', v!=='month');
-    listWrap.classList.toggle('hidden', v!=='list');
-    update();
-  }
-  document.querySelectorAll('.views .chip').forEach(c=>c.addEventListener('click',()=>setView(c.dataset.view)));
-
-  function renderHours(container){ container.innerHTML=''; hours.forEach(h=>{ const c=document.createElement('div'); c.className='hcell'; c.textContent=String(h).padStart(2,'0')+':00'; container.appendChild(c); }); }
-
-  function renderDaysStrip(){
-    daysScroller.innerHTML='';
-    for(let i=-3;i<=3;i++){
-      const d=addDays(cursor,i); const el=document.createElement('div'); el.className='day';
-      const dow=d.toLocaleDateString('ru-RU',{weekday:'short'}); const num=d.getDate(); const mon=d.toLocaleDateString('ru-RU',{month:'short'});
-      el.innerHTML=`<div class='dow'>${dow}</div><div class='num'>${num} ${mon}</div>`;
-      if(i===0) el.classList.add('active');
-      el.addEventListener('click',()=>{ cursor=d; update(); });
-      daysScroller.appendChild(el);
-    }
-  }
-
-  function renderTitle(){
-    const opt = currentView==='week' ? { day:'numeric', month:'long' } : currentView==='month' ? { month:'long', year:'numeric' } : { weekday:'long', day:'numeric', month:'long', year:'numeric' };
-    dateLabel.textContent = 'Выбрано: ' + cursor.toLocaleDateString('ru-RU', opt);
-  }
-
-  async function fetchBookings(from,to){
-    const r=await fetch(`/api/bookings?from=${from}&to=${to}`);
-    return r.ok?await r.json():[];
-  }
-
-  function renderDay(bookings){
-    lane.innerHTML=''; renderHours(hoursCol); lane.style.minHeight=(hours.length*56)+'px';
+  let cursor=new Date();
+  const hoursList=[...Array(12)].map((_,i)=>i+9);
+  function ymd(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),da=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${da}`}
+  function toMin(t){const[a,b]=String(t||'00:00').split(':').map(Number);return a*60+b}
+  function renderHours(){hours.innerHTML='';hoursList.forEach(h=>{const el=document.createElement('div');el.className='h';el.textContent=String(h).padStart(2,'0')+':00';hours.appendChild(el);});}
+  async function loadDay(){
+    renderHours(); lane.innerHTML='';
+    const d=ymd(cursor); dateLabel.textContent='Выбрано: '+cursor.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
+    const r=await fetch(`/api/bookings?from=${d}&to=${d}`);
+    const list=r.ok?await r.json():[];
     const perMin=56/60;
-    bookings.forEach(b=>{
-      const top = Math.max(0,(toMin(b.startTime)-(9*60))*perMin);
-      const dur = Number(b.duration||b.serviceDuration||30);
-      const h = Math.max(36, Math.round(dur*perMin));
-      const ev=document.createElement('div'); ev.className='event'; ev.style.top=top+'px'; ev.style.height=h+'px';
-      ev.innerHTML = `<div class='t'>${b.startTime} • ${b.clientName||''}</div><div class='m'>${b.serviceName||''} · ${b.masterId||''}</div>`;
-      lane.appendChild(ev);
-    });
+    list.forEach(b=>{const top=Math.max(0,(toMin(b.startTime)-(9*60))*perMin);const dur=Number(b.duration||30);const h=Math.max(36,Math.round(dur*perMin));const e=document.createElement('div');e.className='event';e.style.top=top+'px';e.style.height=h+'px';e.innerHTML=`<b>${b.startTime}</b> — ${b.clientName||''}<br><small>${b.serviceName||''}</small>`;lane.appendChild(e);});
   }
+  function setView(v){Object.keys(views).forEach(k=>views[k].style.display=k===v?'grid':'none');chips.forEach(c=>c.classList.toggle('active',c.dataset.view===v));if(v==='day') loadDay();}
+  chips.forEach(c=>c.addEventListener('click',()=>setView(c.dataset.view)));
+  setView('day');
 
-  function renderWeek(weekBookings){
-    weekCols.forEach(c=>c.innerHTML=''); renderHours(hoursColW); const perMin=56/60; const wkStart=startOfWeek(cursor);
-    const map = new Map();
-    for(const b of weekBookings){ if(!map.has(b.date)) map.set(b.date, []); map.get(b.date).push(b); }
-    for(let i=0;i<7;i++){
-      const d=addDays(wkStart,i); const key=ymd(d); const col=weekCols[i]; col.style.minHeight=(hours.length*56)+'px';
-      const list=map.get(key)||[];
-      list.forEach(b=>{
-        const top = Math.max(0,(toMin(b.startTime)-(9*60))*perMin);
-        const dur = Number(b.duration||b.serviceDuration||30);
-        const h = Math.max(32, Math.round(dur*perMin));
-        const ev=document.createElement('div'); ev.className='event'; ev.style.top=top+'px'; ev.style.height=h+'px';
-        ev.innerHTML = `<div class='t'>${b.startTime}</div><div class='m'>${b.clientName||''}</div>`;
-        col.appendChild(ev);
-      });
+  // Modal
+  const modal=document.getElementById('modal');
+  const fab=document.getElementById('fab');
+  const bName=document.getElementById('bName');
+  const bPhone=document.getElementById('bPhone');
+  const bService=document.getElementById('bService');
+  const bMaster=document.getElementById('bMaster');
+  const bDate=document.getElementById('bDate');
+  const bTime=document.getElementById('bTime');
+  const bNotes=document.getElementById('bNotes');
+  function openModal(){modal.classList.add('show');bDate.value=ymd(cursor);loadRefs().then(loadSlots);} 
+  function closeModal(){modal.classList.remove('show');}
+  document.getElementById('bCancel').addEventListener('click',closeModal);
+  fab.addEventListener('click',openModal);
+
+  async function loadRefs(){
+    if(!bService.options.length){
+      const rs=await fetch('/api/services'); const sj=rs.ok?await rs.json():[]; bService.innerHTML='<option value=\"\" disabled selected>Выберите услугу…</option>'+sj.map(s=>`<option value=\"${s.id}\">${s.name} • ${s.duration} мин</option>`).join('');
+    }
+    if(bMaster.options.length<=1){
+      const rm=await fetch('/api/masters'); const mj=rm.ok?await rm.json():[]; bMaster.innerHTML='<option value=\"\">Все мастера</option>'+mj.map(m=>`<option value=\"${m.id}\">${m.name}</option>`).join('');
     }
   }
-
-  function renderMonth(monthBookings){
-    monthWrap.innerHTML='';
-    const first=new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-    const start = startOfWeek(first);
-    for(let i=0;i<42;i++){
-      const d=addDays(start,i); const cell=document.createElement('div'); cell.className='month-cell';
-      cell.innerHTML = `<div class="d">${d.getDate()}</div>`;
-      const key=ymd(d); const items=monthBookings.filter(b=>b.date===key);
-      if(items.length){ cell.innerHTML += `<div class="pill">${items.length} запись(и)</div>`; }
-      monthWrap.appendChild(cell);
-    }
+  async function loadSlots(){
+    const date=bDate.value; const serviceId=bService.value; const masterId=bMaster.value||''; if(!date||!serviceId){bTime.innerHTML='<option disabled selected>Выберите услугу и дату</option>';return}
+    const url=new URL('/api/availability',location.origin); url.searchParams.set('date',date); url.searchParams.set('serviceId',serviceId); if(masterId) url.searchParams.set('masterId',masterId);
+    const r=await fetch(url); const j=r.ok?await r.json():{slots:[]}; const slots=(j.slots||[]).filter(s=>s.available);
+    bTime.innerHTML=slots.length?('<option disabled selected>Выберите время…</option>'+slots.map(s=>`<option value=\"${s.startTime}\">${s.startTime}</option>`).join('')):'<option disabled selected>Нет доступных слотов</option>';
   }
+  bService.addEventListener('change',loadSlots); bMaster.addEventListener('change',loadSlots); bDate.addEventListener('change',loadSlots);
 
-  function renderList(list){
-    listBody.innerHTML='';
-    list.sort((a,b)=> (a.date.localeCompare(b.date)) || (a.startTime||'').localeCompare(b.startTime||''));
-    for(const b of list){
-      const el=document.createElement('div'); el.className='list-item';
-      el.innerHTML = `<div style="min-width:86px"><b>${b.date}</b><div class='muted'>${b.startTime}</div></div>
-      <div style="flex:1 1 auto"><div><b>${b.clientName||''}</b></div><div class='muted'>${b.serviceName||''}${b.masterId?` · ${b.masterId}`:''}</div></div>`;
-      listBody.appendChild(el);
-    }
-  }
-
-  async function update(){
-    renderDaysStrip(); renderTitle();
-    if(currentView==='day'){
-      const from=ymd(cursor); const list = await fetchBookings(from,from); renderDay(list);
-    } else if(currentView==='week'){
-      const start = startOfWeek(cursor); const from=ymd(start); const to=ymd(addDays(start,6)); const list=await fetchBookings(from,to); renderWeek(list);
-    } else if(currentView==='month'){
-      const first=new Date(cursor.getFullYear(), cursor.getMonth(), 1); const last=new Date(cursor.getFullYear(), cursor.getMonth()+1, 0);
-      const from=ymd(first); const to=ymd(last); const list=await fetchBookings(from,to); renderMonth(list);
-    } else {
-      const from=ymd(addDays(cursor,-14)); const to=ymd(addDays(cursor,14)); const list=await fetchBookings(from,to); renderList(list);
-    }
-  }
-
-  // ==== Modal logic ====
-  function openModal(){ modal.classList.add('show'); fDate.value = ymd(cursor); fTime.innerHTML='<option value=\"\" disabled selected>Загружаю слоты…</option>'; ensureRefs().then(loadAvailability); }
-  function closeModal(){ modal.classList.remove('show'); }
-  openFab.addEventListener('click', openModal);
-  closeBtn.addEventListener('click', closeModal);
-  cancelBtn.addEventListener('click', closeModal);
-
-  // Load services & masters once
-  let cachedServices=[]; let cachedMasters=[];
-  async function ensureRefs(){
-    if(!cachedServices.length){
-      const r=await fetch('/api/services'); cachedServices = r.ok ? await r.json() : [];
-      fService.innerHTML='<option value=\"\" disabled selected>Выберите услугу…</option>'+cachedServices.map(s=>`<option value=\"${s.id}\">${s.name} • ${s.duration} мин</option>`).join('');
-    }
-    if(!cachedMasters.length){
-      const r=await fetch('/api/masters'); cachedMasters = r.ok ? await r.json() : [];
-      fMaster.innerHTML='<option value=\"\" selected>Все мастера</option>'+cachedMasters.map(m=>`<option value=\"${m.id}\">${m.name}</option>`).join('');
-    }
-  }
-
-  async function loadAvailability(){
-    const date = fDate.value; const serviceId=fService.value; const masterId=fMaster.value||'';
-    if(!date || !serviceId){ fTime.innerHTML='<option value=\"\" disabled selected>Выберите услугу и дату</option>'; return; }
-    const url = new URL('/api/availability', location.origin);
-    url.searchParams.set('date', date); url.searchParams.set('serviceId', serviceId); if(masterId) url.searchParams.set('masterId', masterId);
-    const r=await fetch(url); const j=r.ok?await r.json():{slots:[]};
-    const slots = (j.slots||[]).filter(s=>s.available);
-    if(!slots.length){ fTime.innerHTML='<option value=\"\" disabled selected>Нет доступных слотов</option>'; return; }
-    fTime.innerHTML = '<option value=\"\" disabled selected>Выберите время…</option>' + slots.map(s=>`<option value=\"${s.startTime}\">${s.startTime}</option>`).join('');
-  }
-  fService.addEventListener('change', loadAvailability);
-  fMaster.addEventListener('change', loadAvailability);
-  fDate.addEventListener('change', loadAvailability);
-
-  async function createBooking(){
-    const payload = {
-      clientName: fName.value.trim(),
-      clientPhone: fPhone.value.trim(),
-      serviceId: Number(fService.value),
-      masterId: fMaster.value || null,
-      date: fDate.value,
-      startTime: fTime.value,
-      notes: fNotes.value.trim()
-    };
-    if(!payload.clientName || !payload.clientPhone || !payload.serviceId || !payload.date || !payload.startTime){
-      alert('Заполните обязательные поля'); return;
-    }
-    const res = await fetch('/api/bookings',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    if(!res.ok){ const err=await res.json().catch(()=>({})); alert(err.error||'Не удалось создать запись'); return; }
-    closeModal(); update();
-  }
-  saveBtn.addEventListener('click', createBooking);
-
-  // Init
-  update();
+  document.getElementById('bSave').addEventListener('click', async ()=>{
+    const payload={clientName:bName.value.trim(),clientPhone:bPhone.value.trim(),serviceId:Number(bService.value),masterId:bMaster.value||null,date:bDate.value,startTime:bTime.value,notes:bNotes.value.trim()};
+    if(!payload.clientName||!payload.clientPhone||!payload.serviceId||!payload.date||!payload.startTime){alert('Заполните обязательные поля');return}
+    const res=await fetch('/api/bookings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok){const err=await res.json().catch(()=>({}));alert(err.error||'Не удалось создать запись');return}
+    closeModal(); loadDay();
+  });
 })();
 </script>
 </body>
