@@ -1699,6 +1699,31 @@ if (pathname.startsWith('/api/')) {
     if (pathname === '/api/gs/export' && req.method === 'POST') {
       if (!ensureAuthorized(ctx, res, ['admin'])) return;
       try {
+        // 1) Prefer Railway env variable webhook if present
+        const webhookUrl = process.env.GS_WEBHOOK_URL || process.env.webhookUrl || '';
+        if (webhookUrl) {
+          const load = (file, fallback=[]) => { try { return readJSON(file, fallback); } catch { return fallback; } };
+          const payload = {
+            groups:   load(groupsFile, []),
+            services: load(servicesFile, []),
+            admins:   load(adminsFile, []),
+            masters:  load(mastersFile, []),      // каталог мастеров услуг
+            bookings: load(bookingsFile, []),
+            contacts: load(contactsFile, []),
+            hostes:   load(hostesFile, [])        // список доступа хостес (если используется)
+          };
+
+          const resp = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const text = await resp.text();
+          if (!resp.ok) return sendJSON(res, 502, { error: `GS webhook export failed`, details: text });
+          return sendJSON(res, 200, { status: 'ok', mode: 'webhook', response: text });
+        }
+
+        // 2) Fallback: direct Google Sheets API (service account)
         const groups = readJSON(groupsFile, []);
         const services = readJSON(servicesFile, []);
         const admins = readJSON(adminsFile, []);
@@ -1722,7 +1747,7 @@ if (pathname.startsWith('/api/')) {
         await sheetsValuesClear(GOOGLE_SHEET_ID, 'Bookings!A:Z');
         await sheetsValuesUpdate(GOOGLE_SHEET_ID, 'Bookings!A1', bookingsValues);
 
-        sendJSON(res, 200, { status: 'ok', updated: 'Sheets updated' });
+        sendJSON(res, 200, { status: 'ok', mode: 'sheets', updated: 'Sheets updated' });
       } catch (e) {
         console.error(e);
         sendJSON(res, 500, { error: String(e.message || e) });

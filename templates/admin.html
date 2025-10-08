@@ -599,6 +599,8 @@
           <div class="auth-dev" style="margin-top:12px">
             <button type="button" class="secondary-btn" id="gsExportBtn">Экспорт ZIP</button>
             <button type="button" class="primary-btn" id="gsImportBtn">Импорт ZIP</button>
+            <button type="button" class="secondary-btn" id="gsCsvExportBtn" title="Выгрузить данные для Google Sheets">GS_exp</button>
+            <button type="button" class="primary-btn" id="gsCsvImportBtn"  title="Загрузить данные из Google Sheets (CSV/ZIP)">GS_imp</button>
           </div>
           <small class="muted">Доступ только для администраторов.</small>
         </div>
@@ -693,6 +695,8 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const adminsWarning = document.getElementById('adminsWarning');
       const gsExportBtn = document.getElementById('gsExportBtn');
       const gsImportBtn = document.getElementById('gsImportBtn');
+      const gsCsvExportBtn = document.getElementById('gsCsvExportBtn');
+      const gsCsvImportBtn = document.getElementById('gsCsvImportBtn');
 
       const tabsNav = document.querySelectorAll('nav.tabs button');
       const tabPanels = document.querySelectorAll('.tab-panel');
@@ -2138,3 +2142,27 @@ masterGroupAddBtn?.addEventListener('click', () => {
     });
 </script>
 </body>
+      // === Google Sheets export/import (Apps Script Web App) ===
+      gsCsvExportBtn?.addEventListener('click', async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        try {
+          const resp = await apiFetch('/api/gs/export', { method: 'POST' });
+          const json = await resp.json();
+          if (!resp.ok) { await handleError(resp); return; }
+          showBanner('Экспортировано в Google Sheets');
+          console.log('GS export:', json);
+        } catch (e) { console.error(e); showBanner('GS экспорт не удался', 'error'); }
+      });
+
+      gsCsvImportBtn?.addEventListener('click', async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        try {
+          const resp = await apiFetch('/api/gs/import', { method: 'POST' });
+          const json = await resp.json();
+          if (!resp.ok) { await handleError(resp); return; }
+          // после импорта перезагружаем данные
+          loadGroups(); loadServices(); loadBookings(); loadAdmins(); loadMasters();
+          showBanner('Импортировано из Google Sheets');
+          console.log('GS import:', json);
+        } catch (e) { console.error(e); showBanner('GS импорт не удался', 'error'); }
+      });
