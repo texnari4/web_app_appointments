@@ -338,20 +338,6 @@
   <main>
     <h1>Панель администратора</h1>
 
-    <section class="auth-card" id="authCard">
-      <h2>Доступ</h2>
-      <p id="authStatus">Проверяю доступ…</p>
-      <small>Панель доступна только администраторам, чьи Telegram ID добавлены в список. В мини-приложении данные приходят автоматически.</small>
-      <div class="auth-dev">
-        <label>
-          Telegram ID для локального доступа
-          <input type="number" id="manualTelegramId" placeholder="Например: 486778995" />
-        </label>
-        <button type="button" class="secondary-btn" id="applyManualIdBtn">Сохранить</button>
-        <button type="button" class="secondary-btn" id="clearManualIdBtn">Сбросить</button>
-      </div>
-    </section>
-
     <nav class="tabs">
       <button data-tab="bookings" class="active">Записи</button>
       <button data-tab="services">Услуги</button>
@@ -581,6 +567,19 @@
     </section>
 
     <section class="tab-panel" data-tab-panel="admins">
+      <section class="auth-card" id="authCard">
+        <h2>Доступ</h2>
+        <p id="authStatus">Проверяю доступ…</p>
+        <small>Панель доступна только администраторам, чьи Telegram ID добавлены в список. В мини‑приложении данные приходят автоматически.</small>
+        <div class="auth-dev">
+          <label>
+            Telegram ID для локального доступа
+            <input type="number" id="manualTelegramId" placeholder="Например: 486778995" />
+          </label>
+          <button type="button" class="secondary-btn" id="applyManualIdBtn">Сохранить</button>
+          <button type="button" class="secondary-btn" id="clearManualIdBtn">Сбросить</button>
+        </div>
+      </section>
       <div class="form-grid">
         <div>
           <h2 style="display:flex;align-items:center;gap:10px;margin:0">
