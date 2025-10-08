@@ -1867,6 +1867,9 @@ cat <<'EOF' > templates/managel.html
 </body>
 </html>
 EOF
+
+# --- client.html ---
+cat <<'EOF' > public/client.html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
