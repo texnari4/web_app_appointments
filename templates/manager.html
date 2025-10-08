@@ -15,9 +15,24 @@ if (pathname === '/admin') {
   return sendHTML(res, 200, html);
 }
 
-if (pathname === '/manager'){
-  const html = readFileSync(join(__dirname, 'templates', 'managel.html'),'utf8');
-  return sendHTML(res, 200, html);
+if (pathname === '/manager' || pathname === '/manager/') {
+  const tplNew = join(__dirname, 'templates', 'manager.html');
+  const tplLegacy = join(__dirname, 'templates', 'managel.html'); // legacy
+  try {
+    const html = readFileSync(tplNew, 'utf8');
+    return sendHTML(res, 200, html);
+  } catch (e1) {
+    try {
+      const html = readFileSync(tplLegacy, 'utf8');
+      return sendHTML(res, 200, html);
+    } catch (e2) {
+      return sendHTML(
+        res,
+        200,
+        '<!doctype html><meta charset="utf-8"><title>Manager</title><p>Файл не найден: <code>templates/manager.html</code> или <code>templates/managel.html</code>.</p>'
+      );
+    }
+  }
 }
 
 // Health endpoint

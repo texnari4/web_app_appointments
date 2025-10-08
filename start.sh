@@ -36,7 +36,7 @@ EOF
 # --- server.mjs ---
 cat <<'EOF' > server.mjs
 import { createServer } from 'http';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, readdirSync } from 'fs';
 import { parse } from 'url';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -164,7 +164,7 @@ function restoreFromLocalBackupsIfMissing() {
       if (existsSync(fpath)) continue;
       try {
         const base = fpath.split('/').pop().replace(/\.json$/, '');
-        const names = require('fs').readdirSync(bakDir)
+        const names = readdirSync(bakDir)
           .filter(n => n.startsWith(base + '.') && n.endsWith('.bak.json'))
           .sort();
         if (names.length) {
@@ -1832,6 +1832,41 @@ EOF
 #
 # --- client.html ---
 cat <<'EOF' >  public/client.html
+EOF
+
+# --- managel.html ---
+mkdir -p templates
+cat <<'EOF' > templates/managel.html
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Manager — Beauty Appointments</title>
+  <style>
+    body{margin:0;padding:24px;font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:#f6f7fb;color:#111827}
+    main{max-width:900px;margin:0 auto;display:grid;gap:16px}
+    section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:16px}
+    .muted{color:#6b7280}
+    a.btn{display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid rgba(148,163,184,.45);text-decoration:none}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Менеджер</h1>
+    <section>
+      <p class="muted">Это базовая страница менеджера. Здесь позже появится интерфейс. Пока доступны ссылки:</p>
+      <p>
+        <a class="btn" href="/admin">Админ‑панель</a>
+        <a class="btn" href="/client">Клиентская форма</a>
+        <a class="btn" href="/health">Health</a>
+      </p>
+      <p class="muted">Если вы видите эту страницу — файл <code>templates/managel.html</code> на месте.</p>
+    </section>
+  </main>
+</body>
+</html>
+EOF
 <!DOCTYPE html>
 <html lang="ru">
 <head>
