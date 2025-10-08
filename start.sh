@@ -1829,10 +1829,6 @@ server.listen(PORT, async () => {
 });
 EOF
 
-#
-# --- client.html ---
-cat <<'EOF' >  public/client.html
-EOF
 
 # --- managel.html ---
 mkdir -p templates
@@ -1842,28 +1838,195 @@ cat <<'EOF' > templates/managel.html
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Manager — Beauty Appointments</title>
+  <title>Записи — Менеджер</title>
   <style>
-    body{margin:0;padding:24px;font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:#f6f7fb;color:#111827}
-    main{max-width:900px;margin:0 auto;display:grid;gap:16px}
-    section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:16px}
-    .muted{color:#6b7280}
-    a.btn{display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid rgba(148,163,184,.45);text-decoration:none}
+    :root{
+      --bg:#f7f8fb;--card:#ffffff;--muted:#6b7280;--text:#0f172a;
+      --line:#e5e7eb;--primary:#2563eb;--primary-weak:#eff6ff;
+      --accent:#111827;--tab:#111827;--tab-muted:#9ca3af;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{display:grid;grid-template-rows:auto auto auto 1fr auto;min-height:100dvh}
+    /* Top view switcher */
+    .views{display:flex;gap:8px;align-items:center;padding:10px 12px;position:sticky;top:0;background:var(--bg);z-index:10}
+    .chip{padding:8px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer;color:var(--tab-muted);background:#fff}
+    .chip.active{border-color:var(--primary);color:#fff;background:var(--primary)}
+    /* Day scroller */
+    .days{display:flex;gap:8px;overflow-x:auto;padding:8px 12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#fff}
+    .day{flex:0 0 auto;min-width:64px;padding:8px;border:1px solid var(--line);border-radius:10px;text-align:center;cursor:pointer;color:#0f172a;background:var(--primary-weak)}
+    .day .dow{font-size:12px;color:var(--muted)}
+    .day.active{background:var(--primary);border-color:var(--primary);color:#fff}
+    .sel-date{padding:10px 16px;font-weight:700}
+    /* Timeline */
+    .timeline{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 12px 12px;height:calc(100dvh - 320px);min-height:420px;overflow:auto}
+    .hour{position:relative;height:64px;border-top:1px solid var(--line);padding-left:56px;display:flex;align-items:flex-start}
+    .hour:first-child{border-top:none}
+    .hour .label{position:absolute;left:8px;top:6px;font-size:12px;color:var(--muted)}
+    .events{position:absolute;inset:0;padding-left:56px}
+    .booking{position:absolute;left:64px;right:12px;border:1px solid rgba(37,99,235,.25);background:#e8f0fe;border-left:4px solid var(--primary);border-radius:10px;padding:8px 10px;font-size:14px;line-height:1.2;overflow:hidden}
+    .booking .title{font-weight:700}
+    /* FAB */
+    .fab{position:fixed;right:18px;bottom:calc(24px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:#fff;border:none;font-size:28px;box-shadow:0 20px 40px -10px rgba(37,99,235,.4);cursor:pointer}
+    /* Bottom nav */
+    .nav{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 6px}
+    .nav a{display:grid;gap:4px;justify-items:center;text-decoration:none;color:var(--muted);font-size:12px}
+    .nav a.active{color:var(--primary)}
+    .nav .dot{width:24px;height:24px;border-radius:8px;border:1px solid var(--line);display:grid;place-items:center}
   </style>
 </head>
 <body>
-  <main>
-    <h1>Менеджер</h1>
-    <section>
-      <p class="muted">Это базовая страница менеджера. Здесь позже появится интерфейс. Пока доступны ссылки:</p>
-      <p>
-        <a class="btn" href="/admin">Админ‑панель</a>
-        <a class="btn" href="/client">Клиентская форма</a>
-        <a class="btn" href="/health">Health</a>
-      </p>
-      <p class="muted">Если вы видите эту страницу — файл <code>templates/managel.html</code> на месте.</p>
-    </section>
-  </main>
+  <div class="wrap">
+    <!-- View switcher -->
+    <div class="views">
+      <button class="chip active" data-view="day">День</button>
+      <button class="chip" data-view="week">Неделя</button>
+      <button class="chip" data-view="month">Месяц</button>
+      <button class="chip" data-view="list">Список</button>
+    </div>
+    <!-- Day scroller -->
+    <div class="days" id="days"></div>
+    <div class="sel-date" id="selDate"></div>
+    <!-- Timeline -->
+    <div class="timeline" id="timeline">
+      <div class="events" id="events"></div>
+    </div>
+    <!-- Bottom nav -->
+    <nav class="nav">
+      <a href="#" class="active"><div class="dot">📄</div><span>Записи</span></a>
+      <a href="/manager?schedule"><div class="dot">📆</div><span>График</span></a>
+      <a href="/admin"><div class="dot">🛠</div><span>Управление</span></a>
+      <a href="/health"><div class="dot">⚙️</div><span>Настройки</span></a>
+    </nav>
+  </div>
+  <button class="fab" id="fab" title="Добавить запись">+</button>
+
+  <script>
+    // --- Utils ---
+    const pad = n => String(n).padStart(2,'0');
+    const toISO = d => d.toISOString().slice(0,10);
+    const fmtRu = d => d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+    let state = {
+      date: toISO(new Date()),
+      open: 9*60, close: 21*60, step: 60, // fallback
+      bookings: []
+    };
+
+    init();
+
+    async function init(){
+      renderDayStrip();
+      await loadMeta();     // get business hours/slots
+      await loadBookings(); // admin-only; silently ignore if forbidden
+      renderAll();
+      document.getElementById('fab').onclick = ()=> location.href='/client';
+      document.querySelectorAll('.chip').forEach(b=>b.onclick = onChangeView);
+    }
+
+    function onChangeView(e){
+      const v = e.currentTarget.dataset.view;
+      document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active', x.dataset.view===v));
+      // Пока реализован только вид "День"
+    }
+
+    function renderDayStrip(anchor = new Date(state.date)){
+      const daysEl = document.getElementById('days');
+      daysEl.innerHTML = '';
+      for(let i=-3;i<=3;i++){
+        const d = new Date(anchor); d.setDate(d.getDate()+i);
+        const iso = toISO(d);
+        const el = document.createElement('div');
+        el.className = 'day'+(iso===state.date?' active':'');
+        el.innerHTML = '<div class="dow">'+d.toLocaleDateString('ru-RU',{weekday:'short'})+'</div>'+
+                       '<div><b>'+d.getDate()+'</b> '+d.toLocaleDateString('ru-RU',{month:'short'})+'</div>';
+        el.onclick = ()=>{ state.date = iso; onDateChange(); };
+        daysEl.appendChild(el);
+      }
+      document.getElementById('selDate').textContent = 'Выбрано: '+fmtRu(new Date(state.date));
+    }
+
+    async function onDateChange(){
+      renderDayStrip();
+      await loadBookings();
+      renderAll();
+    }
+
+    function renderAll(){
+      renderTimelineGrid();
+      renderEvents();
+    }
+
+    function renderTimelineGrid(){
+      const wrap = document.getElementById('timeline');
+      wrap.querySelectorAll('.hour').forEach(n=>n.remove());
+      const hoursCount = Math.ceil((state.close - state.open)/60);
+      for(let h=0; h<=hoursCount; h++){
+        const m = state.open + h*60;
+        const label = pad(Math.floor(m/60))+':'+pad(m%60);
+        const row = document.createElement('div');
+        row.className = 'hour';
+        row.style.top = (h*64)+'px';
+        const lab = document.createElement('div'); lab.className='label'; lab.textContent = label;
+        row.appendChild(lab);
+        wrap.appendChild(row);
+      }
+      wrap.style.setProperty('--hours', hoursCount+1);
+      wrap.style.height = Math.max(420, (hoursCount+1)*64)+'px';
+      document.getElementById('selDate').textContent = 'Выбрано: '+fmtRu(new Date(state.date));
+    }
+
+    function renderEvents(){
+      const ev = document.getElementById('events');
+      ev.innerHTML = '';
+      const dayStart = state.open;
+      const pxPerMin = 64/60;
+      state.bookings.forEach(b=>{
+        const start = toMin(b.startTime);
+        const dur = Number(b.duration)||state.step;
+        const top = ( (start - dayStart) * pxPerMin );
+        const height = dur * pxPerMin;
+        if (height <= 0) return;
+        const el = document.createElement('div');
+        el.className='booking';
+        el.style.top = Math.max(0, top)+'px';
+        el.style.height = height+'px';
+        el.innerHTML = '<div class="title">'+(b.serviceName||'Услуга')+'</div>'
+                     + '<div>'+ (b.clientName||'Клиент') +'</div>'
+                     + '<div>'+ b.startTime +' · '+ dur +' мин</div>';
+        ev.appendChild(el);
+      });
+    }
+
+    function toMin(t){
+      const [hh,mm] = String(t).split(':').map(Number);
+      return hh*60 + (mm||0);
+    }
+
+    async function loadMeta(){
+      try{
+        const r = await fetch('/api/availability?date='+encodeURIComponent(state.date));
+        if(!r.ok) return;
+        const j = await r.json();
+        const meta = j.meta || {};
+        if (meta.businessHours){
+          state.open = toMin(meta.businessHours.open || '09:00');
+          state.close = toMin(meta.businessHours.close || '21:00');
+        }
+        state.step = Number(meta.slotStep||60);
+      }catch(e){}
+    }
+
+    async function loadBookings(){
+      state.bookings = [];
+      try{
+        const r = await fetch('/api/bookings?date='+encodeURIComponent(state.date));
+        if(!r.ok) return;
+        state.bookings = await r.json();
+      }catch(e){}
+    }
+  </script>
 </body>
 </html>
 EOF
