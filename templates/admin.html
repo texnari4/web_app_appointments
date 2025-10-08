@@ -2119,59 +2119,6 @@ masterGroupAddBtn?.addEventListener('click', () => {
         }
       });
 
-      // === Google Sheets integration helpers ===
-      const fetchGsUrl = async () => {
-        try {
-          const resp = await apiFetch('/api/gs/url');
-          if (!resp.ok) return null;
-          return await resp.json();
-        } catch (_) { return null; }
-      };
-
-      async function initGsControls() {
-        const data = await fetchGsUrl();
-        if (data?.url) {
-          gsTableLink.href = data.url;
-          gsSheetIdLabel.textContent = data.sheetId ? `(${data.sheetId})` : '';
-        }
-        // доступ
-        [gsExportBtn, gsImportBtn].forEach(btn => btn && (btn.disabled = !authState.isAuthorized));
-      }
-
-      gsTableLink?.addEventListener('click', async (e) => {
-        // если нет href — подгрузим и предотвратим переход по "#"
-        if (!gsTableLink.href || gsTableLink.getAttribute('href') === '#') {
-          e.preventDefault();
-          const data = await fetchGsUrl();
-          if (data?.url) {
-            gsTableLink.href = data.url;
-            window.open(data.url, '_blank');
-          }
-        }
-      });
-
-      gsExportBtn?.addEventListener('click', async () => {
-        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
-        const resp = await apiFetch('/api/gs/export', { method: 'POST' });
-        if (!resp.ok) { await handleError(resp); return; }
-        const result = await resp.json();
-        showBanner(`Экспорт выполнен: ${result.updated || 'OK'}`);
-      });
-
-      gsImportBtn?.addEventListener('click', async () => {
-        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
-        const resp = await apiFetch('/api/gs/import', { method: 'POST' });
-        if (!resp.ok) { await handleError(resp); return; }
-        const result = await resp.json();
-        // Обновим локальные данные после импорта
-        loadGroups();
-        loadServices();
-        loadBookings();
-        loadAdmins();
-        loadMasters();
-        showBanner(`Импорт выполнен: ${result.status || 'OK'}`);
-      });
-
       const initialId = detectTelegramId();
       if (initialId) {
         authState.telegramId = initialId;
