@@ -1909,12 +1909,9 @@ cat <<'EOF' > templates/managel.html
     const fmtRu = d => d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
     let state = {
-    view: 'day',
-    date: toISO(new Date()),
-    open: 9*60, close: 21*60, step: 60,
-    bookings: [],
-    rangeBookings: [],
-    daysRange: { start: toISO(addDays(new Date(), -31)), end: toISO(addDays(new Date(), 31)) }
+      date: toISO(new Date()),
+      open: 9*60, close: 21*60, step: 60, // fallback
+      bookings: []
     };
 
     init();
@@ -1927,45 +1924,6 @@ cat <<'EOF' > templates/managel.html
       document.getElementById('fab').onclick = ()=> location.href='/client';
       document.querySelectorAll('.chip').forEach(b=>b.onclick = onChangeView);
     }
-
-      const daysDiff = (a,b)=> Math.round( (fromISO(b) - fromISO(a)) / 86400000 );
-  const clampToRange = (iso)=>{
-    const s = fromISO(state.daysRange.start), e = fromISO(state.daysRange.end);
-    const d = fromISO(iso);
-    if (d < s) return toISO(s);
-    if (d > e) return toISO(e);
-    return iso;
-  };
-
-  
-
-    function buildDaysStrip(center=false){
-    const daysEl = document.getElementById('days');
-    daysEl.innerHTML = '';
-    const start = fromISO(state.daysRange.start);
-    const total = daysDiff(state.daysRange.start, state.daysRange.end) + 1;
-    for(let i=0;i<total;i++){
-      const d = addDays(start,i);
-      const iso = toISO(d);
-      const el = document.createElement('div');
-      el.className = 'day'+(iso===state.date?' active':'');
-      el.dataset.iso = iso;
-      el.innerHTML = '<div class="dow">'+fmtDow(d)+'</div><div><b>'+d.getDate()+'</b> '+d.toLocaleDateString('ru-RU',{month:'short'})+'</div>';
-      el.onclick = ()=> selectDate(iso);
-      daysEl.appendChild(el);
-    }
-
-      function onDaysScroll(_e){
-    // Диапазон фиксирован ±1 месяц — бесконечную подгрузку отключили.
-  }
-
-
-    if(center){
-      const active = [...daysEl.children].find(c=>c.dataset.iso===state.date);
-      if(active) daysEl.scrollLeft = active.offsetLeft - (daysEl.clientWidth/2 - active.clientWidth/2);
-    }
-    updateSelectedDateLabel();
-  }
 
     function onChangeView(e){
       const v = e.currentTarget.dataset.view;
@@ -2068,15 +2026,6 @@ cat <<'EOF' > templates/managel.html
         state.bookings = await r.json();
       }catch(e){}
     }
-    
-  async function selectDate(iso){
-    state.date = clampToRange(iso); // <— было просто state.date = iso;
-    [...document.querySelectorAll('.day')].forEach(d=>d.classList.toggle('active', d.dataset.iso===state.date));
-    updateSelectedDateLabel();
-    if(state.view==='day'){ await loadDay(); } else { await loadRangeForView(); }
-    render();
-  }
-
   </script>
 </body>
 </html>
@@ -2737,16 +2686,7 @@ cat <<'EOF' > templates/managel.html
     .h{height:56px;font-size:12px;color:#6b7280;display:flex;align-items:flex-start;justify-content:flex-end;padding:8px}
     .lane{position:relative;border-left:1px dashed #e5e7eb;min-height:56px}
     .event{position:absolute;left:10px;right:10px;border-radius:12px;padding:8px 10px;background:#eef6ff;border:1px solid #c7ddff}
-
-  .fab{
-    position:fixed;
-    right:18px;
-    bottom:calc(88px + env(safe-area-inset-bottom,0px)); /* было 24px */
-    width:56px;height:56px;border-radius:50%;
-    display:grid;place-items:center;background:var(--primary);color:#fff;
-    border:none;font-size:28px;box-shadow:0 20px 40px -10px rgba(37,99,235,.4);cursor:pointer
-  }
-
+    .fab{position:fixed;right:18px;bottom:84px;width:56px;height:56px;border-radius:50%;background:#007aff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:0;border:none;box-shadow:0 16px 36px -16px rgba(0,122,255,.5);cursor:pointer}
     .modal{position:fixed;inset:0;background:rgba(15,23,42,.4);display:none;align-items:center;justify-content:center;z-index:40;padding:12px}
     .modal.show{display:flex}
     .card{width:100%;max-width:520px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 30px 60px -40px rgba(15,23,42,.4);padding:14px}
