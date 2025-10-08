@@ -749,6 +749,16 @@ if (pathname === '/beauty' && req.method === 'GET') {
   // Фоллбек: ?tg_id=... — бот подставит ID.
   const tid = (query && query.tg_id) ? String(query.tg_id) : '';
   const url = tid ? `/admin?tg_id=${encodeURIComponent(tid)}` : '/admin';
+    if (pathname === '/beauty' && req.method === 'GET') {
+  const tid = (query && query.tg_id) ? String(query.tg_id) : '';
+  if (tid) {
+    // сохраняем ID на 12 часов для последующих XHR из админки
+    setCookie(res, 'tg_id', tid, { maxAge: 60*60*12 });
+  }
+  const url = tid ? `/admin?tg_id=${encodeURIComponent(tid)}` : '/admin`;
+  res.statusCode = 302; res.setHeader('Location', url); res.end();
+  return;
+}
   res.statusCode = 302; res.setHeader('Location', url); res.end();
   return;
 }
@@ -1424,8 +1434,14 @@ if (pathname.startsWith('/api/')) {
     }
 
     if (pathname === '/admin' || pathname === '/admin/' || pathname.startsWith('/admin')) {
+          // Variant A: пришли с tg_id — зафиксируем cookie, чтобы API-запросы видели ID
+  if (query && query.tg_id) {
+    const qid = String(query.tg_id);
+    if (qid) setCookie(res, 'tg_id', qid, { maxAge: 60*60*12 });
+  }
       const admins = readAdmins();
-      const isAdmin = admins.some(a => a.id === ctx.telegramId);
+      const candidateId = ctx.telegramId ?? (query && Number(query.tg_id)) ?? null;
+      const isAdmin = admins.some(a => a.id === candidateId);
       if (!isAdmin) {
         const bootstrap = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Авторизация…</title><style>html,body{height:100%}body{margin:0;display:grid;place-items:center;background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;color:#111827}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:22px;max-width:720px;text-align:center;display:grid;gap:10px}</style></head><body><section><h1>Авторизация через Telegram…</h1><p class="muted">Если вы открыли эту страницу <b>внутри Telegram</b>, мы попробуем авторизовать вас автоматически.</p><p class="muted">Если страница не обновится в течение 3 секунд, откройте админку из бота командой <b>/admin</b>.</p></section><script>
 (function(){
@@ -1510,7 +1526,11 @@ if (pathname.startsWith('/api/')) {
              }
            });
          } else {
-           await tgSendMessage(chatId, 'Не знаю эту команду. Попробуйте /client или /admin');
+           await tgSendMessage(chatId, 'Не знаю эту команду. Попробуйте записаться по телефону или нажмите кнопку «Записаться» ниже.', {
+             reply_markup: {
+               inline_keyboard: [ [ { text: '🧾 Записаться', web_app: { url: `${PUBLIC_BASE_URL}/client` } } ] ]
+             }
+           });
          }
         }
         sendJSON(res, 200, { ok: true });
