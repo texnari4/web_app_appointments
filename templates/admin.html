@@ -45,6 +45,16 @@
       gap: 14px;
     }
 
+    /* Make inner Access panel look flat inside Admin tab */
+    .tab-panel .auth-card {
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 0;
+      backdrop-filter: none;
+      border-radius: 0;
+    }
+
     .auth-card p {
       margin: 0;
       font-size: 15px;
@@ -799,7 +809,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
 
         manualTelegramId.value = authState.telegramId;
         if (authState.isAuthorized) {
-          const roleLabel = authState.role === 'owner' ? 'Владелец' : 'Администратор';
+          const roleLabel = ({ owner: 'Владелец', admin: 'Администратор', hostes: 'Хостес', master: 'Мастер' }[authState.role] || 'Гость');
           authStatus.textContent = `Доступ разрешён (${roleLabel}). Telegram ID: ${authState.telegramId}`;
         } else {
           authStatus.textContent = `Telegram ID ${authState.telegramId} не найден в списке администраторов.`;

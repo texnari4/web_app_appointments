@@ -52,6 +52,8 @@ const bookingsFile = join(DATA_DIR, 'bookings.json');
 const adminsFile = join(DATA_DIR, 'admins.json');
 const mastersFile = join(DATA_DIR, 'masters.json');
 const contactsFile = join(DATA_DIR, 'contacts.json');
+const hostesFile = join(DATA_DIR, 'hostes.json');
+
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://beautyminiappappointments-production.up.railway.app').replace(/\/+$/,'');
