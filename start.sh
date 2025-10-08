@@ -226,6 +226,36 @@ function readJSON(file, fallback = []) {
   }
 }
 
+// ==== Authorization helpers (Telegram ID based) ====
+function getAdminAuth(req) {
+  const id = Number(req.headers['x-telegram-id'] || 0);
+  const admins = readJSON(adminsFile, []);
+  const admin = admins.find(a => String(a.id) === String(id));
+  return { authenticated: Boolean(admin), admin: admin || null };
+}
+
+function requireAdmin(req, res) {
+  const auth = getAdminAuth(req);
+  if (!auth.authenticated) {
+    sendJSON(res, 401, { error: 'Unauthorized: provide X-Telegram-Id of an admin' });
+    return null;
+  }
+  return auth;
+}
+
+function requireOwner(req, res) {
+  const auth = getAdminAuth(req);
+  if (!auth.authenticated) {
+    sendJSON(res, 401, { error: 'Unauthorized' });
+    return null;
+  }
+  if ((auth.admin?.role || 'admin') !== 'owner') {
+    sendJSON(res, 403, { error: 'Only the owner can perform this action' });
+    return null;
+  }
+  return auth;
+}
+
 function writeJSON(file, data) {
   try {
     // Make a lightweight timestamped backup before overwriting
@@ -713,6 +743,18 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+// Deep link helper: open admin with Telegram ID (used from /beauty command reply)
+if (pathname === '/beauty' && req.method === 'GET') {
+  // Если открыто в Telegram — admin.html сам возьмёт id из initDataUnsafe.
+  // Фоллбек: ?tg_id=... — бот подставит ID.
+  const tid = (query && query.tg_id) ? String(query.tg_id) : '';
+  const url = tid ? `/admin?tg_id=${encodeURIComponent(tid)}` : '/admin';
+  res.statusCode = 302; res.setHeader('Location', url); res.end();
+  return;
+}
+
+
+
     if (pathname === '/api/admins/me' && req.method === 'GET') {
       const admins = readAdmins();
       const isAdmin = admins.some((admin) => admin.id === ctx.telegramId);
@@ -1081,6 +1123,27 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
       return;
     }
 
+    // ==== Global API guard for mutations and sensitive reads ====
+if (pathname.startsWith('/api/')) {
+  const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+  const protectedPrefixes = ['/api/services', '/api/groups', '/api/masters', '/api/backup', '/api/bookings'];
+  const sensitiveReads   = ['/api/admins'];
+
+  const needsAuth = (isWrite && protectedPrefixes.some(p => pathname.startsWith(p))) || sensitiveReads.includes(pathname);
+
+  if (needsAuth) {
+    const auth = getAdminAuth(req);
+    if (!auth.authenticated) {
+      return sendJSON(res, 401, { error: 'Unauthorized' });
+    }
+    // Управление администраторами — только для владельца
+    if (pathname.startsWith('/api/admins') && req.method !== 'GET') {
+      if ((auth.admin?.role || 'admin') !== 'owner') {
+        return sendJSON(res, 403, { error: 'Only the owner can modify admins' });
+      }
+    }
+  }
+}
     if (pathname === '/api/bookings' && req.method === 'POST') {
       const body = await readBody(req);
       const payload = JSON.parse(body || '{}');
@@ -1435,6 +1498,13 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
            const url = `${PUBLIC_BASE_URL}/admin`;
            // Send both text and a Web App button to open inside Telegram
            await tgSendMessage(chatId, `🛠 <b>Админ-панель</b>\nОткройте внутри Telegram для авто‑входа.\n${url}`, {
+             reply_markup: {
+               inline_keyboard: [ [ { text: 'Открыть админку', web_app: { url } } ] ]
+             }
+           });
+         } else if (/^\/beauty\b/.test(text)) {
+           const url = `${PUBLIC_BASE_URL}/beauty?tg_id=${userId}`;
+           await tgSendMessage(chatId, `🧿 <b>Вход в админку</b>\nОткройте ссылку внутри Telegram — доступ по вашему ID.\n${url}`, {
              reply_markup: {
                inline_keyboard: [ [ { text: 'Открыть админку', web_app: { url } } ] ]
              }
