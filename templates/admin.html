@@ -908,6 +908,31 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         input.click();
       });
 
+      // === Google Sheets export/import (Apps Script Web App) ===
+      gsCsvExportBtn?.addEventListener('click', async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        try {
+          const resp = await apiFetch('/api/gs/export', { method: 'POST' });
+          const json = await resp.json();
+          if (!resp.ok) { await handleError(resp); return; }
+          showBanner('Экспортировано в Google Sheets');
+          console.log('GS export:', json);
+        } catch (e) { console.error(e); showBanner('GS экспорт не удался', 'error'); }
+      });
+
+      gsCsvImportBtn?.addEventListener('click', async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        try {
+          const resp = await apiFetch('/api/gs/import', { method: 'POST' });
+          const json = await resp.json();
+          if (!resp.ok) { await handleError(resp); return; }
+          // после импорта перезагружаем данные
+          loadGroups(); loadServices(); loadBookings(); loadAdmins(); loadMasters();
+          showBanner('Импортировано из Google Sheets');
+          console.log('GS import:', json);
+        } catch (e) { console.error(e); showBanner('GS импорт не удался', 'error'); }
+      });
+
       const switchTab = (tab) => {
         state.activeTab = tab;
         tabsNav.forEach((button) => {
@@ -2132,37 +2157,5 @@ masterGroupAddBtn?.addEventListener('click', () => {
         }
       });
 
-      const initialId = detectTelegramId();
-      if (initialId) {
-        authState.telegramId = initialId;
-      }
-      updateAuthStatus();
-      refreshAccess();
-      switchTab(state.activeTab);
-    });
 </script>
 </body>
-      // === Google Sheets export/import (Apps Script Web App) ===
-      gsCsvExportBtn?.addEventListener('click', async () => {
-        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
-        try {
-          const resp = await apiFetch('/api/gs/export', { method: 'POST' });
-          const json = await resp.json();
-          if (!resp.ok) { await handleError(resp); return; }
-          showBanner('Экспортировано в Google Sheets');
-          console.log('GS export:', json);
-        } catch (e) { console.error(e); showBanner('GS экспорт не удался', 'error'); }
-      });
-
-      gsCsvImportBtn?.addEventListener('click', async () => {
-        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
-        try {
-          const resp = await apiFetch('/api/gs/import', { method: 'POST' });
-          const json = await resp.json();
-          if (!resp.ok) { await handleError(resp); return; }
-          // после импорта перезагружаем данные
-          loadGroups(); loadServices(); loadBookings(); loadAdmins(); loadMasters();
-          showBanner('Импортировано из Google Sheets');
-          console.log('GS import:', json);
-        } catch (e) { console.error(e); showBanner('GS импорт не удался', 'error'); }
-      });
