@@ -1868,7 +1868,7 @@ cat <<'EOF' > templates/managel.html
     .booking{position:absolute;left:64px;right:12px;border:1px solid rgba(37,99,235,.25);background:#e8f0fe;border-left:4px solid var(--primary);border-radius:10px;padding:8px 10px;font-size:14px;line-height:1.2;overflow:hidden}
     .booking .title{font-weight:700}
     /* FAB */
-    .fab{position:fixed;right:18px;bottom:calc(24px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:#fff;border:none;font-size:28px;box-shadow:0 20px 40px -10px rgba(37,99,235,.4);cursor:pointer}
+    .fab{position:fixed;right:18px;bottom:calc(88px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:#fff;border:none;font-size:28px;box-shadow:0 20px 40px -10px rgba(37,99,235,.4);cursor:pointer}
     /* Bottom nav */
     .nav{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 6px}
     .nav a{display:grid;gap:4px;justify-items:center;text-decoration:none;color:var(--muted);font-size:12px}
