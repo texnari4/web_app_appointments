@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 
 echo ">>> 🚀 Развёртывание мини-приложения (сервер + админка v13)..."
 
@@ -748,17 +748,11 @@ if (pathname === '/beauty' && req.method === 'GET') {
   // Если открыто в Telegram — admin.html сам возьмёт id из initDataUnsafe.
   // Фоллбек: ?tg_id=... — бот подставит ID.
   const tid = (query && query.tg_id) ? String(query.tg_id) : '';
-  const url = tid ? `/admin?tg_id=${encodeURIComponent(tid)}` : '/admin';
-    if (pathname === '/beauty' && req.method === 'GET') {
-  const tid = (query && query.tg_id) ? String(query.tg_id) : '';
   if (tid) {
     // сохраняем ID на 12 часов для последующих XHR из админки
     setCookie(res, 'tg_id', tid, { maxAge: 60*60*12 });
   }
-  const url = tid ? `/admin?tg_id=${encodeURIComponent(tid)}` : '/admin`;
-  res.statusCode = 302; res.setHeader('Location', url); res.end();
-  return;
-}
+  const url = tid ? `/admin?tg_id=${encodeURIComponent(tid)}` : '/admin';
   res.statusCode = 302; res.setHeader('Location', url); res.end();
   return;
 }
