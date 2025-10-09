@@ -1132,7 +1132,7 @@ if (masterId && master && !isMasterWorkingOnDate(master, date)) {
     // ==== Global API guard for mutations and sensitive reads ====
 if (pathname.startsWith('/api/')) {
   const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
-  const protectedPrefixes = ['/api/services', '/api/groups', '/api/masters', '/api/backup', '/api/bookings'];
+  const protectedPrefixes = ['/api/services', '/api/groups', '/api/masters', '/api/backup'];
   const sensitiveReads   = ['/api/admins'];
 
   const needsAuth = (isWrite && protectedPrefixes.some(p => pathname.startsWith(p))) || sensitiveReads.includes(pathname);
