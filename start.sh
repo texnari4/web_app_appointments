@@ -1773,30 +1773,83 @@ if (pathname.startsWith('/api/')) {
           // Normalize payload structure and keys (accept several variants/cases)
           const src = (data && (data.data || data.payload)) ? (data.data || data.payload) : data;
 
+          // --- Normalizers to coerce types and fill required fields ---
+          const toInt = (v, d=null) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+          const toStr = (v, d='') => (v==null ? d : String(v));
+          const toArr = (v) => Array.isArray(v) ? v : [];
+
+          function normGroup(g){
+            return { id: toInt(g.id, Date.now()), name: toStr(g.name).trim() };
+          }
+          function normService(s){
+            return {
+              id: toInt(s.id, Date.now()),
+              name: toStr(s.name).trim(),
+              description: toStr(s.description,''),
+              price: toInt(s.price, 0),
+              duration: toInt(s.duration, 30),
+              groupId: s.groupId===''||s.groupId==null ? null : toInt(s.groupId, null)
+            };
+          }
+          function normAdmin(a){
+            const role = a.role==='owner' ? 'owner' : 'admin';
+            const id = toInt(a.id, 0);
+            const username = toStr(a.username).replace(/^@/, '').trim();
+            return id>0 && username ? { id, username, displayName: toStr(a.displayName||a.name||username), role } : null;
+          }
+          function normMaster(m){
+            const id = toInt(m.id, Date.now());
+            const name = toStr(m.name).trim();
+            const specialties = toStr(m.specialties,'').split(',').map(x=>x.trim()).filter(Boolean);
+            const serviceIds = toStr(m.serviceIds,'').split(',').map(x=>toInt(x)).filter(Number.isFinite);
+            let schedule = null; try { schedule = m.schedule || (m.schedule_json ? JSON.parse(m.schedule_json) : null); } catch {}
+            return { id, name, specialties, photoUrl: m.photoUrl||null, description: toStr(m.description,''), schedule, serviceIds };
+          }
+          function normBooking(b){
+            // Require minimal fields: date, startTime, serviceId
+            const date = toStr(b.date).trim();
+            const startTime = toStr(b.startTime).trim();
+            const serviceId = toInt(b.serviceId, null);
+            if (!date || !startTime || !Number.isFinite(serviceId)) return null;
+            const id = toInt(b.id, Date.now());
+            const status = toStr(b.status||'pending');
+            const clientName = toStr(b.clientName||'');
+            const clientPhone = toStr(b.clientPhone||'');
+            const notes = toStr(b.notes||'');
+            const serviceName = toStr(b.serviceName||'');
+            const serviceDuration = toInt(b.serviceDuration, null);
+            const servicePrice = toInt(b.servicePrice, null);
+            const masterId = (b.masterId===''||b.masterId==null) ? null : toStr(b.masterId);
+            const duration = toInt(b.duration, serviceDuration); // keep if provided
+            const createdAt = toStr(b.createdAt||new Date().toISOString());
+            const updatedAt = toStr(b.updatedAt||createdAt);
+            return { id, createdAt, updatedAt, status, clientName, clientPhone, notes, serviceId, serviceName, serviceDuration, servicePrice, masterId, date, startTime, duration };
+          }
+
+          // Map keys from payload (support multiple cases)
           const pickArray = (...keys) => {
-            for (const k of keys) {
-              const v = src[k];
-              if (Array.isArray(v)) return v;
-            }
-            // Also accept sheet-shaped objects: { values: [...] }
-            for (const k of keys) {
-              const v = src[k];
-              if (v && Array.isArray(v.values)) return v.values;
-            }
+            for (const k of keys) { const v = src[k]; if (Array.isArray(v)) return v; }
+            for (const k of keys) { const v = src[k]; if (v && Array.isArray(v.values)) return v.values; }
             return [];
           };
           const hasAnyKey = (...keys) => keys.some(k => Object.prototype.hasOwnProperty.call(src, k));
 
-          const groups   = pickArray('groups', 'Groups');
-          const services = pickArray('services', 'Services');
-          const admins   = pickArray('admins', 'Admins');
-          // masters may come as staffMasters
-          const masters  = pickArray('masters', 'Masters', 'staffMasters', 'StaffMasters');
-          const bookings = pickArray('bookings', 'Bookings');
-          const contacts = pickArray('contacts', 'Contacts');
-          const hostes   = pickArray('hostes', 'Hostes');
+          const rawGroups   = pickArray('groups','Groups');
+          const rawServices = pickArray('services','Services');
+          const rawAdmins   = pickArray('admins','Admins');
+          const rawMasters  = pickArray('masters','Masters','staffMasters','StaffMasters');
+          const rawBookings = pickArray('bookings','Bookings');
+          const rawContacts = pickArray('contacts','Contacts');
+          const rawHostes   = pickArray('hostes','Hostes');
 
-          // Overwrite files if the corresponding key is present, even if array is empty
+          const groups   = toArr(rawGroups).map(normGroup).filter(g=>g.name);
+          const services = toArr(rawServices).map(normService).filter(s=>s.name);
+          const admins   = toArr(rawAdmins).map(normAdmin).filter(Boolean);
+          const masters  = toArr(rawMasters).map(normMaster).filter(m=>m.name);
+          const bookings = toArr(rawBookings).map(normBooking).filter(Boolean);
+          const contacts = toArr(rawContacts); // passthrough
+          const hostes   = toArr(rawHostes);   // passthrough
+
           if (hasAnyKey('groups','Groups'))         writeJSON(groupsFile,   groups);
           if (hasAnyKey('services','Services'))     writeJSON(servicesFile, services);
           if (hasAnyKey('admins','Admins'))         writeJSON(adminsFile,   admins);
@@ -1805,7 +1858,7 @@ if (pathname.startsWith('/api/')) {
           if (hasAnyKey('contacts','Contacts'))     writeJSON(contactsFile, contacts);
           if (hasAnyKey('hostes','Hostes'))         writeJSON(hostesFile,   hostes);
 
-          console.log('GS webhook import wrote counts:', {
+          console.log('GS webhook import (normalized) wrote:', {
             groups: groups.length,
             services: services.length,
             admins: admins.length,
