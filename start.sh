@@ -1785,6 +1785,7 @@ if (pathname.startsWith('/api/')) {
             }
             return [];
           };
+          const hasAnyKey = (...keys) => keys.some(k => Object.prototype.hasOwnProperty.call(src, k));
 
           const groups   = pickArray('groups', 'Groups');
           const services = pickArray('services', 'Services');
@@ -1795,14 +1796,24 @@ if (pathname.startsWith('/api/')) {
           const contacts = pickArray('contacts', 'Contacts');
           const hostes   = pickArray('hostes', 'Hostes');
 
-          const w = (file, v) => { try { if (Array.isArray(v)) writeJSON(file, v); } catch {} };
-          if (groups.length)   w(groupsFile,   groups);
-          if (services.length) w(servicesFile, services);
-          if (admins.length)   w(adminsFile,   admins);
-          if (masters.length)  w(mastersFile,  masters);
-          if (bookings.length) w(bookingsFile, bookings);
-          if (contacts.length) w(contactsFile, contacts);
-          if (hostes.length)   w(hostesFile,   hostes);
+          // Overwrite files if the corresponding key is present, even if array is empty
+          if (hasAnyKey('groups','Groups'))         writeJSON(groupsFile,   groups);
+          if (hasAnyKey('services','Services'))     writeJSON(servicesFile, services);
+          if (hasAnyKey('admins','Admins'))         writeJSON(adminsFile,   admins);
+          if (hasAnyKey('masters','Masters','staffMasters','StaffMasters')) writeJSON(mastersFile,  masters);
+          if (hasAnyKey('bookings','Bookings'))     writeJSON(bookingsFile, bookings);
+          if (hasAnyKey('contacts','Contacts'))     writeJSON(contactsFile, contacts);
+          if (hasAnyKey('hostes','Hostes'))         writeJSON(hostesFile,   hostes);
+
+          console.log('GS webhook import wrote counts:', {
+            groups: groups.length,
+            services: services.length,
+            admins: admins.length,
+            masters: masters.length,
+            bookings: bookings.length,
+            contacts: contacts.length,
+            hostes: hostes.length
+          });
 
           return sendJSON(res, 200, { status: 'ok', mode: 'webhook', imported: {
             groups: groups.length,
