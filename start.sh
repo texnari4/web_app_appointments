@@ -1758,6 +1758,44 @@ if (pathname.startsWith('/api/')) {
     if (pathname === '/api/gs/import' && req.method === 'POST') {
       if (!ensureAuthorized(ctx, res, ['admin'])) return;
       try {
+        // 1) Prefer webhook JSON import (Apps Script doGet)
+        const webhookUrl = process.env.GS_WEBHOOK_URL || process.env.webhookUrl || '';
+        if (webhookUrl) {
+          const url = webhookUrl.includes('?') ? `${webhookUrl}&mode=export_json` : `${webhookUrl}?mode=export_json`;
+          const resp = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+          const text = await resp.text();
+          if (!resp.ok) {
+            return sendJSON(res, 502, { error: 'GS webhook import failed', details: text });
+          }
+          let data;
+          try { data = JSON.parse(text); } catch { return sendJSON(res, 502, { error: 'GS webhook returned non‑JSON', details: text.slice(0,3000) }); }
+
+          // Expected keys: groups, services, admins, masters, bookings, contacts?, hostes?
+          const w = (file, v) => { if (Array.isArray(v)) writeJSON(file, v); };
+          if (data.groups)   w(groupsFile,   data.groups);
+          if (data.services) w(servicesFile, data.services);
+          if (data.admins)   w(adminsFile,   data.admins);
+          if (data.masters)  w(mastersFile,  data.masters);
+          if (data.bookings) w(bookingsFile, data.bookings);
+          if (data.contacts) w(contactsFile, data.contacts);
+          if (data.hostes)   w(hostesFile,   data.hostes);
+
+          return sendJSON(res, 200, { status: 'ok', mode: 'webhook', imported: {
+            groups: Array.isArray(data.groups)?data.groups.length:0,
+            services: Array.isArray(data.services)?data.services.length:0,
+            admins: Array.isArray(data.admins)?data.admins.length:0,
+            masters: Array.isArray(data.masters)?data.masters.length:0,
+            bookings: Array.isArray(data.bookings)?data.bookings.length:0,
+            contacts: Array.isArray(data.contacts)?data.contacts.length:0,
+            hostes: Array.isArray(data.hostes)?data.hostes.length:0
+          }});
+        }
+
+        // 2) Fallback: direct Google Sheets API (requires GOOGLE_SERVICE_ACCOUNT_JSON)
+        if (!GOOGLE_SERVICE_ACCOUNT_JSON) {
+          return sendJSON(res, 400, { error: 'GOOGLE_SERVICE_ACCOUNT_JSON not set; configure GS_WEBHOOK_URL or service account to import' });
+        }
+
         const groupsResp = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Groups!A1:Z');
         const servicesResp = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Services!A1:Z');
         const adminsResp = await sheetsValuesGet(GOOGLE_SHEET_ID, 'Admins!A1:Z');
@@ -1770,9 +1808,7 @@ if (pathname.startsWith('/api/')) {
           const headers = rows[0];
           const idx = Object.fromEntries(headers.map((h,i)=>[h,i]));
           return rows.slice(1).filter(r=>r.length>0).map(r=>{
-            const obj = {};
-            headersExpected.forEach((h)=>{ obj[h] = r[idx[h]] ?? ''; });
-            return obj;
+            const obj = {}; headersExpected.forEach((h)=>{ obj[h] = r[idx[h]] ?? ''; }); return obj;
           });
         }
 
@@ -1791,7 +1827,7 @@ if (pathname.startsWith('/api/')) {
         const bookings = rowsToObjects(bookingsResp, ['id','createdAt','updatedAt','status','clientName','clientPhone','notes','serviceId','serviceName','serviceDuration','servicePrice','masterId','date','startTime','duration']).map(r=>({ id: toNum(r.id)||Date.now(), createdAt: r.createdAt||new Date().toISOString(), updatedAt: r.updatedAt||r.createdAt||new Date().toISOString(), status: r.status||'pending', clientName: r.clientName||'', clientPhone: r.clientPhone||'', notes: r.notes||'', serviceId: Number(r.serviceId)||0, serviceName: r.serviceName||'', serviceDuration: Number(r.serviceDuration)||null, servicePrice: Number(r.servicePrice)||null, masterId: r.masterId===''?null:String(r.masterId), date: r.date||'', startTime: r.startTime||'', duration: Number(r.duration)||null }));
         writeJSON(bookingsFile, bookings);
 
-        sendJSON(res, 200, { status: 'ok', imported: { groups: groups.length, services: services.length, admins: admins.length, masters: masters.length, bookings: bookings.length } });
+        sendJSON(res, 200, { status: 'ok', mode: 'sheets', imported: { groups: groups.length, services: services.length, admins: admins.length, masters: masters.length, bookings: bookings.length } });
       } catch (e) {
         console.error(e);
         sendJSON(res, 500, { error: String(e.message || e) });
