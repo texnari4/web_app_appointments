@@ -1703,14 +1703,16 @@ if (pathname.startsWith('/api/')) {
         const webhookUrl = process.env.GS_WEBHOOK_URL || process.env.webhookUrl || '';
         if (webhookUrl) {
           const load = (file, fallback=[]) => { try { return readJSON(file, fallback); } catch { return fallback; } };
+          const mastersData = load(mastersFile, []);
           const payload = {
-            groups:   load(groupsFile, []),
-            services: load(servicesFile, []),
-            admins:   load(adminsFile, []),
-            masters:  load(mastersFile, []),      // каталог мастеров услуг
-            bookings: load(bookingsFile, []),
-            contacts: load(contactsFile, []),
-            hostes:   load(hostesFile, [])        // список доступа хостес (если используется)
+            groups:       load(groupsFile, []),
+            services:     load(servicesFile, []),
+            admins:       load(adminsFile, []),
+            masters:      mastersData,              // каталог мастеров
+            staffMasters: mastersData,              // дублируем для GS (лист StaffMasters)
+            bookings:     load(bookingsFile, []),
+            contacts:     load(contactsFile, []),
+            hostes:       load(hostesFile, [])
           };
 
           const resp = await fetch(webhookUrl, {
