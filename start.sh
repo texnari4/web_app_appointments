@@ -1768,8 +1768,17 @@ if (pathname.startsWith('/api/')) {
             return sendJSON(res, 502, { error: 'GS webhook import failed', details: text });
           }
           let data;
-          try { data = JSON.parse(text); } catch { return sendJSON(res, 502, { error: 'GS webhook returned non‑JSON', details: text.slice(0,3000) }); }
 
+          try {
+  data = JSON.parse(text);
+  // Если внутри есть свойство 'data' или 'payload' — используем его
+  if (data && typeof data === 'object' && (data.data || data.payload)) {
+    data = data.data || data.payload;
+  }
+} catch (e) {
+  console.error('❌ Ошибка разбора JSON из Google Script:', e, text.slice(0,3000));
+  return sendJSON(res, 502, { error: 'GS webhook returned invalid JSON', details: text.slice(0,3000) });
+}
           // Normalize payload structure and keys (accept several variants/cases)
           const src = (data && (data.data || data.payload)) ? (data.data || data.payload) : data;
 
