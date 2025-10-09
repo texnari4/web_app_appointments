@@ -1770,25 +1770,49 @@ if (pathname.startsWith('/api/')) {
           let data;
           try { data = JSON.parse(text); } catch { return sendJSON(res, 502, { error: 'GS webhook returned non‑JSON', details: text.slice(0,3000) }); }
 
-          // Expected keys: groups, services, admins, masters, bookings, contacts?, hostes?
-          const w = (file, v) => { if (Array.isArray(v)) writeJSON(file, v); };
-          if (data.groups)   w(groupsFile,   data.groups);
-          if (data.services) w(servicesFile, data.services);
-          if (data.admins)   w(adminsFile,   data.admins);
-          if (data.masters)  w(mastersFile,  data.masters);
-          if (data.bookings) w(bookingsFile, data.bookings);
-          if (data.contacts) w(contactsFile, data.contacts);
-          if (data.hostes)   w(hostesFile,   data.hostes);
+          // Normalize payload structure and keys (accept several variants/cases)
+          const src = (data && (data.data || data.payload)) ? (data.data || data.payload) : data;
+
+          const pickArray = (...keys) => {
+            for (const k of keys) {
+              const v = src[k];
+              if (Array.isArray(v)) return v;
+            }
+            // Also accept sheet-shaped objects: { values: [...] }
+            for (const k of keys) {
+              const v = src[k];
+              if (v && Array.isArray(v.values)) return v.values;
+            }
+            return [];
+          };
+
+          const groups   = pickArray('groups', 'Groups');
+          const services = pickArray('services', 'Services');
+          const admins   = pickArray('admins', 'Admins');
+          // masters may come as staffMasters
+          const masters  = pickArray('masters', 'Masters', 'staffMasters', 'StaffMasters');
+          const bookings = pickArray('bookings', 'Bookings');
+          const contacts = pickArray('contacts', 'Contacts');
+          const hostes   = pickArray('hostes', 'Hostes');
+
+          const w = (file, v) => { try { if (Array.isArray(v)) writeJSON(file, v); } catch {} };
+          if (groups.length)   w(groupsFile,   groups);
+          if (services.length) w(servicesFile, services);
+          if (admins.length)   w(adminsFile,   admins);
+          if (masters.length)  w(mastersFile,  masters);
+          if (bookings.length) w(bookingsFile, bookings);
+          if (contacts.length) w(contactsFile, contacts);
+          if (hostes.length)   w(hostesFile,   hostes);
 
           return sendJSON(res, 200, { status: 'ok', mode: 'webhook', imported: {
-            groups: Array.isArray(data.groups)?data.groups.length:0,
-            services: Array.isArray(data.services)?data.services.length:0,
-            admins: Array.isArray(data.admins)?data.admins.length:0,
-            masters: Array.isArray(data.masters)?data.masters.length:0,
-            bookings: Array.isArray(data.bookings)?data.bookings.length:0,
-            contacts: Array.isArray(data.contacts)?data.contacts.length:0,
-            hostes: Array.isArray(data.hostes)?data.hostes.length:0
-          }});
+            groups: groups.length,
+            services: services.length,
+            admins: admins.length,
+            masters: masters.length,
+            bookings: bookings.length,
+            contacts: contacts.length,
+            hostes: hostes.length
+          } });
         }
 
         // 2) Fallback: direct Google Sheets API (requires GOOGLE_SERVICE_ACCOUNT_JSON)
