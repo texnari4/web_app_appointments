@@ -2018,14 +2018,9 @@ if (pathname.startsWith('/api/')) {
 
         sendJSON(res, 200, { status: 'ok', mode: 'sheets', imported: { groups: groups.length, services: services.length, admins: admins.length, masters: masters.length, bookings: bookings.length } });
       } catch (e) {
-        
-          } catch (e) {
-  logError('gs_import', e);
-  sendJSON(res, 500, { error: String(e.message || e) });
-}
+        logError('gs_import', e);
         sendJSON(res, 500, { error: String(e.message || e) });
       }
-      return;
     }
 
         // === Backup ZIP (export) ===
