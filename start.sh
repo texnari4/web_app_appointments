@@ -705,6 +705,7 @@ const server = createServer(async (req, res) => {
         { label: 'masters.json',  path: mastersFile,  get: () => readJSON(mastersFile, []) },
         { label: 'bookings.json', path: bookingsFile, get: () => readJSON(bookingsFile, []) },
         { label: 'contacts.json', path: contactsFile, get: () => readJSON(contactsFile, []) }
+        ,{ label: 'hostes.json',  path: hostesFile,   get: () => readJSON(hostesFile, []) }
       ];
       const rowHtml = files.map(f => {
         try {
@@ -719,10 +720,15 @@ const server = createServer(async (req, res) => {
       }).join('');
       const mem = process.memoryUsage();
       const uptime = `${Math.floor(process.uptime())}s`;
+      const GS_WEBHOOK_URL = process.env.GS_WEBHOOK_URL || process.env.webhookUrl || '';
+      const hasWebhook = Boolean(GS_WEBHOOK_URL);
+      const maskedWebhook = hasWebhook ? GS_WEBHOOK_URL.replace(/(^.{10}).+(.{6}$)/, '$1…$2') : '—';
+      const hasServiceAccount = Boolean(GOOGLE_SERVICE_ACCOUNT_JSON);
+      const gsLink = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/edit`;
       const html = `<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Health</title>
-<style>body{font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:#f6f7fb;color:#111827;margin:0;padding:24px}main{max-width:900px;margin:0 auto;display:grid;gap:16px}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:16px}table{width:100%;border-collapse:collapse}th,td{border-top:1px solid rgba(209,213,219,.6);padding:8px 10px;text-align:left}th{background:#f8fafc}</style>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:#f6f7fb;color:#111827;margin:0;padding:24px}main{max-width:900px;margin:0 auto;display:grid;gap:16px}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:16px}table{width:100%;border-collapse:collapse}th,td{border-top:1px solid rgba(209,213,219,.6);padding:8px 10px;text-align:left}th{background:#f8fafc}code{background:#f1f5f9;padding:2px 6px;border-radius:6px}</style>
 </head><body><main>
 <h1>Статус приложения</h1>
 <section>
@@ -733,6 +739,14 @@ const server = createServer(async (req, res) => {
 <section>
 <h2>Файлы данных</h2>
 <table><thead><tr><th>Файл</th><th>Размер (байт)</th><th>Количество записей</th></tr></thead><tbody>${rowHtml}</tbody></table>
+</section>
+<section>
+  <h2>Интеграции</h2>
+  <ul>
+    <li>Google Sheets ID: <a href="${gsLink}" target="_blank" rel="noopener">${GOOGLE_SHEET_ID}</a></li>
+    <li>Service Account: <b>${hasServiceAccount ? 'configured' : 'not set'}</b></li>
+    <li>GS_WEBHOOK_URL: <code>${maskedWebhook}</code> ${hasWebhook ? '' : '<span style="color:#b91c1c">— not set</span>'}</li>
+  </ul>
 </section>
 <section>
 <h2>Ссылки</h2>
