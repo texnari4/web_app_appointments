@@ -68,6 +68,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://beautyminiappappointments-production.up.railway.app').replace(/\/+$/,'');
 const TG_API = TELEGRAM_BOT_TOKEN ? `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}` : null;
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || null;
+const OWNER_TG_ID = Number(process.env.OWNER_TG_ID || 0) || null;
 
 async function tgSendMessage(chatId, text, extra = {}) {
   if (!TG_API) return;
@@ -435,6 +436,11 @@ function authenticate(req) {
   const telegramId = parseTelegramId(req);
   if (!telegramId) {
     return { role: 'guest', telegramId: null, provided: false };
+  }
+
+  // Env-based emergency owner access
+  if (OWNER_TG_ID && String(telegramId) === String(OWNER_TG_ID)) {
+    return { role: 'owner', telegramId, provided: true, admin: { id: telegramId, role: 'owner', username: 'env_owner' } };
   }
 
   const admins = readAdmins();
@@ -1527,11 +1533,21 @@ if (pathname.startsWith('/api/')) {
   }
       const admins = readAdmins();
       const candidateId = ctx.telegramId ?? (query && Number(query.tg_id)) ?? null;
-      const isAdmin = admins.some(a => a.id === candidateId);
+
+      // Bootstrap: if admins.json is empty and we have a candidate ID, promote as owner
+      if (Array.isArray(admins) && admins.length === 0 && Number.isFinite(candidateId)) {
+        const seeded = { id: candidateId, username: 'owner', displayName: 'Owner', role: 'owner' };
+        writeAdmins([seeded]);
+      }
+
+      // Re-evaluate after potential bootstrap
+      const nowAdmins = readAdmins();
+      const isAdmin = nowAdmins.some(a => a.id === candidateId);
+
       if (!isAdmin) {
-        const bootstrap = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Авторизация…</title><style>html,body{height:100%}body{margin:0;display:grid;place-items:center;background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;color:#111827}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:22px;max-width:720px;text-align:center;display:grid;gap:10px}</style></head><body><section><h1>Авторизация через Telegram…</h1><p class="muted">Если вы открыли эту страницу <b>внутри Telegram</b>, мы попробуем авторизовать вас автоматически.</p><p class="muted">Если страница не обновится в течение 3 секунд, откройте админку из бота командой <b>/admin</b>.</p></section><script>
+        const bootstrap = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Авторизация…</title><style>html,body{height:100%}body{margin:0;display:grid;place-items:center;background:#f6f7fb;font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;color:#111827}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:22px;max-width:720px;text-align:center;display:grid;gap:10px}</style></head><body><section><h1>Авторизация через Telegram…</h1><p class="muted">Если вы открыли эту страницу <b>внутри Telegram</b>, мы попробуем авторизовать вас автоматически.</p><p class="muted">Если страница не обновится в течение 3 секунд, откройте админку из бота командой <b>/beauty</b>.</p></section><script>
 (function(){
-  function done(ok){ if(ok){ location.replace('/admin'); } else { document.body.innerHTML = '<section><h1>403</h1><p>Доступ ограничен. Откройте админку из Telegram: /admin</p></section>'; } }
+  function done(ok){ if(ok){ location.replace('/admin'); } else { document.body.innerHTML = '<section><h1>403</h1><p>Доступ ограничен. Откройте админку из Telegram: /beauty</p></section>'; } }
   try{
     var tg = window.Telegram && window.Telegram.WebApp;
     if(tg && tg.initData){
