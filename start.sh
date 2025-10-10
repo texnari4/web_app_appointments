@@ -1841,12 +1841,7 @@ if (pathname.startsWith('/api/')) {
 
         sendJSON(res, 200, { status: 'ok', mode: 'sheets', updated: 'Sheets updated' });
       } catch (e) {
-        
-          } catch (e) {
-  logError('gs_export', e);
-  sendJSON(res, 500, { error: String(e.message || e) });
-}
-
+        logError('gs_export', e);
         sendJSON(res, 500, { error: String(e.message || e) });
       }
       return;
