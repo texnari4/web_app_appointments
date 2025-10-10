@@ -395,8 +395,12 @@ function writeAdmins(admins) {
   writeJSON(adminsFile, admins);
 }
 
-function readContacts() { return readJSON(contactsFile, []); }
-function writeContacts(list) { writeJSON(contactsFile, list); }
+function readContacts() {
+  return readJSON(contactsFile, []);
+}
+function writeContacts(list) {
+  writeJSON(contactsFile, list);
+}
 function upsertContact(next) {
   const list = readContacts();
   const idx = list.findIndex(c => String(c.id) === String(next.id));
@@ -1217,7 +1221,21 @@ if (pathname.startsWith('/api/')) {
       bookings.push(newBooking);
       writeJSON(bookingsFile, bookings);
 
-      // Link booking to Telegram user (if opened as WebApp) and notify client
+      // Always persist client contact (even if not coming from Telegram WebApp)
+      try {
+        const rawPhone = String(payload.clientPhone||'').trim();
+        const digits = rawPhone.replace(/\D/g,'');
+        const contactId = ctx.telegramId || (digits ? `phone:${digits}` : `anon:${Date.now()}`);
+        const nameParts = String(payload.clientName||'').trim().split(/\s+/);
+        upsertContact({
+          id: contactId,
+          first_name: nameParts[0] || undefined,
+          last_name: nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined,
+          phone: rawPhone || undefined
+        });
+      } catch {}
+
+      // If opened as Telegram WebApp: link by numeric tg_id and notify via Telegram
       try {
         if (ctx.telegramId) {
           // 1) Upsert contact using provided name/phone
@@ -2360,7 +2378,7 @@ cat <<'EOF' > public/client.html
         <h2>Шаг 1 из 3 — Контакты</h2>
         <div class="form-grid">
           <label>Как к вам обращаться
-            <input type="text" id="clientName" placeholder="Имя и фамилия" required />
+            <input type="text" id="clientName" placeholder="Имя" required />
           </label>
           <label>Телефон
             <input type="tel" id="clientPhone" placeholder="+375 (29) 123-45-67" required />
