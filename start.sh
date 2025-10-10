@@ -44,7 +44,16 @@ import crypto from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
-mkdirSync(DATA_DIR, { recursive: true });
+
+const MAX_LOG = 300;
+const LOGS = { ops: [], err: [], req: [], backup: [] };
+function pushLog(type, entry){
+  try{
+    const arr = LOGS[type]; if(!arr) return;
+    arr.push({ ts: new Date().toISOString(), ...entry });
+    if(arr.length > MAX_LOG) arr.splice(0, arr.length - MAX_LOG);
+  }catch{}
+}
 
 const servicesFile = join(DATA_DIR, 'services.json');
 const groupsFile = join(DATA_DIR, 'groups.json');
@@ -269,10 +278,13 @@ function writeJSON(file, data) {
       try {
         const cur = readFileSync(file);
         writeFileSync(join(bakDir, bakName), cur);
+        pushLog('backup', { file: file.split('/').pop(), name: bakName, size: cur.length });
       } catch {}
     }
   } catch {}
   writeFileSync(file, JSON.stringify(data, null, 2));
+  const isArr = Array.isArray(data);
+  pushLog('ops', { file: file.split('/').pop(), items: isArr ? data.length : null, bytes: Buffer.byteLength(JSON.stringify(data)) });
 }
 
 async function getGoogleAccessToken() {
@@ -333,6 +345,11 @@ function sendJSON(res, statusCode, payload) {
 function sendText(res, statusCode, payload) {
   res.writeHead(statusCode, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end(payload);
+}
+
+function logError(context, e){
+  const msg = (e && (e.message || e)) || 'Unknown error';
+  pushLog('err', { context, error: String(msg) });
 }
 
 function parseCookies(req){
@@ -696,6 +713,8 @@ const server = createServer(async (req, res) => {
   const { pathname, query } = parse(req.url, true);
   const ctx = authenticate(req);
 
+  pushLog('req', { method: req.method, path: pathname, role: ctx.role, tg: ctx.telegramId || null });
+
   try {
     if (pathname === '/health') {
       const files = [
@@ -748,6 +767,45 @@ const server = createServer(async (req, res) => {
     <li>GS_WEBHOOK_URL: <code>${maskedWebhook}</code> ${hasWebhook ? '' : '<span style="color:#b91c1c">— not set</span>'}</li>
   </ul>
 </section>
+
+<section>
+  <h2>Операции</h2>
+  <table>
+    <thead><tr><th>Время</th><th>Файл</th><th>Записей</th><th>Размер (байт)</th></tr></thead>
+    <tbody>
+      ${LOGS.ops.slice(-50).reverse().map(r=>`<tr><td>${r.ts}</td><td>${r.file||''}</td><td>${r.items??''}</td><td>${r.bytes??''}</td></tr>`).join('') || '<tr><td colspan="4">—</td></tr>'}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Ошибки и логи</h2>
+
+  <h3 style="margin:8px 0 6px">Ошибки</h3>
+  <table>
+    <thead><tr><th>Время</th><th>Контекст</th><th>Сообщение</th></tr></thead>
+    <tbody>
+      ${LOGS.err.slice(-50).reverse().map(r=>`<tr><td>${r.ts}</td><td>${r.context||''}</td><td><code>${(r.error||'').replace(/</g,'&lt;')}</code></td></tr>`).join('') || '<tr><td colspan="3">—</td></tr>'}
+    </tbody>
+  </table>
+
+  <h3 style="margin:16px 0 6px">Резервные копии</h3>
+  <table>
+    <thead><tr><th>Время</th><th>Файл</th><th>Бэкап</th><th>Размер (байт)</th></tr></thead>
+    <tbody>
+      ${LOGS.backup.slice(-50).reverse().map(r=>`<tr><td>${r.ts}</td><td>${r.file||''}</td><td>${r.name||''}</td><td>${r.size??''}</td></tr>`).join('') || '<tr><td colspan="4">—</td></tr>'}
+    </tbody>
+  </table>
+
+  <h3 style="margin:16px 0 6px">Запросы</h3>
+  <table>
+    <thead><tr><th>Время</th><th>Метод</th><th>Путь</th><th>Роль</th><th>TG</th></tr></thead>
+    <tbody>
+      ${LOGS.req.slice(-50).reverse().map(r=>`<tr><td>${r.ts}</td><td>${r.method}</td><td>${r.path}</td><td>${r.role}</td><td>${r.tg??''}</td></tr>`).join('') || '<tr><td colspan="5">—</td></tr>'}
+    </tbody>
+  </table>
+</section>
+
 <section>
 <h2>Ссылки</h2>
 <ul>
@@ -1783,7 +1841,12 @@ if (pathname.startsWith('/api/')) {
 
         sendJSON(res, 200, { status: 'ok', mode: 'sheets', updated: 'Sheets updated' });
       } catch (e) {
-        console.error(e);
+        
+          } catch (e) {
+  logError('gs_export', e);
+  sendJSON(res, 500, { error: String(e.message || e) });
+}
+
         sendJSON(res, 500, { error: String(e.message || e) });
       }
       return;
@@ -1960,7 +2023,11 @@ if (pathname.startsWith('/api/')) {
 
         sendJSON(res, 200, { status: 'ok', mode: 'sheets', imported: { groups: groups.length, services: services.length, admins: admins.length, masters: masters.length, bookings: bookings.length } });
       } catch (e) {
-        console.error(e);
+        
+          } catch (e) {
+  logError('gs_import', e);
+  sendJSON(res, 500, { error: String(e.message || e) });
+}
         sendJSON(res, 500, { error: String(e.message || e) });
       }
       return;
