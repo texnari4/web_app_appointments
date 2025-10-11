@@ -722,108 +722,22 @@ const server = createServer(async (req, res) => {
   pushLog('req', { method: req.method, path: pathname, role: ctx.role, tg: ctx.telegramId || null });
 
   try {
-    if (pathname === '/health') {
-      const files = [
-        { label: 'groups.json',   path: groupsFile,   get: () => readJSON(groupsFile, []) },
-        { label: 'services.json', path: servicesFile, get: () => readJSON(servicesFile, []) },
-        { label: 'admins.json',   path: adminsFile,   get: () => readJSON(adminsFile, []) },
-        { label: 'masters.json',  path: mastersFile,  get: () => readJSON(mastersFile, []) },
-        { label: 'bookings.json', path: bookingsFile, get: () => readJSON(bookingsFile, []) },
-        { label: 'contacts.json', path: contactsFile, get: () => readJSON(contactsFile, []) }
-        ,{ label: 'hostes.json',  path: hostesFile,   get: () => readJSON(hostesFile, []) }
-      ];
-      const rowHtml = files.map(f => {
-        try {
-          const s = statSync(f.path);
-          const size = s.size;
-          const data = f.get();
-          const count = Array.isArray(data) ? data.length : (data && typeof data === 'object' ? Object.keys(data).length : 0);
-          return `<tr><td>${f.label}</td><td>${size}</td><td>${count}</td></tr>`;
-        } catch {
-          return `<tr><td>${f.label}</td><td>—</td><td>—</td></tr>`;
-        }
-      }).join('');
-      const mem = process.memoryUsage();
-      const uptime = `${Math.floor(process.uptime())}s`;
-      const GS_WEBHOOK_URL = process.env.GS_WEBHOOK_URL || process.env.webhookUrl || '';
-      const hasWebhook = Boolean(GS_WEBHOOK_URL);
-      const maskedWebhook = hasWebhook ? GS_WEBHOOK_URL.replace(/(^.{10}).+(.{6}$)/, '$1…$2') : '—';
-      const hasServiceAccount = Boolean(GOOGLE_SERVICE_ACCOUNT_JSON);
-      const gsLink = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/edit`;
-      const html = `<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Health</title>
-<style>body{font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:#f6f7fb;color:#111827;margin:0;padding:24px}main{max-width:900px;margin:0 auto;display:grid;gap:16px}section{background:#fff;border:1px solid rgba(209,213,219,.5);border-radius:14px;padding:16px}table{width:100%;border-collapse:collapse}th,td{border-top:1px solid rgba(209,213,219,.6);padding:8px 10px;text-align:left}th{background:#f8fafc}code{background:#f1f5f9;padding:2px 6px;border-radius:6px}</style>
-</head><body><main>
-<h1>Статус приложения</h1>
-<section>
-<p>Node.js: <b>${process.version}</b> · Uptime: <b>${uptime}</b></p>
-<p>BASE_URL: <code>${PUBLIC_BASE_URL}</code> · Telegram bot: <b>${TELEGRAM_BOT_TOKEN ? 'configured' : 'not set'}</b>${TELEGRAM_BOT_USERNAME ? ` · @${TELEGRAM_BOT_USERNAME}` : ''}</p>
-<p>Memory RSS: <b>${mem.rss}</b>, Heap Used: <b>${mem.heapUsed}</b></p>
-</section>
-<section>
-<h2>Файлы данных</h2>
-<table><thead><tr><th>Файл</th><th>Размер (байт)</th><th>Количество записей</th></tr></thead><tbody>${rowHtml}</tbody></table>
-</section>
-<section>
-  <h2>Интеграции</h2>
-  <ul>
-    <li>Google Sheets ID: <a href="${gsLink}" target="_blank" rel="noopener">${GOOGLE_SHEET_ID}</a></li>
-    <li>Service Account: <b>${hasServiceAccount ? 'configured' : 'not set'}</b></li>
-    <li>GS_WEBHOOK_URL: <code>${maskedWebhook}</code> ${hasWebhook ? '' : '<span style="color:#b91c1c">— not set</span>'}</li>
-  </ul>
-</section>
-
-<section>
-  <h2>Операции</h2>
-  <table>
-    <thead><tr><th>Время</th><th>Файл</th><th>Записей</th><th>Размер (байт)</th></tr></thead>
-    <tbody>
-      ${LOGS.ops.slice(-50).reverse().map(r=>`<tr><td>${r.ts}</td><td>${r.file||''}</td><td>${r.items??''}</td><td>${r.bytes??''}</td></tr>`).join('') || '<tr><td colspan="4">—</td></tr>'}
-    </tbody>
-  </table>
-</section>
-
-<section>
-  <h2>Ошибки и логи</h2>
-
-  <h3 style="margin:8px 0 6px">Ошибки</h3>
-  <table>
-    <thead><tr><th>Время</th><th>Контекст</th><th>Сообщение</th></tr></thead>
-    <tbody>
-      ${LOGS.err.slice(-50).reverse().map(r=>`<tr><td>${r.ts}</td><td>${r.context||''}</td><td><code>${(r.error||'').replace(/</g,'&lt;')}</code></td></tr>`).join('') || '<tr><td colspan="3">—</td></tr>'}
-    </tbody>
-  </table>
-
-  <h3 style="margin:16px 0 6px">Резервные копии</h3>
-  <table>
-    <thead><tr><th>Время</th><th>Файл</th><th>Бэкап</th><th>Размер (байт)</th></tr></thead>
-    <tbody>
-      ${LOGS.backup.slice(-50).reverse().map(r=>`<tr><td>${r.ts}</td><td>${r.file||''}</td><td>${r.name||''}</td><td>${r.size??''}</td></tr>`).join('') || '<tr><td colspan="4">—</td></tr>'}
-    </tbody>
-  </table>
-
-  <h3 style="margin:16px 0 6px">Запросы</h3>
-  <table>
-    <thead><tr><th>Время</th><th>Метод</th><th>Путь</th><th>Роль</th><th>TG</th></tr></thead>
-    <tbody>
-      ${LOGS.req.slice(-50).reverse().map(r=>`<tr><td>${r.ts}</td><td>${r.method}</td><td>${r.path}</td><td>${r.role}</td><td>${r.tg??''}</td></tr>`).join('') || '<tr><td colspan="5">—</td></tr>'}
-    </tbody>
-  </table>
-</section>
-
-<section>
-<h2>Ссылки</h2>
-<ul>
-<li><a href="/client">/client</a></li>
-<li><a href="/admin">/admin</a></li>
-<li><a href="/manager">/manager</a></li>
-<li><a href="/api/backup/export">/api/backup/export</a> (zip)</li>
-</ul>
-</section>
-</main></body></html>`;
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(html);
+    if (pathname === '/api/health' && req.method === 'GET') {
+      const counts = {
+        groups: (readJSON(groupsFile, []) || []).length,
+        services: (readJSON(servicesFile, []) || []).length,
+        admins: (readJSON(adminsFile, []) || []).length,
+        masters: (readJSON(mastersFile, []) || []).length,
+        bookings: (readJSON(bookingsFile, []) || []).length,
+        contacts: (readJSON(contactsFile, []) || []).length
+      };
+      sendJSON(res, 200, {
+        ok: true,
+        time: new Date().toISOString(),
+        uptimeSec: Math.floor(process.uptime()),
+        version: process.env.APP_VERSION || 'v13',
+        counts
+      });
       return;
     }
 
