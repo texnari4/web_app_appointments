@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 echo ">>> 🚀 Развёртывание мини-приложения (сервер + админка v13)..."
 
 # --- Подготовка директорий ---
-# mkdir -p app/data - создаётся автоматически при первом запуске, включить при первом деплое
+mkdir -p app/data
 mkdir -p app/public
 mkdir -p app/templates
 
@@ -152,10 +152,15 @@ function ensureDataFile(file, fallback) {
   // Never overwrite existing content during deploy, even if empty or unreadable.
   if (!existsSync(file)) {
     try {
+      // ensure parent directory exists
+      try { mkdirSync(dirname(file), { recursive: true }); } catch {}
       writeFileSync(file, JSON.stringify(fallback, null, 2));
     } catch (e) {
       // As a last resort, attempt to create an empty JSON array/object
-      try { writeFileSync(file, Array.isArray(fallback) ? '[]' : '{}'); } catch {}
+      try {
+        try { mkdirSync(dirname(file), { recursive: true }); } catch {}
+        writeFileSync(file, Array.isArray(fallback) ? '[]' : '{}');
+      } catch {}
     }
   }
 }
@@ -289,7 +294,7 @@ function writeJSON(file, data) {
 }
 
 // --- Logs helpers ---
-const logsFile = path.join(DATA_DIR, 'logs.json');
+const logsFile = join(DATA_DIR, 'logs.json');
 function readLogs(){
   try { return JSON.parse(fs.readFileSync(logsFile,'utf8')); } catch { return []; }
 }
