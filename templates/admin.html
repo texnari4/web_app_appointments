@@ -756,6 +756,71 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           "'": '&#39;'
         })[char] || char);
 
+      const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30);
+
+      const toTimeLabel = (minutesTotal) => {
+        const minutes = ((minutesTotal % (24 * 60)) + (24 * 60)) % (24 * 60);
+        const hours = String(Math.floor(minutes / 60)).padStart(2, '0');
+        const mins = String(minutes % 60).padStart(2, '0');
+        return `${hours}:${mins}`;
+      };
+
+      const normalizeDateString = (value) => {
+        if (value == null || value === '') return '';
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          const date = new Date(EXCEL_EPOCH_MS + Math.round(value * 86400000));
+          if (!Number.isFinite(date.getTime())) return '';
+          return date.toISOString().slice(0, 10);
+        }
+        const text = String(value).trim();
+        if (!text) return '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+        const numeric = Number(text);
+        if (!Number.isNaN(numeric) && text !== '') {
+          return normalizeDateString(numeric);
+        }
+        const parsed = Date.parse(text);
+        if (!Number.isNaN(parsed)) {
+          return new Date(parsed).toISOString().slice(0, 10);
+        }
+        return '';
+      };
+
+      const normalizeTimeString = (value) => {
+        if (value == null || value === '') return '';
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          const fractional = value % 1;
+          const minutes = Math.round(((fractional < 0 ? fractional + 1 : fractional)) * 24 * 60);
+          return toTimeLabel(minutes);
+        }
+        const text = String(value).trim();
+        if (!text) return '';
+        if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(text)) {
+          return text.slice(0, 5);
+        }
+        const numeric = Number(text);
+        if (!Number.isNaN(numeric) && text !== '') {
+          return normalizeTimeString(numeric);
+        }
+        const parsed = Date.parse(text);
+        if (!Number.isNaN(parsed)) {
+          const date = new Date(parsed);
+          const minutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+          return toTimeLabel(minutes);
+        }
+        return '';
+      };
+
+      const getBookingDateTime = (booking) => {
+        const date = normalizeDateString(booking.date) || '';
+        const time = normalizeTimeString(booking.startTime) || '';
+        if (!date || !time) return null;
+        const iso = `${date}T${time}:00`;
+        const timestamp = Date.parse(iso);
+        if (Number.isNaN(timestamp)) return null;
+        return new Date(timestamp);
+      };
+
       const showBanner = (message, type = 'success') => {
         banner.textContent = message;
         banner.classList.toggle('error', type === 'error');
@@ -1234,21 +1299,32 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           return;
         }
 
-        state.bookings
-          .sort((a, b) => new Date(`${a.date}T${a.startTime}`) - new Date(`${b.date}T${b.startTime}`))
-          .forEach((booking) => {
+        const sortedBookings = [...state.bookings].sort((a, b) => {
+          const aDt = getBookingDateTime(a);
+          const bDt = getBookingDateTime(b);
+          const aTime = aDt ? aDt.getTime() : 0;
+          const bTime = bDt ? bDt.getTime() : 0;
+          return aTime - bTime;
+        });
+
+        sortedBookings.forEach((booking) => {
             const tr = document.createElement('tr');
             tr.dataset.id = booking.id;
 
-            const startDate = new Date(`${booking.date}T${booking.startTime}:00`);
-            const formattedDate = startDate.toLocaleDateString('ru-RU', {
-              weekday: 'short',
-              day: '2-digit',
-              month: 'short'
-            });
+            const startDate = getBookingDateTime(booking);
+            const formattedDate = startDate
+              ? startDate.toLocaleDateString('ru-RU', {
+                  weekday: 'short',
+                  day: '2-digit',
+                  month: 'short'
+                })
+              : '—';
+            const timeLabel = normalizeTimeString(booking.startTime) || (startDate
+              ? toTimeLabel(startDate.getHours() * 60 + startDate.getMinutes())
+              : '—');
 
             const timeCell = document.createElement('td');
-            timeCell.innerHTML = `<strong>${booking.startTime}</strong><br><span class="muted">${formattedDate}</span>`;
+            timeCell.innerHTML = `<strong>${timeLabel || '—'}</strong><br><span class="muted">${formattedDate}</span>`;
 
             const clientCell = document.createElement('td');
             clientCell.innerHTML = `
@@ -1258,9 +1334,16 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
             `;
 
             const serviceCell = document.createElement('td');
+            const durationValue = Number(booking.duration);
+            const hasDuration = booking.duration !== null && booking.duration !== '' && Number.isFinite(durationValue);
+            const durationLabel = hasDuration ? `${durationValue} мин` : '—';
+            const priceValue = Number(booking.servicePrice);
+            const hasPrice = booking.servicePrice !== null && booking.servicePrice !== '' && Number.isFinite(priceValue);
+            const priceLabel = hasPrice ? formatRub(priceValue) : '—';
+            const metaLabel = [durationLabel, priceLabel].filter((item) => item && item !== '—').join(' · ');
             serviceCell.innerHTML = `
               <div>${escapeHtml(booking.serviceName || '—')}</div>
-              <div class="muted">${booking.duration} мин · ${formatRub(booking.servicePrice)}</div>
+              <div class="muted">${metaLabel || '—'}</div>
             `;
 
             

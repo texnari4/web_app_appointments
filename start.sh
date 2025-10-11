@@ -230,6 +230,125 @@ function toIdOrGenerate(value, prefix) {
   return candidate || generateId(prefix);
 }
 
+const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30);
+
+function excelSerialToDate(serial) {
+  if (!Number.isFinite(serial)) return null;
+  const wholeDays = Math.floor(serial);
+  const fractional = serial - wholeDays;
+  const ms = Math.round(serial * 86400000);
+  const date = new Date(EXCEL_EPOCH_MS + ms);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date;
+}
+
+function normalizeSheetDate(value, fallback = '') {
+  if (value == null || value === '') return fallback;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = excelSerialToDate(value);
+    return date ? date.toISOString().slice(0, 10) : fallback;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric) && trimmed !== '') {
+      const date = excelSerialToDate(numeric);
+      if (date) return date.toISOString().slice(0, 10);
+    }
+    const parsed = Date.parse(trimmed);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString().slice(0, 10);
+    }
+  }
+  return fallback;
+}
+
+function normalizeSheetTime(value, fallback = '') {
+  if (value == null || value === '') return fallback;
+
+  const formatMinutes = (minutesTotal) => {
+    const minutes = ((minutesTotal % (24 * 60)) + (24 * 60)) % (24 * 60);
+    return minutesToTime(minutes);
+  };
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const fractional = value % 1;
+    const minutes = Math.round(((fractional < 0 ? fractional + 1 : fractional)) * 24 * 60);
+    return formatMinutes(minutes);
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+      return trimmed.slice(0, 5);
+    }
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric) && trimmed !== '') {
+      return normalizeSheetTime(numeric, fallback);
+    }
+    const parsed = Date.parse(trimmed);
+    if (!Number.isNaN(parsed)) {
+      const date = new Date(parsed);
+      const minutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+      return formatMinutes(minutes);
+    }
+  }
+
+  return fallback;
+}
+
+function normalizeScheduleTimes(schedule) {
+  if (!schedule || typeof schedule !== 'object') return schedule;
+  const clone = { ...schedule };
+
+  if (clone.type === 'weekly' && clone.weekly && typeof clone.weekly === 'object') {
+    clone.weekly = { ...clone.weekly };
+    clone.weekly.start = normalizeSheetTime(clone.weekly.start, clone.weekly.start || '09:00');
+    clone.weekly.end = normalizeSheetTime(clone.weekly.end, clone.weekly.end || '21:00');
+    clone.weekly.days = Array.isArray(clone.weekly.days)
+      ? clone.weekly.days
+          .map((d) => Number(d))
+          .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+      : [];
+  }
+
+  if (clone.type === 'shift' && clone.shift && typeof clone.shift === 'object') {
+    clone.shift = { ...clone.shift };
+    clone.shift.start = normalizeSheetTime(clone.shift.start, clone.shift.start || '09:00');
+    clone.shift.end = normalizeSheetTime(clone.shift.end, clone.shift.end || '21:00');
+    if (clone.shift.workDays != null) {
+      const wd = Number(clone.shift.workDays);
+      if (Number.isFinite(wd)) clone.shift.workDays = wd;
+    }
+    if (clone.shift.restDays != null) {
+      const rd = Number(clone.shift.restDays);
+      if (Number.isFinite(rd)) clone.shift.restDays = rd;
+    }
+    if (clone.shift.anchorDate) {
+      clone.shift.anchorDate = normalizeSheetDate(clone.shift.anchorDate, clone.shift.anchorDate);
+    }
+  }
+
+  if (clone.type === 'custom' && clone.custom && Array.isArray(clone.custom.days)) {
+    clone.custom = {
+      ...clone.custom,
+      days: clone.custom.days.map((day) => {
+        if (!day || typeof day !== 'object') return day;
+        const next = { ...day };
+        next.start = normalizeSheetTime(next.start, next.start || '09:00');
+        next.end = normalizeSheetTime(next.end, next.end || '21:00');
+        if (next.date) next.date = normalizeSheetDate(next.date, next.date);
+        return next;
+      })
+    };
+  }
+
+  return clone;
+}
+
 function buildScheduleSnapshots(masters) {
   const unique = new Map();
   masters.forEach((master) => {
@@ -260,8 +379,21 @@ function syncSchedulesSnapshot(masters) {
 }
 
 function persistMasters(masters) {
-  writeJSON(mastersFile, masters);
-  syncSchedulesSnapshot(masters);
+  const normalized = Array.isArray(masters)
+    ? masters.map((master) => {
+        if (!master || typeof master !== 'object') return master;
+        const next = { ...master };
+        if (next.schedule && typeof next.schedule === 'object') {
+          next.schedule = normalizeScheduleTimes(next.schedule);
+          next.scheduleId = next.schedule?.id || null;
+        } else {
+          next.scheduleId = next.scheduleId ?? null;
+        }
+        return next;
+      })
+    : [];
+  writeJSON(mastersFile, normalized);
+  syncSchedulesSnapshot(normalized);
 }
 
 function normalizeIdentifiers() {
@@ -350,6 +482,7 @@ function normalizeIdentifiers() {
       if (ensured && ensured !== master.schedule) {
         master.schedule = ensured;
       }
+      master.schedule = normalizeScheduleTimes(master.schedule);
       master.scheduleId = master.schedule?.id || null;
     } else {
       master.schedule = null;
@@ -382,6 +515,18 @@ function normalizeIdentifiers() {
     const mappedMaster = mapToKnownId(masterMap, booking.masterId ?? null);
     if (mappedMaster !== booking.masterId) {
       booking.masterId = mappedMaster;
+      bookingsChanged = true;
+    }
+
+    const normalizedDate = normalizeSheetDate(booking.date, booking.date || '');
+    if (normalizedDate && normalizedDate !== booking.date) {
+      booking.date = normalizedDate;
+      bookingsChanged = true;
+    }
+
+    const normalizedTime = normalizeSheetTime(booking.startTime, booking.startTime || '');
+    if (normalizedTime && normalizedTime !== booking.startTime) {
+      booking.startTime = normalizedTime;
       bookingsChanged = true;
     }
   });
@@ -490,8 +635,9 @@ async function restoreFromGoogleSheetsIfEmpty() {
             if (!schedule.id) {
               schedule.id = incomingScheduleId || null;
             }
+            schedule = normalizeScheduleTimes(schedule);
           } else if (incomingScheduleId) {
-            schedule = { id: incomingScheduleId, type: null };
+            schedule = normalizeScheduleTimes({ id: incomingScheduleId, type: null });
           }
 
           return {
@@ -505,13 +651,13 @@ async function restoreFromGoogleSheetsIfEmpty() {
             description: r.description || '',
             schedule,
             scheduleId: schedule?.id || null,
-            serviceIds: String(r.serviceIds || '')
-              .split(',')
-              .map((x) => {
-                const trimmed = x.trim();
-                return trimmed ? sanitizeIdCandidate(trimmed) || trimmed : null;
-              })
-              .filter(Boolean)
+            serviceIds: normalizeServiceIdList(
+              String(r.serviceIds || '')
+                .split(',')
+                .map((x) => (x || '').trim())
+                .filter(Boolean),
+              null
+            )
           };
         });
       if (mastersArr.length) persistMasters(mastersArr);
@@ -536,8 +682,8 @@ async function restoreFromGoogleSheetsIfEmpty() {
             const raw = String(r.masterId ?? '').trim();
             return raw ? sanitizeIdCandidate(raw) || raw : null;
           })(),
-          date: r.date || '',
-          startTime: r.startTime || '',
+          date: normalizeSheetDate(r.date, ''),
+          startTime: normalizeSheetTime(r.startTime, ''),
           duration: Number(r.duration) || null
         }));
       if (bookingsArr.length) writeJSON(bookingsFile, bookingsArr);
@@ -1006,8 +1152,10 @@ function validateBookingPayload(payload, services) {
 
   const clientName = String(payload.clientName ?? '').trim();
   const clientPhone = String(payload.clientPhone ?? '').trim();
-  const date = String(payload.date ?? '').trim();
-  const startTime = String(payload.startTime ?? '').trim();
+  const rawDate = String(payload.date ?? '').trim();
+  const rawStartTime = String(payload.startTime ?? '').trim();
+  const date = normalizeSheetDate(rawDate, rawDate);
+  const startTime = normalizeSheetTime(rawStartTime, rawStartTime);
   const serviceId = payload.serviceId == null || payload.serviceId === '' ? '' : String(payload.serviceId).trim();
   const masterId = payload.masterId == null || payload.masterId === '' ? null : String(payload.masterId).trim();
 
@@ -1056,6 +1204,8 @@ function validateBookingPayload(payload, services) {
   }
 
   payload.duration = normalizedDuration;
+  payload.date = date;
+  payload.startTime = startTime;
   payload.serviceId = serviceId;
   if (masterId) {
     payload.masterId = masterId;
@@ -2003,6 +2153,7 @@ if (pathname.startsWith('/api/')) {
         ? JSON.parse(JSON.stringify(payload.schedule))
         : null;
       const schedule = scheduleInput ? ensureScheduleHasId(scheduleInput, scheduleMap) : null;
+      const normalizedSchedule = schedule ? normalizeScheduleTimes(schedule) : null;
 
       const serviceIds = normalizeServiceIdList(payload.serviceIds, serviceIdSet);
 
@@ -2012,8 +2163,8 @@ if (pathname.startsWith('/api/')) {
         specialties: Array.isArray(payload.specialties) ? payload.specialties.map((s) => String(s).trim()).filter(Boolean) : [],
         photoUrl: payload.photoUrl ? String(payload.photoUrl) : null,
         description: String(payload.description ?? ''),
-        schedule,
-        scheduleId: schedule?.id || null,
+        schedule: normalizedSchedule,
+        scheduleId: normalizedSchedule?.id || null,
         serviceIds
       };
 
@@ -2088,6 +2239,7 @@ if (pathname.startsWith('/api/')) {
       }
       if (nextSchedule) {
         ensureScheduleHasId(nextSchedule, scheduleMap);
+        nextSchedule = normalizeScheduleTimes(nextSchedule);
       }
       const nextScheduleId = nextSchedule?.id || null;
 
@@ -2295,26 +2447,27 @@ if (pathname.startsWith('/api/')) {
             const id = toId(m.id, 'mst');
             const name = toStr(m.name).trim();
             const specialties = toStr(m.specialties,'').split(',').map(x=>x.trim()).filter(Boolean);
-            const serviceIds = toStr(m.serviceIds,'').split(',')
-              .map((x)=>{
-                const trimmed = x.trim();
-                return trimmed ? sanitizeIdCandidate(trimmed) || trimmed : null;
-              })
-              .filter(Boolean);
+            const serviceIds = normalizeServiceIdList(
+              toStr(m.serviceIds,'').split(',').map(x => x.trim()).filter(Boolean),
+              null
+            );
             let schedule = null; try { schedule = m.schedule || (m.schedule_json ? JSON.parse(m.schedule_json) : null); } catch {}
             const scheduleId = toMaybeId(m.scheduleId);
             if (schedule && typeof schedule === 'object') {
               if (!schedule.id) schedule.id = scheduleId || null;
+              schedule = normalizeScheduleTimes(schedule);
             } else if (scheduleId) {
-              schedule = { id: scheduleId, type: null };
+              schedule = normalizeScheduleTimes({ id: scheduleId, type: null });
             }
             return { id, name, specialties, photoUrl: m.photoUrl||null, description: toStr(m.description,''), schedule, scheduleId: schedule?.id || null, serviceIds };
           }
           function normBooking(b){
             // Require minimal fields: date, startTime, serviceId
-            const date = toStr(b.date).trim();
-            const startTime = toStr(b.startTime).trim();
+            const dateRaw = toStr(b.date).trim();
+            const startRaw = toStr(b.startTime).trim();
             const serviceId = toMaybeId(b.serviceId);
+            const date = normalizeSheetDate(dateRaw, dateRaw);
+            const startTime = normalizeSheetTime(startRaw, startRaw);
             if (!date || !startTime || !serviceId) return null;
             const id = toId(b.id, 'bkg');
             const status = toStr(b.status||'pending');
@@ -2450,8 +2603,9 @@ if (pathname.startsWith('/api/')) {
               if (!schedule.id) {
                 schedule.id = incomingScheduleId || null;
               }
+              schedule = normalizeScheduleTimes(schedule);
             } else if (incomingScheduleId) {
-              schedule = { id: incomingScheduleId, type: null };
+              schedule = normalizeScheduleTimes({ id: incomingScheduleId, type: null });
             }
 
             return {
@@ -2465,13 +2619,13 @@ if (pathname.startsWith('/api/')) {
               description: r.description || '',
               schedule,
               scheduleId: schedule?.id || null,
-              serviceIds: String(r.serviceIds || '')
-                .split(',')
-                .map((x) => {
-                  const trimmed = x.trim();
-                  return trimmed ? sanitizeIdCandidate(trimmed) || trimmed : null;
-                })
-                .filter(Boolean)
+              serviceIds: normalizeServiceIdList(
+                String(r.serviceIds || '')
+                  .split(',')
+                  .map((x) => (x || '').trim())
+                  .filter(Boolean),
+                null
+              )
             };
           });
         persistMasters(masters);
@@ -2496,8 +2650,8 @@ if (pathname.startsWith('/api/')) {
               const raw = String(r.masterId ?? '').trim();
               return raw ? sanitizeIdCandidate(raw) || raw : null;
             })(),
-            date: r.date || '',
-            startTime: r.startTime || '',
+            date: normalizeSheetDate(r.date, ''),
+            startTime: normalizeSheetTime(r.startTime, ''),
             duration: Number(r.duration) || null
           }));
         writeJSON(bookingsFile, bookings);
