@@ -351,9 +351,10 @@
     <nav class="tabs">
       <button data-tab="bookings" class="active">Записи</button>
       <button data-tab="services">Услуги</button>
-  <button data-tab="masters">Мастера</button>
+      <button data-tab="masters">Мастера</button>
       <button data-tab="groups">Группы</button>
       <button data-tab="admins">Админ</button>
+      <button data-tab="status">Status</button>
     </nav>
 
     <section class="tab-panel active" data-tab-panel="bookings">
@@ -649,6 +650,16 @@
         <tbody></tbody>
       </table>
     </section>
+
+    <section class="tab-panel" data-tab-panel="status">
+      <h2>Состояние системы</h2>
+      <div class="form-grid">
+        <div>
+          <button type="button" class="secondary-btn" id="statusRefreshBtn">Проверить сейчас</button>
+          <pre id="statusOutput" style="margin-top:12px; white-space:pre-wrap; background:#0f172a; color:#e5e7eb; padding:14px 16px; border-radius:12px; overflow:auto; max-height:320px;">—</pre>
+        </div>
+      </div>
+    </section>
   </main>
 
   <div class="banner" id="banner" hidden></div>
@@ -697,6 +708,8 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const gsImportBtn = document.getElementById('gsImportBtn');
       const gsCsvExportBtn = document.getElementById('gsCsvExportBtn');
       const gsCsvImportBtn = document.getElementById('gsCsvImportBtn');
+      const statusRefreshBtn = document.getElementById('statusRefreshBtn');
+      const statusOutput = document.getElementById('statusOutput');
 
       const tabsNav = document.querySelectorAll('nav.tabs button');
       const tabPanels = document.querySelectorAll('.tab-panel');
@@ -754,6 +767,18 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         return response;
       };
 
+      const refreshStatus = async () => {
+        try {
+          const resp = await apiFetch('/api/health');
+          if (!resp.ok) { await handleError(resp); return; }
+          const data = await resp.json();
+          statusOutput.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          console.error(e);
+          statusOutput.textContent = 'Не удалось получить состояние системы';
+          showBanner('Ошибка получения состояния системы', 'error');
+        }
+      };
       const handleError = async (response) => {
         if (response.status === 401 || response.status === 403) {
           return;
@@ -941,6 +966,9 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         tabPanels.forEach((panel) => {
           panel.classList.toggle('active', panel.dataset.tabPanel === tab);
         });
+        if (tab === 'status') {
+          refreshStatus();
+        }
       };
 
       tabsNav.forEach((button) => {
@@ -948,6 +976,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           switchTab(button.dataset.tab);
         });
       });
+      statusRefreshBtn?.addEventListener('click', refreshStatus);
 
       const BOOKING_STATUS_LABELS = {
         pending: 'В ожидании',
