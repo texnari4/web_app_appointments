@@ -12,16 +12,95 @@
 
     body {
       margin: 0;
-      padding: 32px;
       background: #f4f6fb;
       color: #0f172a;
     }
 
+    .app-shell {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      padding: 32px 28px;
+      background: #ffffff;
+      border-right: 1px solid rgba(209, 213, 219, 0.45);
+      backdrop-filter: blur(14px);
+    }
+
+    .sidebar .brand {
+      display: grid;
+      gap: 6px;
+    }
+
+    .sidebar .brand span {
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+
+    .sidebar .brand strong {
+      font-size: clamp(22px, 3vw, 26px);
+      letter-spacing: -0.01em;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      display: grid;
+      gap: 16px;
+      font-size: 13px;
+      color: #64748b;
+    }
+
     main {
-      max-width: 1100px;
-      margin: 0 auto;
+      padding: 40px;
       display: grid;
       gap: 28px;
+      align-content: start;
+    }
+
+    .page-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .page-head h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 40px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .page-head p {
+      margin: 4px 0 0;
+      color: #64748b;
+      font-size: 15px;
+    }
+
+    .page-head .status-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      background: #e7ecf7;
+      color: #0f172a;
     }
 
     h1 {
@@ -82,20 +161,24 @@
 
     nav.tabs {
       display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
+      flex-direction: column;
+      gap: 8px;
     }
 
     nav.tabs button {
       border: none;
       border-radius: 12px;
-      padding: 10px 18px;
+      padding: 11px 18px;
       font-size: 15px;
       font-weight: 600;
       background: #e7ecf7;
       color: #0f172a;
       cursor: pointer;
       transition: transform 0.15s ease, box-shadow 0.2s ease;
+      justify-content: flex-start;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
     }
 
     nav.tabs button.active {
@@ -118,9 +201,197 @@
       display: grid;
     }
 
+    .tab-wrapper {
+      display: grid;
+      gap: 28px;
+    }
+
+    .panel-grid,
+    .cards-stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel-grid.two {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      align-items: start;
+    }
+
+    .info-card {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 18px;
+      padding: 20px 22px;
+      border: 1px solid rgba(209, 213, 219, 0.4);
+      box-shadow: 0 24px 44px -32px rgba(15, 23, 42, 0.25);
+      display: grid;
+      gap: 10px;
+    }
+
+    .info-card h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .info-card p {
+      margin: 0;
+      color: #475569;
+      font-size: 14px;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .toggle-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #475569;
+    }
+
+    .token-output {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(148, 163, 184, 0.12);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 13px;
+      color: #0f172a;
+      word-break: break-all;
+    }
+
+    .metrics-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .metrics-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #475569;
+      font-size: 14px;
+    }
+
+    .metrics-list strong {
+      font-size: 18px;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+
+    .schedule-board {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .schedule-calendar {
+      min-height: 320px;
+      border-radius: 18px;
+      border: 1px solid rgba(209, 213, 219, 0.4);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #475569;
+      box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.45);
+    }
+
+    .schedule-sidebar {
+      display: grid;
+      gap: 16px;
+    }
+
+    table.compact th,
+    table.compact td {
+      font-size: 13px;
+    }
+
+    .tags-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: #475569;
+      font-size: 13px;
+    }
+
+    .tags-cloud span {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.16);
+    }
+
+    .chart-placeholder {
+      min-height: 220px;
+      border-radius: 16px;
+      border: 1px dashed rgba(148, 163, 184, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 18px;
+      color: #475569;
+    }
+
+    .log-view {
+      white-space: pre-wrap;
+      background: #0f172a;
+      color: #e5e7eb;
+      padding: 14px 16px;
+      border-radius: 12px;
+      max-height: 280px;
+      overflow: auto;
+      font-size: 13px;
+    }
+
+    .feature-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+      color: #475569;
+      font-size: 14px;
+    }
+
     .form-grid {
       display: grid;
       gap: 16px;
+    }
+
+    .filters-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .filters-row label {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .section-header h2 {
+      margin: 0;
+      font-size: 22px;
     }
 
     .form-grid label {
@@ -328,9 +599,49 @@
   .icon-btn.danger  { background: linear-gradient(135deg, #ff9eb5, #ff6b81); color:#fff; border-color: transparent }
   .icon-btn svg { width:18px; height:18px }
 
+    @media (max-width: 1200px) {
+      .app-shell {
+        grid-template-columns: 240px 1fr;
+      }
+
+      main {
+        padding: 32px;
+      }
+    }
+
     @media (max-width: 960px) {
-      body {
-        padding: 22px;
+      .app-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        z-index: 12;
+        flex-direction: row;
+        align-items: center;
+        gap: 18px;
+        padding: 18px 22px;
+        border-right: none;
+        border-bottom: 1px solid rgba(209, 213, 219, 0.45);
+        overflow-x: auto;
+      }
+
+      .sidebar .brand {
+        min-width: 180px;
+      }
+
+      nav.tabs {
+        flex-direction: row;
+        gap: 8px;
+      }
+
+      nav.tabs button {
+        white-space: nowrap;
+      }
+
+      main {
+        padding: 24px;
       }
 
       section {
@@ -341,38 +652,116 @@
         flex-direction: column;
         width: auto;
       }
+
+      .schedule-board {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Панель администратора</h1>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span>Beauty appointments</span>
+        <strong>Админ-панель</strong>
+      </div>
+      <nav class="tabs">
+        <button data-tab="bookings" class="active">Записи</button>
+        <button data-tab="masters">Мастера</button>
+        <button data-tab="schedules">Графики</button>
+        <button data-tab="services">Услуги</button>
+        <button data-tab="clients">Клиенты и аналитика</button>
+        <button data-tab="backup">Резервное копирование</button>
+        <button data-tab="integrations">Интеграции</button>
+        <button data-tab="admins">Админ</button>
+        <button data-tab="status">Status</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div>Разделы настраиваются под роли: owner → admin → manager → master.</div>
+        <div class="pill" id="sidebarActiveRole">Роль: —</div>
+      </div>
+    </aside>
+    <main>
+      <header class="page-head">
+        <div>
+          <h1>Панель администратора</h1>
+          <p>Управляйте расписанием салона, клиентами и интеграциями из одной точки.</p>
+        </div>
+        <div class="status-pills">
+          <span class="pill" id="pillBookings">Записи • —</span>
+          <span class="pill" id="pillMasters">Мастера • —</span>
+          <span class="pill" id="pillStatus">Status • —</span>
+        </div>
+      </header>
 
-    <nav class="tabs">
-      <button data-tab="bookings" class="active">Записи</button>
-      <button data-tab="services">Услуги</button>
-      <button data-tab="masters">Мастера</button>
-      <button data-tab="groups">Группы</button>
-      <button data-tab="admins">Админ</button>
-      <button data-tab="status">Status</button>
-    </nav>
+      <div class="tab-wrapper">
 
     <section class="tab-panel active" data-tab-panel="bookings">
       <div class="section-header">
         <h2>Записи клиентов</h2>
-        <label>
-          Статус
-          <select id="bookingStatusFilter">
-            <option value="all">Все</option>
-            <option value="pending" selected>В ожидании</option>
-            <option value="confirmed">Подтверждённые</option>
-            <option value="cancelled">Отменённые</option>
-          </select>
-        </label>
+        <div class="filters-row">
+          <label>
+            Статус
+            <select id="bookingStatusFilter">
+              <option value="all">Все</option>
+              <option value="pending" selected>В ожидании</option>
+              <option value="confirmed">Подтверждённые</option>
+              <option value="cancelled">Отменённые</option>
+            </select>
+          </label>
+          <label>
+            Мастер
+            <select id="bookingMasterFilter">
+              <option value="">Все мастера</option>
+            </select>
+          </label>
+          <label>
+            Услуга
+            <select id="bookingServiceFilter">
+              <option value="">Все услуги</option>
+            </select>
+          </label>
+          <label>
+            Источник
+            <select id="bookingSourceFilter">
+              <option value="">Любой</option>
+              <option value="web">Web</option>
+              <option value="tg">Telegram</option>
+              <option value="direct">Direct link</option>
+            </select>
+          </label>
+          <label>
+            С даты
+            <input type="date" id="bookingDateFrom" />
+          </label>
+          <label>
+            По дату
+            <input type="date" id="bookingDateTo" />
+          </label>
+          <label>
+            Поиск
+            <input type="search" id="bookingSearchInput" placeholder="Имя или телефон" />
+          </label>
+        </div>
+      </div>
+      <div class="button-row" style="margin-bottom:12px">
+        <button type="button" class="primary-btn" id="bookingCreateBtn">Создать запись</button>
+        <button type="button" class="secondary-btn" id="bookingMassConfirm">Массово подтвердить</button>
+        <button type="button" class="secondary-btn" id="bookingMassCancel">Массово отменить</button>
+        <button type="button" class="secondary-btn" id="bookingExportBtn">Экспорт</button>
       </div>
       <div class="warning-card" id="bookingsWarning" hidden>
         Добавьте свой Telegram ID в список администраторов, чтобы подтверждать и отменять записи.
       </div>
+      <section class="info-card">
+        <h3>Умные подсказки</h3>
+        <ul class="feature-list">
+          <li>Свободные ближайшие окна подсвечиваются при выборе мастера.</li>
+          <li>Пересечения с графиком и перерывами выделяются до сохранения.</li>
+          <li>Быстрые действия открывают диалог с клиентом и историю визитов.</li>
+        </ul>
+      </section>
       <table id="bookingsTable">
         <thead>
           <tr>
@@ -497,10 +886,95 @@
     <tbody></tbody>
   </table>
 </section>
-<section class="tab-panel" data-tab-panel="services">
-      <div class="form-grid">
-        <div>
-          <h2>Добавить услугу</h2>
+
+    <section class="tab-panel" data-tab-panel="schedules">
+      <div class="section-header">
+        <h2>Графики мастеров</h2>
+        <div class="filters-row">
+          <label>
+            Режим
+            <select id="scheduleViewSelect">
+              <option value="day">День</option>
+              <option value="week" selected>Неделя</option>
+              <option value="month">Месяц</option>
+              <option value="resource">Ресурсный</option>
+            </select>
+          </label>
+          <label>
+            Мастер
+            <select id="scheduleMasterFilter">
+              <option value="">Все мастера</option>
+            </select>
+          </label>
+          <label>
+            Диапазон
+            <input type="date" id="scheduleFrom" />
+          </label>
+          <label>
+            &nbsp;
+            <input type="date" id="scheduleTo" />
+          </label>
+          <button type="button" class="secondary-btn" id="scheduleApply">Применить</button>
+        </div>
+      </div>
+
+      <div class="panel-grid two">
+        <section class="info-card">
+          <h3>Статистика загрузки</h3>
+          <ul class="metrics-list">
+            <li><span>Рабочих слотов</span><strong id="metricsSlots">—</strong></li>
+            <li><span>Свободных слотов</span><strong id="metricsFreeSlots">—</strong></li>
+            <li><span>Конфликтов</span><strong id="metricsConflicts">—</strong></li>
+          </ul>
+          <button type="button" class="secondary-btn" id="scheduleTemplateBtn">Шаблоны расписаний</button>
+        </section>
+
+        <section class="info-card">
+          <h3>Исключения и спец-дни</h3>
+          <p class="muted">Добавляйте выходные, сокращённые смены и временные слоты. Все изменения логируются.</p>
+          <button type="button" class="secondary-btn" id="scheduleAddException">Добавить исключение</button>
+          <table class="compact" id="scheduleExceptionsTable">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Мастер</th>
+                <th>Комментарий</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="empty-row"><td colspan="3">Нет исключений</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <div class="schedule-board">
+        <div class="schedule-calendar" id="scheduleCalendar">Календарь по мастерам появится здесь (неделя/месяц/ресурсный режимы).</div>
+        <aside class="schedule-sidebar">
+          <section class="info-card">
+            <h3>Грядущие смены</h3>
+            <ul class="muted" id="scheduleUpcoming">
+              <li>—</li>
+            </ul>
+          </section>
+          <section class="info-card">
+            <h3>Проверка занятости</h3>
+            <p class="muted">При конфликте слота система подсветит запись в «Записях» и предложит свободные альтернативы.</p>
+            <button type="button" class="secondary-btn" id="scheduleCheckConflicts">Проверить конфликты</button>
+          </section>
+        </aside>
+      </div>
+    </section>
+    <section class="tab-panel" data-tab-panel="services">
+      <div class="section-header">
+        <h2>Услуги и категории</h2>
+        <p class="muted">Глобальный каталог услуг и персональные прайсы мастеров.</p>
+      </div>
+
+      <div class="panel-grid two">
+        <section class="info-card">
+          <h3>Добавить услугу</h3>
+          <p>Создайте новую услугу, задайте длительность и стоимость. Назначить мастерам можно после сохранения.</p>
           <form id="serviceForm" class="form-grid">
             <label>
               Название
@@ -519,21 +993,43 @@
               <input type="number" name="duration" min="30" step="5" required />
             </label>
             <label>
-              Группа
+              Категория
               <select name="groupId">
-                <option value="">Без группы</option>
+                <option value="">Без категории</option>
               </select>
             </label>
             <button type="submit" class="primary-btn">Добавить услугу</button>
           </form>
-        </div>
+        </section>
+
+        <section class="info-card">
+          <h3>Категории услуг</h3>
+          <p> Используйте категории, чтобы группировать услуги в клиентском каталоге и фильтрах мастеров.</p>
+          <form id="groupForm" class="form-grid">
+            <label>
+              Название категории
+              <input type="text" name="name" placeholder="Например: Косметология" required />
+            </label>
+            <button type="submit" class="secondary-btn">Создать категорию</button>
+          </form>
+          <table id="groupsTable" style="margin-top:12px">
+            <thead>
+              <tr>
+                <th>Название</th>
+                <th class="table-actions">Действия</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
       </div>
+
       <div class="section-header" style="margin-top:12px;">
         <h2>Список услуг</h2>
         <label>
-          Фильтр по группе
+          Фильтр по категории
           <select id="groupFilter">
-            <option value="">Все группы</option>
+            <option value="">Все категории</option>
           </select>
         </label>
       </div>
@@ -544,7 +1040,7 @@
             <th>Описание</th>
             <th>Цена, ₽</th>
             <th>Длительность</th>
-            <th>Группа</th>
+            <th>Категория</th>
             <th class="table-actions">Действия</th>
           </tr>
         </thead>
@@ -552,29 +1048,203 @@
       </table>
     </section>
 
-    <section class="tab-panel" data-tab-panel="groups">
-      <div class="form-grid">
-        <div>
-          <h2>Добавить группу</h2>
-          <form id="groupForm" class="form-grid">
-            <label>
-              Название группы
-              <input type="text" name="name" placeholder="Например: Косметология" required />
-            </label>
-            <button type="submit" class="secondary-btn">Создать группу</button>
-          </form>
+    <section class="tab-panel" data-tab-panel="clients">
+      <div class="section-header">
+        <h2>Клиенты и аналитика</h2>
+        <div class="filters-row">
+          <label>
+            Период
+            <select id="analyticsPeriod">
+              <option value="7d">Неделя</option>
+              <option value="30d" selected>30 дней</option>
+              <option value="90d">Квартал</option>
+              <option value="365d">Год</option>
+            </select>
+          </label>
+          <label>
+            Мастер
+            <select id="analyticsMasterFilter">
+              <option value="">Все</option>
+            </select>
+          </label>
+          <label>
+            Услуга
+            <select id="analyticsServiceFilter">
+              <option value="">Все</option>
+            </select>
+          </label>
+          <button type="button" class="secondary-btn" id="analyticsExportCsv">Экспорт CSV</button>
         </div>
       </div>
-      <h2>Все группы</h2>
-      <table id="groupsTable">
-        <thead>
-          <tr>
-            <th>Название</th>
-            <th class="table-actions">Действия</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+
+      <div class="panel-grid two">
+        <section class="info-card">
+          <h3>Основные показатели</h3>
+          <ul class="metrics-list">
+            <li><span>Записей</span><strong id="analyticsBookings">—</strong></li>
+            <li><span>Новых клиентов</span><strong id="analyticsNewClients">—</strong></li>
+            <li><span>Выручка</span><strong id="analyticsRevenue">—</strong></li>
+          </ul>
+        </section>
+        <section class="info-card">
+          <h3>Распределение</h3>
+          <p class="muted">Популярные услуги, мастера и источники записей за выбранный период.</p>
+          <div class="tags-cloud" id="analyticsDistribution">—</div>
+        </section>
+      </div>
+
+      <section class="info-card">
+        <h3>Список клиентов</h3>
+        <p class="muted">Статусы, история визитов и LTV доступны на карточке клиента.</p>
+        <table id="clientsTable">
+          <thead>
+            <tr>
+              <th>Клиент</th>
+              <th>Контакты</th>
+              <th>Визиты</th>
+              <th>LTV</th>
+              <th>Последний визит</th>
+              <th>Метки</th>
+              <th class="table-actions">Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="empty-row"><td colspan="7">Данные появятся после подключения /api/clients</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <div class="panel-grid two">
+        <section class="info-card">
+          <h3>Аналитика по услугам</h3>
+          <div class="chart-placeholder" id="analyticsServicesChart">Графики загрузки услуг появятся после настройки бэкенда.</div>
+        </section>
+        <section class="info-card">
+          <h3>Retention и отмены</h3>
+          <div class="chart-placeholder" id="analyticsRetentionChart">Кривые удержания и показатели отмен доступны в API аналитики.</div>
+        </section>
+      </div>
+    </section>
+
+    <section class="tab-panel" data-tab-panel="backup">
+      <div class="section-header">
+        <h2>Резервное копирование и синхронизация</h2>
+        <p class="muted">Экспорт/импорт данных салона и обмен с Google Sheets.</p>
+      </div>
+
+      <div class="panel-grid two">
+        <section class="info-card">
+          <h3>ZIP архив</h3>
+          <p>Снимите полную копию данных или восстановитесь из готового архива. Доступно только администраторам.</p>
+          <div class="button-row">
+            <button type="button" class="secondary-btn" id="gsExportBtn">Экспорт ZIP</button>
+            <button type="button" class="primary-btn" id="gsImportBtn">Импорт ZIP</button>
+          </div>
+          <small class="muted">Последний бэкап: <span id="lastBackupAt">—</span></small>
+        </section>
+
+        <section class="info-card">
+          <h3>Google Sheets</h3>
+          <p>Синхронизируйте каталог услуг, мастеров и записи с Таблицами Google.</p>
+          <div class="button-row">
+            <button type="button" class="secondary-btn" id="gsCsvExportBtn" title="Выгрузить данные для Google Sheets">Экспорт в Sheets</button>
+            <button type="button" class="primary-btn" id="gsCsvImportBtn" title="Загрузить данные из Google Sheets (CSV/ZIP)">Импорт из Sheets</button>
+          </div>
+          <small class="muted">При импорте локальные данные полностью перезаписываются.</small>
+        </section>
+      </div>
+
+      <section class="info-card">
+        <h3>История бэкапов</h3>
+        <table id="backupHistoryTable" class="compact">
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Тип</th>
+              <th>Статус</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="empty-row"><td colspan="3">Журнал появится после первого бэкапа</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="info-card">
+        <h3>Журнал синхронизации</h3>
+        <pre class="log-view" id="backupSyncLog">Подключите Google Sheets, чтобы видеть отчёт о синхронизации.</pre>
+      </section>
+    </section>
+
+    <section class="tab-panel" data-tab-panel="integrations">
+      <div class="section-header">
+        <h2>Интеграции</h2>
+        <p class="muted">Настройте обмен данными и уведомления с внешними сервисами.</p>
+      </div>
+
+      <div class="panel-grid two">
+        <section class="info-card">
+          <h3>Telegram</h3>
+          <p>Уведомления для мастеров и клиентов, выдача токенов и рассылки через бота.</p>
+          <label class="toggle-row">
+            <input type="checkbox" id="toggleTelegram" />
+            <span>Включить интеграцию</span>
+          </label>
+          <div class="button-row">
+            <button type="button" class="secondary-btn" id="telegramBotSettings">Настроить бота</button>
+            <button type="button" class="secondary-btn" id="telegramBroadcast">Рассылка</button>
+          </div>
+          <small class="muted">Webhook: <code id="telegramWebhookUrl">—</code></small>
+        </section>
+
+        <section class="info-card">
+          <h3>Google Sheets</h3>
+          <p>Синхронизация с таблицами для аналитики и ручного редактирования данных.</p>
+          <label class="toggle-row">
+            <input type="checkbox" id="toggleSheets" />
+            <span>Автосинхронизация каждые 15 минут</span>
+          </label>
+          <div class="button-row">
+            <button type="button" class="secondary-btn" id="sheetsConnect">Подключить</button>
+            <button type="button" class="secondary-btn" id="sheetsSyncNow">Синхронизировать сейчас</button>
+          </div>
+          <small class="muted">Последняя синхронизация: <span id="sheetsSyncedAt">—</span></small>
+        </section>
+
+        <section class="info-card">
+          <h3>Google Calendar</h3>
+          <p>Двусторонняя синхронизация расписаний мастеров и событий в календарях.</p>
+          <label class="toggle-row">
+            <input type="checkbox" id="toggleCalendar" />
+            <span>Отправлять записи в календарь</span>
+          </label>
+          <div class="button-row">
+            <button type="button" class="secondary-btn" id="calendarConnect">Подключить</button>
+            <button type="button" class="secondary-btn" id="calendarSyncNow">Синхронизировать</button>
+          </div>
+          <small class="muted">Проверка учётных данных и прав доступа — через сервисный аккаунт.</small>
+        </section>
+
+        <section class="info-card">
+          <h3>Webhook / API</h3>
+          <p>Подключите CRM, CDP или аналитику через Webhook API.</p>
+          <label class="toggle-row">
+            <input type="checkbox" id="toggleWebhook" />
+            <span>Активировать API</span>
+          </label>
+          <div class="form-grid" style="margin-top:8px">
+            <label>
+              URL Webhook
+              <input type="url" id="webhookUrl" placeholder="https://example.com/webhook" />
+            </label>
+            <label>
+              Секретный ключ
+              <input type="text" id="webhookSecret" placeholder="******" />
+            </label>
+          </div>
+          <button type="button" class="secondary-btn" id="webhookTest">Отправить тестовый запрос</button>
+        </section>
+      </div>
     </section>
 
     <section class="tab-panel" data-tab-panel="admins">
@@ -591,20 +1261,44 @@
           <button type="button" class="secondary-btn" id="clearManualIdBtn">Сбросить</button>
         </div>
       </section>
-      <div class="form-grid">
-        <div>
-          <h2 style="display:flex;align-items:center;gap:10px;margin:0">
-            <span id="backupTitle" style="text-decoration:none;cursor:default;">Бэкап</span>
-            <span class="muted" id="backupHint" style="font-size:12px">Экспорт/импорт ZIP архива данных</span>
-          </h2>
-          <div class="auth-dev" style="margin-top:12px">
-            <button type="button" class="secondary-btn" id="gsExportBtn">Экспорт ZIP</button>
-            <button type="button" class="primary-btn" id="gsImportBtn">Импорт ZIP</button>
-            <button type="button" class="secondary-btn" id="gsCsvExportBtn" title="Выгрузить данные для Google Sheets">GS_exp</button>
-            <button type="button" class="primary-btn" id="gsCsvImportBtn"  title="Загрузить данные из Google Sheets (CSV/ZIP)">GS_imp</button>
+      <div class="panel-grid two">
+        <section class="info-card">
+          <h3>Токены и ссылки</h3>
+          <p>Генерируйте доступы для кабинетов `/manager`, клиентских ссылок и интеграций API.</p>
+          <div class="form-grid">
+            <label>
+              Тип токена
+              <select id="tokenTypeSelect">
+                <option value="manager">Менеджер</option>
+                <option value="master">Мастер</option>
+                <option value="client">Клиент</option>
+                <option value="admin">Администратор</option>
+                <option value="api">API</option>
+              </select>
+            </label>
+            <label>
+              Мастер / сущность
+              <select id="tokenMasterSelect">
+                <option value="">Не выбрано</option>
+              </select>
+            </label>
           </div>
-          <small class="muted">Доступ только для администраторов.</small>
-        </div>
+          <div class="button-row">
+            <button type="button" class="primary-btn" id="tokenGenerateBtn">Сгенерировать токен</button>
+            <button type="button" class="secondary-btn" id="tokenDeactivateBtn">Деактивировать</button>
+          </div>
+          <div class="token-output" id="tokenOutput">—</div>
+        </section>
+
+        <section class="info-card">
+          <h3>Аудит действий</h3>
+          <p class="muted">Каждое изменение данных, импорт и выдача токенов фиксируются в журнале.</p>
+          <div class="button-row">
+            <button type="button" class="secondary-btn" id="auditRefresh">Обновить</button>
+            <button type="button" class="secondary-btn" id="auditExport">Экспорт журнала</button>
+          </div>
+          <pre class="log-view" id="auditLog">Логи появятся после интеграции /api/audit.</pre>
+        </section>
       </div>
       <div class="form-grid">
         <div>
@@ -678,7 +1372,9 @@
         <pre id="logsOutput" style="white-space:pre-wrap; background:#0f172a; color:#e5e7eb; padding:14px 16px; border-radius:12px; overflow:auto; max-height:320px;">—</pre>
       </div>
     </section>
-  </main>
+      </div>
+    </main>
+  </div>
 
   <div class="banner" id="banner" hidden></div>
 
@@ -714,6 +1410,46 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const groupForm = document.getElementById('groupForm');
       const serviceFormGroupSelect = serviceForm.querySelector('select[name="groupId"]');
       const banner = document.getElementById('banner');
+
+      const scheduleMasterFilter = document.getElementById('scheduleMasterFilter');
+      const scheduleViewSelect = document.getElementById('scheduleViewSelect');
+      const scheduleApplyBtn = document.getElementById('scheduleApply');
+      const analyticsMasterFilter = document.getElementById('analyticsMasterFilter');
+      const analyticsServiceFilter = document.getElementById('analyticsServiceFilter');
+      const analyticsExportCsv = document.getElementById('analyticsExportCsv');
+      const bookingMasterFilter = document.getElementById('bookingMasterFilter');
+      const bookingServiceFilter = document.getElementById('bookingServiceFilter');
+      const bookingSourceFilter = document.getElementById('bookingSourceFilter');
+      const bookingDateFrom = document.getElementById('bookingDateFrom');
+      const bookingDateTo = document.getElementById('bookingDateTo');
+      const bookingSearchInput = document.getElementById('bookingSearchInput');
+      const bookingCreateBtn = document.getElementById('bookingCreateBtn');
+      const bookingMassConfirmBtn = document.getElementById('bookingMassConfirm');
+      const bookingMassCancelBtn = document.getElementById('bookingMassCancel');
+      const bookingExportBtn = document.getElementById('bookingExportBtn');
+      const pillBookings = document.getElementById('pillBookings');
+      const pillMasters = document.getElementById('pillMasters');
+      const pillStatus = document.getElementById('pillStatus');
+      const sidebarActiveRole = document.getElementById('sidebarActiveRole');
+      const lastBackupAt = document.getElementById('lastBackupAt');
+      const tokenMasterSelect = document.getElementById('tokenMasterSelect');
+      const tokenTypeSelect = document.getElementById('tokenTypeSelect');
+      const tokenGenerateBtn = document.getElementById('tokenGenerateBtn');
+      const tokenDeactivateBtn = document.getElementById('tokenDeactivateBtn');
+      const tokenOutput = document.getElementById('tokenOutput');
+      const auditRefreshBtn = document.getElementById('auditRefresh');
+      const auditExportBtn = document.getElementById('auditExport');
+      const auditLog = document.getElementById('auditLog');
+      const scheduleTemplateBtn = document.getElementById('scheduleTemplateBtn');
+      const scheduleAddExceptionBtn = document.getElementById('scheduleAddException');
+      const scheduleCheckConflictsBtn = document.getElementById('scheduleCheckConflicts');
+      const sheetsConnectBtn = document.getElementById('sheetsConnect');
+      const sheetsSyncNowBtn = document.getElementById('sheetsSyncNow');
+      const telegramBotSettingsBtn = document.getElementById('telegramBotSettings');
+      const telegramBroadcastBtn = document.getElementById('telegramBroadcast');
+      const calendarConnectBtn = document.getElementById('calendarConnect');
+      const calendarSyncNowBtn = document.getElementById('calendarSyncNow');
+      const webhookTestBtn = document.getElementById('webhookTest');
 
 
       const authStatus = document.getElementById('authStatus');
@@ -865,6 +1601,15 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           if (!resp.ok) { await handleError(resp); return; }
           const data = await resp.json();
           statusOutput.textContent = JSON.stringify(data, null, 2);
+          if (pillStatus) {
+            const label = data?.status || (data?.ok ? 'OK' : '—');
+            const version = data?.version ? ` v${data.version}` : '';
+            pillStatus.textContent = `Status • ${label}${version}`;
+          }
+          if (lastBackupAt) {
+            const last = data?.backup?.lastAt || data?.backup?.lastRunAt;
+            lastBackupAt.textContent = last ? new Date(last).toLocaleString('ru-RU') : '—';
+          }
         } catch (e) {
           console.error(e);
           statusOutput.textContent = 'Не удалось получить состояние системы';
@@ -907,6 +1652,9 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(a.href);
         showBanner('Экспортирован ZIP архив');
+        if (lastBackupAt) {
+          lastBackupAt.textContent = new Date().toLocaleString('ru-RU');
+        }
         refreshLogs();
       };
 
@@ -922,6 +1670,9 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           await refreshStatus();
           await refreshLogs();
           showBanner('Импорт завершён');
+          if (lastBackupAt) {
+            lastBackupAt.textContent = new Date().toLocaleString('ru-RU');
+          }
         };
         input.click();
       };
@@ -979,15 +1730,23 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           manualTelegramId.value = '';
           bookingsWarning.hidden = true;
           adminsWarning.hidden = true;
+          if (sidebarActiveRole) {
+            sidebarActiveRole.textContent = 'Роль: —';
+          }
           return;
         }
 
         manualTelegramId.value = authState.telegramId;
+        const roleLabelMap = { owner: 'Владелец', admin: 'Администратор', hostess: 'Хостес', hostes: 'Хостес', manager: 'Менеджер', master: 'Мастер' };
+        const roleLabel = roleLabelMap[authState.role] || 'Гость';
         if (authState.isAuthorized) {
-          const roleLabel = ({ owner: 'Владелец', admin: 'Администратор', hostes: 'Хостес', master: 'Мастер' }[authState.role] || 'Гость');
           authStatus.textContent = `Доступ разрешён (${roleLabel}). Telegram ID: ${authState.telegramId}`;
         } else {
           authStatus.textContent = `Telegram ID ${authState.telegramId} не найден в списке администраторов.`;
+        }
+
+        if (sidebarActiveRole) {
+          sidebarActiveRole.textContent = `Роль: ${authState.isAuthorized ? roleLabel : '—'}`;
         }
 
         bookingsWarning.hidden = authState.isAuthorized;
@@ -995,6 +1754,20 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         adminForm.querySelectorAll('input, select, button').forEach((el) => {
           el.disabled = !(authState.role === 'owner');
         });
+      };
+
+      const updateDashboardCounters = () => {
+        if (pillBookings) {
+          const total = state.bookings.length;
+          const pending = state.bookings.filter((item) => item.status === 'pending').length;
+          pillBookings.textContent = total
+            ? `Записи • ${total} (${pending} в ожидании)`
+            : 'Записи • —';
+        }
+        if (pillMasters) {
+          const totalMasters = state.masters.length;
+          pillMasters.textContent = totalMasters ? `Мастера • ${totalMasters}` : 'Мастера • —';
+        }
       };
 
       const refreshAccess = async () => {
@@ -1288,6 +2061,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           cell.textContent = 'Чтобы просматривать записи, откройте панель из Telegram или введите свой Telegram ID.';
           row.appendChild(cell);
           bookingsTableBody.appendChild(row);
+          updateDashboardCounters();
           return;
         }
 
@@ -1299,6 +2073,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           cell.textContent = 'Записей пока нет';
           row.appendChild(cell);
           bookingsTableBody.appendChild(row);
+          updateDashboardCounters();
           return;
         }
 
@@ -1431,8 +2206,10 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
             tr.appendChild(statusCell);
             tr.appendChild(actionsCell);
 
-            bookingsTableBody.appendChild(tr);
-          });
+          bookingsTableBody.appendChild(tr);
+        });
+
+        updateDashboardCounters();
       };
 
       const renderAdminsTable = () => {
@@ -1541,6 +2318,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         state.services = await response.json();
         renderServicesTable();
         renderMasterServiceOptions();
+        renderServiceFilters();
       };
 
       const loadBookings = async () => {
@@ -1596,6 +2374,101 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         const value = event.target.value;
         state.filterGroupId = value === '' ? null : value;
         renderServicesTable();
+      });
+
+      scheduleApplyBtn?.addEventListener('click', () => {
+        showBanner('Интерактивное применение фильтров графика будет подключено после настройки API.', 'error');
+      });
+
+      scheduleTemplateBtn?.addEventListener('click', () => {
+        showBanner('Редактор шаблонов расписаний появится в следующей версии.', 'error');
+      });
+
+      scheduleAddExceptionBtn?.addEventListener('click', () => {
+        showBanner('Добавление исключений будет доступно после обновления сервера.', 'error');
+      });
+
+      scheduleCheckConflictsBtn?.addEventListener('click', () => {
+        showBanner('Проверка конфликтов подключается к календарю — скоро появится.', 'error');
+      });
+
+      analyticsExportCsv?.addEventListener('click', () => {
+        showBanner('Экспорт аналитики CSV станет доступен после подключения /api/reports.', 'error');
+      });
+
+      const notifyFiltersWip = () => {
+        showBanner('Расширенные фильтры записей будут активны после интеграции API.', 'error');
+      };
+
+      [bookingMasterFilter, bookingServiceFilter, bookingSourceFilter]
+        .forEach((element) => element?.addEventListener('change', notifyFiltersWip));
+      [bookingDateFrom, bookingDateTo]
+        .forEach((element) => element?.addEventListener('change', notifyFiltersWip));
+      bookingSearchInput?.addEventListener('search', notifyFiltersWip);
+      bookingSearchInput?.addEventListener('change', notifyFiltersWip);
+
+      bookingCreateBtn?.addEventListener('click', () => {
+        showBanner('Создание записи из панели появится после добавления /api/bookings POST.', 'error');
+      });
+
+      bookingMassConfirmBtn?.addEventListener('click', () => {
+        showBanner('Массовые операции доступны после включения пакетных эндпоинтов.', 'error');
+      });
+
+      bookingMassCancelBtn?.addEventListener('click', () => {
+        showBanner('Массовая отмена станет доступна после обновления API.', 'error');
+      });
+
+      bookingExportBtn?.addEventListener('click', () => {
+        showBanner('Экспорт записей появится вместе с отчётами.', 'error');
+      });
+
+      sheetsConnectBtn?.addEventListener('click', () => {
+        showBanner('Авторизация Google Sheets настраивается — подключение появится позже.', 'error');
+      });
+
+      sheetsSyncNowBtn?.addEventListener('click', () => {
+        showBanner('Запрос синхронизации с Google Sheets будет активирован после внедрения API.', 'error');
+      });
+
+      telegramBotSettingsBtn?.addEventListener('click', () => {
+        showBanner('Настройки Telegram-бота доступны в серверной конфигурации. Интерфейс добавим позже.', 'error');
+      });
+
+      telegramBroadcastBtn?.addEventListener('click', () => {
+        showBanner('Рассылка в Telegram подключится после добавления пуш-методов в API.', 'error');
+      });
+
+      calendarConnectBtn?.addEventListener('click', () => {
+        showBanner('Подключение Google Calendar находится в разработке.', 'error');
+      });
+
+      calendarSyncNowBtn?.addEventListener('click', () => {
+        showBanner('Ручная синхронизация календаря станет доступна позже.', 'error');
+      });
+
+      webhookTestBtn?.addEventListener('click', () => {
+        showBanner('Тестовый запрос webhook появится после реализации серверного обработчика.', 'error');
+      });
+
+      tokenGenerateBtn?.addEventListener('click', () => {
+        const type = tokenTypeSelect?.value || 'manager';
+        const masterId = tokenMasterSelect?.value;
+        tokenOutput.textContent = `token://${type}/${masterId || 'common'} — функциональность появится после включения endpoints.`;
+        showBanner('Генерация токенов будет реализована на бэкенде.', 'error');
+      });
+
+      tokenDeactivateBtn?.addEventListener('click', () => {
+        showBanner('Деактивация токенов появится после добавления соответствующего API.', 'error');
+      });
+
+      auditRefreshBtn?.addEventListener('click', () => {
+        auditLog.textContent = 'Ожидаю подключения /api/audit. Здесь появится журнал действий.';
+        showBanner('Аудит будет доступен после подключения API.', 'error');
+      });
+
+      auditExportBtn?.addEventListener('click', () => {
+        showBanner('Экспорт журнала аудита запланирован в серверной части.', 'error');
       });
 
       applyManualIdBtn.addEventListener('click', () => {
@@ -2009,6 +2882,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           await handleError(response);
           state.masters = [];
           renderMastersTable();
+          renderMasterServiceOptions();
           return;
         }
         state.masters = (await response.json()).map((m) => ({
@@ -2019,86 +2893,146 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         renderMasterServiceOptions();
       };
 
-      // ===== MASTERS: опции услуг и рендер таблицы =====
-      // Кнопки и выпадающий селект для управления услугами мастера
+      // ===== MASTERS: опции услуг и фильтры =====
       const masterServicesPicker = document.getElementById('masterServicesPicker');
       const masterServicesChosen = document.getElementById('masterServicesChosen');
       const masterServicesAddBtn = document.getElementById('masterServicesAdd');
       const masterServicesRemoveBtn = document.getElementById('masterServicesRemove');
 
-      const masterGroupPicker  = document.getElementById('masterGroupPicker');
-      const masterGroupAddBtn  = document.getElementById('masterGroupAdd');
+      const masterGroupPicker = document.getElementById('masterGroupPicker');
+      const masterGroupAddBtn = document.getElementById('masterGroupAdd');
 
-      function getChosenIds() {
-        return Array.from(masterServicesChosen.options).map(o => o.value);
-      }
+      const getChosenIds = () => Array.from(masterServicesChosen?.options || []).map((option) => option.value);
 
-      function updateMasterPickerOptions() {
-        if (!masterServicesPicker || !masterServicesChosen) return;
-        const chosen = new Set(getChosenIds().map(String));
-        const options = state.services
-          .filter(s => !chosen.has(String(s.id)))
-          .map(s => `<option value="${s.id}">${escapeHtml(s.name)} (${s.duration} мин)</option>`);
-        masterServicesPicker.innerHTML = options.join('');
-        masterServicesPicker.disabled = options.length === 0;
-        const renderMasterServiceOptions = () => {
-          if (!masterForm) return;
-          updateMasterPickerOptions();
-          renderGroupOptionsForMasters();
-        };
-      }
-
-      function renderChosenServices(ids = getChosenIds()) {
-        const byId = new Map(state.services.map(s => [String(s.id), s]));
+      const renderChosenServices = (ids = getChosenIds()) => {
+        if (!masterServicesChosen) return;
+        const byId = new Map(state.services.map((service) => [String(service.id), service]));
         masterServicesChosen.innerHTML = ids
-          .map(id => {
+          .map((id) => {
             const svc = byId.get(String(id));
             if (!svc) return '';
             return `<option value="${svc.id}">${escapeHtml(svc.name)} (${svc.duration} мин)</option>`;
           })
           .join('');
-      }
+      };
 
-      function renderGroupOptionsForMasters() {
-  if (!masterGroupPicker) return;
-  masterGroupPicker.innerHTML = state.groups
-    .map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`)
-    .join('');
-}
+      const updateMasterPickerOptions = () => {
+        if (!masterServicesPicker || !masterServicesChosen) return;
+        const chosen = new Set(getChosenIds().map(String));
+        const options = state.services
+          .filter((service) => !chosen.has(String(service.id)))
+          .map((service) => `<option value="${service.id}">${escapeHtml(service.name)} (${service.duration} мин)</option>`);
+        masterServicesPicker.innerHTML = options.join('');
+        masterServicesPicker.disabled = options.length === 0;
+      };
+
+      const renderGroupOptionsForMasters = () => {
+        if (!masterGroupPicker) return;
+        masterGroupPicker.innerHTML = state.groups
+          .map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`)
+          .join('');
+      };
+
+      const renderMasterFilters = () => {
+        const masterOptions = state.masters
+          .map((master) => `<option value="${master.id}">${escapeHtml(master.name)}</option>`)
+          .join('');
+
+        if (scheduleMasterFilter) {
+          const current = scheduleMasterFilter.value;
+          scheduleMasterFilter.innerHTML = `<option value="">Все мастера</option>${masterOptions}`;
+          if (current && state.masters.some((master) => String(master.id) === String(current))) {
+            scheduleMasterFilter.value = current;
+          }
+        }
+
+        if (analyticsMasterFilter) {
+          const current = analyticsMasterFilter.value;
+          analyticsMasterFilter.innerHTML = `<option value="">Все</option>${masterOptions}`;
+          if (current && state.masters.some((master) => String(master.id) === String(current))) {
+            analyticsMasterFilter.value = current;
+          }
+        }
+
+        if (bookingMasterFilter) {
+          const current = bookingMasterFilter.value;
+          bookingMasterFilter.innerHTML = `<option value="">Все мастера</option>${masterOptions}`;
+          if (current && state.masters.some((master) => String(master.id) === String(current))) {
+            bookingMasterFilter.value = current;
+          }
+        }
+
+        if (tokenMasterSelect) {
+          const current = tokenMasterSelect.value;
+          tokenMasterSelect.innerHTML = `<option value="">Не выбрано</option>${masterOptions}`;
+          if (current && state.masters.some((master) => String(master.id) === String(current))) {
+            tokenMasterSelect.value = current;
+          }
+        }
+      };
+
+      const renderServiceFilters = () => {
+        if (!analyticsServiceFilter) return;
+        const current = analyticsServiceFilter.value;
+        const options = state.services
+          .map((service) => `<option value="${service.id}">${escapeHtml(service.name)}</option>`)
+          .join('');
+        analyticsServiceFilter.innerHTML = `<option value="">Все</option>${options}`;
+        if (current && state.services.some((service) => String(service.id) === String(current))) {
+          analyticsServiceFilter.value = current;
+        }
+        if (bookingServiceFilter) {
+          const currentBooking = bookingServiceFilter.value;
+          bookingServiceFilter.innerHTML = `<option value="">Все услуги</option>${options}`;
+          if (currentBooking && state.services.some((service) => String(service.id) === String(currentBooking))) {
+            bookingServiceFilter.value = currentBooking;
+          }
+        }
+      };
+
+      const renderMasterServiceOptions = () => {
+        if (!masterForm) return;
+        updateMasterPickerOptions();
+        renderChosenServices();
+        renderGroupOptionsForMasters();
+        renderMasterFilters();
+      };
 
       masterServicesAddBtn?.addEventListener('click', () => {
         if (!masterServicesPicker) return;
-        const val = masterServicesPicker.value;
-        if (!val) { showBanner('Нет доступных услуг для добавления', 'error'); return; }
+        const value = masterServicesPicker.value;
+        if (!value) {
+          showBanner('Нет доступных услуг для добавления', 'error');
+          return;
+        }
         const ids = new Set(getChosenIds().map(String));
-        ids.add(val);
+        ids.add(value);
         renderChosenServices(Array.from(ids));
         updateMasterPickerOptions();
       });
 
       masterServicesRemoveBtn?.addEventListener('click', () => {
-        const selected = Array.from(masterServicesChosen.selectedOptions).map(o => o.value);
-        if (!selected.length) { showBanner('Выберите услуги для удаления', 'error'); return; }
-        const ids = getChosenIds().filter(id => !selected.includes(id));
+        const toRemove = Array.from(masterServicesChosen?.selectedOptions || []).map((option) => option.value);
+        if (!toRemove.length) {
+          showBanner('Выберите услуги для удаления', 'error');
+          return;
+        }
+        const ids = getChosenIds().filter((id) => !toRemove.includes(id));
         renderChosenServices(ids);
         updateMasterPickerOptions();
       });
 
-
-masterGroupAddBtn?.addEventListener('click', () => {
-  const groupId = masterGroupPicker.value;
-  if (!groupId) return;
-  const servicesInGroup = state.services.filter(s => String(s.groupId) === String(groupId)).map(s => s.id);
-  const ids = new Set(getChosenIds().map(String));
-  servicesInGroup.forEach(id => ids.add(id));
-  renderChosenServices(Array.from(ids));
-  updateMasterPickerOptions();
-});
-
-      const renderMasterServiceOptions = () => {
-        if (!masterForm) return;
+      masterGroupAddBtn?.addEventListener('click', () => {
+        const groupId = masterGroupPicker?.value;
+        if (!groupId) return;
+        const servicesInGroup = state.services
+          .filter((service) => String(service.groupId) === String(groupId))
+          .map((service) => service.id);
+        const ids = new Set(getChosenIds().map(String));
+        servicesInGroup.forEach((id) => ids.add(id));
+        renderChosenServices(Array.from(ids));
         updateMasterPickerOptions();
-      };
+      });
 
       const renderMastersTable = () => {
         mastersTableBody.innerHTML = '';
@@ -2111,6 +3045,7 @@ masterGroupAddBtn?.addEventListener('click', () => {
           cell.textContent = 'Мастеров пока нет';
           row.appendChild(cell);
           mastersTableBody.appendChild(row);
+          updateDashboardCounters();
           return;
         }
 
@@ -2185,6 +3120,8 @@ masterGroupAddBtn?.addEventListener('click', () => {
           tr.append(photo, name, spec, desc, sched, servicesCell, actions);
           mastersTableBody.appendChild(tr);
         });
+
+        updateDashboardCounters();
       };
 
       // ===== MASTERS: обработчики формы и CRUD =====

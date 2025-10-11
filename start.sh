@@ -63,6 +63,8 @@ const mastersFile = join(DATA_DIR, 'masters.json');
 const contactsFile = join(DATA_DIR, 'contacts.json');
 const hostesFile = join(DATA_DIR, 'hostes.json');
 const schedulesFile = join(DATA_DIR, 'schedules.json');
+const clientsFile = join(DATA_DIR, 'clients.json');
+const tokenLinksFile = join(DATA_DIR, 'token-links.json');
 
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
@@ -139,6 +141,8 @@ const DEFAULT_BOOKINGS = [];
 const DEFAULT_MASTERS = [];
 const DEFAULT_CONTACTS = [];
 const DEFAULT_SCHEDULES = [];
+const DEFAULT_CLIENTS = [];
+const DEFAULT_TOKEN_LINKS = [];
 
 const DEFAULT_ADMINS = [
   {
@@ -637,6 +641,8 @@ ensureDataFile(adminsFile, DEFAULT_ADMINS);
 ensureDataFile(mastersFile, DEFAULT_MASTERS);
 ensureDataFile(contactsFile, DEFAULT_CONTACTS);
 ensureDataFile(schedulesFile, DEFAULT_SCHEDULES);
+ensureDataFile(clientsFile, DEFAULT_CLIENTS);
+ensureDataFile(tokenLinksFile, DEFAULT_TOKEN_LINKS);
 
 // --- Cold-deploy restoration helpers ---
 function restoreFromLocalBackupsIfMissing() {
@@ -913,6 +919,31 @@ async function sheetsValuesGet(spreadsheetId, range) {
 
 function toCsvList(arr) { return Array.isArray(arr) ? arr.join(', ') : ''; }
 function toNum(val) { const n = Number(val); return Number.isFinite(n) ? n : null; }
+function normalizePhone(phone) {
+  if (!phone) return '';
+  return String(phone).replace(/\D+/g, '');
+}
+
+function readClients() {
+  return readJSON(clientsFile, []);
+}
+
+function writeClients(clients) {
+  writeJSON(clientsFile, clients);
+}
+
+function readTokenLinks() {
+  return readJSON(tokenLinksFile, []);
+}
+
+function writeTokenLinks(list) {
+  writeJSON(tokenLinksFile, list);
+}
+
+function generateTokenString(prefix = '') {
+  const raw = crypto.randomBytes(24).toString('base64url');
+  return prefix ? `${prefix}_${raw}` : raw;
+}
 
 function sendJSON(res, statusCode, payload) {
   res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -944,9 +975,23 @@ function setCookie(res, name, value, opts={}){
   res.setHeader('Set-Cookie', [...(res.getHeader('Set-Cookie')||[]), parts.join('; ')]);
 }
 
+function getPathSegments(pathname = '') {
+  return pathname.split('/').filter(Boolean);
+}
+
+function getSegment(segments, index) {
+  return segments[index] ? decodeURIComponent(segments[index]) : null;
+}
+
+function getLastSegment(segments) {
+  return segments.length ? decodeURIComponent(segments[segments.length - 1]) : null;
+}
+
 const ROLE_WEIGHT = {
   unknown: -1,
   guest: 0,
+  hostess: 1,
+  manager: 1,
   admin: 2,
   owner: 3
 };
@@ -1025,7 +1070,8 @@ function authenticate(req) {
     return { role: 'unknown', telegramId, provided: true };
   }
 
-  const role = adminEntry.role === 'owner' ? 'owner' : 'admin';
+  const allowedRoles = new Set(['owner','admin','manager','hostess']);
+  const role = allowedRoles.has(adminEntry.role) ? adminEntry.role : 'admin';
   return { role, telegramId, provided: true, admin: adminEntry };
 }
 
