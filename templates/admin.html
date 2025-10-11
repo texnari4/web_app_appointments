@@ -654,10 +654,28 @@
     <section class="tab-panel" data-tab-panel="status">
       <h2>Состояние системы</h2>
       <div class="form-grid">
-        <div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button type="button" class="secondary-btn" id="statusRefreshBtn">Проверить сейчас</button>
-          <pre id="statusOutput" style="margin-top:12px; white-space:pre-wrap; background:#0f172a; color:#e5e7eb; padding:14px 16px; border-radius:12px; overflow:auto; max-height:320px;">—</pre>
+          <button type="button" class="secondary-btn" id="seedDemoBtn" title="Создать тестовые данные">Создать демо‑данные</button>
+          <button type="button" class="secondary-btn" id="statusExportBtn" title="Экспорт ZIP бэкапа">Экспорт ZIP</button>
+          <button type="button" class="primary-btn" id="statusImportBtn" title="Импорт ZIP бэкапа">Импорт ZIP</button>
         </div>
+        <pre id="statusOutput" style="margin-top:12px; white-space:pre-wrap; background:#0f172a; color:#e5e7eb; padding:14px 16px; border-radius:12px; overflow:auto; max-height:240px;">—</pre>
+      </div>
+
+      <h3 style="margin-top:10px">Логи</h3>
+      <div class="form-grid">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button type="button" class="secondary-btn" id="logsRefreshBtn">Обновить логи</button>
+          <label style="display:inline-flex;gap:6px;align-items:center"><span class="muted">Показать</span>
+            <select id="logsLimitSelect">
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="200">200</option>
+            </select>
+          </label>
+        </div>
+        <pre id="logsOutput" style="white-space:pre-wrap; background:#0f172a; color:#e5e7eb; padding:14px 16px; border-radius:12px; overflow:auto; max-height:320px;">—</pre>
       </div>
     </section>
   </main>
@@ -710,6 +728,12 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const gsCsvImportBtn = document.getElementById('gsCsvImportBtn');
       const statusRefreshBtn = document.getElementById('statusRefreshBtn');
       const statusOutput = document.getElementById('statusOutput');
+      const seedDemoBtn = document.getElementById('seedDemoBtn');
+      const statusExportBtn = document.getElementById('statusExportBtn');
+      const statusImportBtn = document.getElementById('statusImportBtn');
+      const logsRefreshBtn = document.getElementById('logsRefreshBtn');
+      const logsLimitSelect = document.getElementById('logsLimitSelect');
+      const logsOutput = document.getElementById('logsOutput');
 
       const tabsNav = document.querySelectorAll('nav.tabs button');
       const tabPanels = document.querySelectorAll('.tab-panel');
@@ -778,6 +802,60 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           statusOutput.textContent = 'Не удалось получить состояние системы';
           showBanner('Ошибка получения состояния системы', 'error');
         }
+      };
+
+      const refreshLogs = async () => {
+        try {
+          const limit = Number(logsLimitSelect?.value || 100);
+          const resp = await apiFetch('/api/logs?limit=' + limit);
+          if (!resp.ok) { await handleError(resp); return; }
+          const data = await resp.json();
+          logsOutput.textContent = (data.logs || [])
+            .map(x => `[${x.time}] ${x.level || 'info'}:${x.type} ${x.message || ''}`)
+            .join('\n') || '—';
+        } catch (e) {
+          console.error(e);
+          logsOutput.textContent = 'Не удалось загрузить логи';
+        }
+      };
+
+      const seedDemoData = async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        if (!confirm('Создать демо‑данные? Это добавит пример услуг, мастеров и записей.')) return;
+        const resp = await apiFetch('/api/seed/demo', { method: 'POST' });
+        if (!resp.ok) { await handleError(resp); return; }
+        await refreshStatus();
+        await refreshLogs();
+        showBanner('Демо‑данные созданы');
+      };
+
+      const exportZip = async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        const resp = await apiFetch('/api/backup/export');
+        if (!resp.ok) { await handleError(resp); return; }
+        const blob = await resp.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = 'backup.zip';
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(a.href);
+        showBanner('Экспортирован ZIP архив');
+        refreshLogs();
+      };
+
+      const importZip = async () => {
+        if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.zip,application/zip';
+        input.onchange = async () => {
+          const file = input.files?.[0]; if (!file) return;
+          const fd = new FormData(); fd.append('file', file);
+          const resp = await apiFetch('/api/backup/import', { method: 'POST', body: fd });
+          if (!resp.ok) { await handleError(resp); return; }
+          await refreshStatus();
+          await refreshLogs();
+          showBanner('Импорт завершён');
+        };
+        input.click();
       };
       const handleError = async (response) => {
         if (response.status === 401 || response.status === 403) {
@@ -968,6 +1046,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         });
         if (tab === 'status') {
           refreshStatus();
+          refreshLogs();
         }
       };
 
@@ -977,6 +1056,11 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         });
       });
       statusRefreshBtn?.addEventListener('click', refreshStatus);
+      logsRefreshBtn?.addEventListener('click', refreshLogs);
+      logsLimitSelect?.addEventListener('change', refreshLogs);
+      seedDemoBtn?.addEventListener('click', seedDemoData);
+      statusExportBtn?.addEventListener('click', exportZip);
+      statusImportBtn?.addEventListener('click', importZip);
 
       const BOOKING_STATUS_LABELS = {
         pending: 'В ожидании',

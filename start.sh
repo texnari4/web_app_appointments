@@ -288,6 +288,23 @@ function writeJSON(file, data) {
   pushLog('ops', { file: file.split('/').pop(), items: isArr ? data.length : null, bytes: Buffer.byteLength(JSON.stringify(data)) });
 }
 
+// --- Logs helpers ---
+const logsFile = path.join(DATA_DIR, 'logs.json');
+function readLogs(){
+  try { return JSON.parse(fs.readFileSync(logsFile,'utf8')); } catch { return []; }
+}
+function appendLog(entry){
+  const list = readLogs();
+  list.push({
+    time: new Date().toISOString(),
+    level: entry.level || 'info',
+    type: entry.type || 'event',
+    message: entry.message || '',
+    meta: entry.meta || null
+  });
+  fs.writeFileSync(logsFile, JSON.stringify(list.slice(-5000), null, 2));
+}
+
 async function getGoogleAccessToken() {
   if (!GOOGLE_SERVICE_ACCOUNT_JSON) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON not set');
@@ -768,7 +785,13 @@ if (pathname === '/beauty' && req.method === 'GET') {
       });
       return;
     }
-
+    // GET /api/logs?limit=100
+if (pathname === '/api/logs' && req.method === 'GET') {
+  const limit = Math.max(1, Math.min(500, Number(new URL(req.url, 'http://x').searchParams.get('limit') || 100)));
+  const logs = readLogs().slice(-limit);
+  sendJSON(res, 200, { logs });
+  return;
+}
     if (pathname === '/api/admins' && req.method === 'GET') {
       if (!ensureAuthorized(ctx, res, ['admin'])) {
         return;
@@ -1980,6 +2003,7 @@ if (pathname.startsWith('/api/')) {
               const content = st.size > 0 ? rf(full) : Buffer.from('');
               zip.addFile(basename(full), content);
               added++;
+              try { appendLog({ type: 'backup.export', message: 'Экспорт ZIP выполнен' }); } catch {}
             } catch {}
           }
         } catch {}
@@ -2018,6 +2042,7 @@ if (pathname.startsWith('/api/')) {
             received = true;
             stream.on('data', (chunk) => { zipBuffer = Buffer.concat([zipBuffer, chunk]); });
             stream.on('error', reject);
+            try { appendLog({ type: 'backup.import', message: 'Импорт ZIP выполнен' }); } catch {}
           });
           bb.on('error', reject);
           bb.on('finish', resolve);
