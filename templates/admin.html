@@ -1081,7 +1081,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         servicesTableBody.innerHTML = '';
 
         const rows = state.filterGroupId
-          ? state.services.filter((service) => service.groupId === state.filterGroupId)
+          ? state.services.filter((service) => String(service.groupId) === String(state.filterGroupId))
           : state.services;
 
         if (!rows.length) {
@@ -1266,11 +1266,11 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
             
     const masterCell = document.createElement('td');
 
-    const selected = booking.masterId ? state.masters.find(m => m.id === booking.masterId) : null;
+    const selected = booking.masterId ? state.masters.find(m => String(m.id) === String(booking.masterId)) : null;
     const title = selected ? selected.name : 'Не выбран';
 
     const eligibleMasters = state.masters.filter(m =>
-      (m.serviceIds || []).includes(booking.serviceId)
+      (m.serviceIds || []).map(String).includes(String(booking.serviceId))
     );
 
     if (authState.isAuthorized && eligibleMasters.length) {
@@ -1284,12 +1284,12 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         const opt = document.createElement('option');
         opt.value = m.id;
         opt.textContent = m.name;
-        opt.selected = booking.masterId === m.id;
+        opt.selected = String(booking.masterId) === String(m.id);
         select.appendChild(opt);
       });
 
       select.addEventListener('change', async () => {
-        const masterId = select.value === '' ? null : Number(select.value);
+        const masterId = select.value === '' ? null : select.value;
         const resp = await apiFetch(`/api/bookings/${booking.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -1508,7 +1508,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
 
       groupFilter.addEventListener('change', (event) => {
         const value = event.target.value;
-        state.filterGroupId = value === '' ? null : Number(value);
+        state.filterGroupId = value === '' ? null : value;
         renderServicesTable();
       });
 
@@ -1553,7 +1553,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           description: formData.get('description'),
           price: Number(formData.get('price')),
           duration: Number(formData.get('duration')),
-          groupId: formData.get('groupId') ? Number(formData.get('groupId')) : null
+          groupId: formData.get('groupId') ? formData.get('groupId') : null
         };
 
         const response = await apiFetch('/api/services', {
@@ -1621,7 +1621,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         }
 
         const updated = await response.json();
-        const index = state.services.findIndex((service) => service.id === id);
+        const index = state.services.findIndex((service) => String(service.id) === String(id));
         if (index !== -1) {
           state.services[index] = updated;
         }
@@ -1635,12 +1635,12 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         }
 
         const row = cell.closest('tr');
-        const id = Number(row?.dataset.id);
+        const id = row?.dataset.id || null;
         if (!id) {
           return;
         }
 
-        const service = state.services.find((item) => item.id === id);
+        const service = state.services.find((item) => String(item.id) === String(id));
         if (!service) {
           return;
         }
@@ -1681,15 +1681,15 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         }
 
         const row = select.closest('tr');
-        const id = Number(row?.dataset.id);
+        const id = row?.dataset.id || null;
         if (!id) {
           return;
         }
 
-        const value = select.value === '' ? null : Number(select.value);
+        const value = select.value === '' ? null : select.value;
         const updated = await updateServiceField(id, 'groupId', value);
         if (!updated) {
-          const service = state.services.find((item) => item.id === id);
+          const service = state.services.find((item) => String(item.id) === String(id));
           select.value = service?.groupId ?? '';
           return;
         }
@@ -1706,7 +1706,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           return;
         }
 
-        const id = Number(button.dataset.id);
+        const id = button.dataset.id;
         if (!id || !confirm('Удалить услугу?')) {
           return;
         }
@@ -1717,7 +1717,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           return;
         }
 
-        state.services = state.services.filter((service) => service.id !== id);
+        state.services = state.services.filter((service) => String(service.id) !== String(id));
         renderServicesTable();
         showBanner('Услуга удалена');
       });
@@ -1739,7 +1739,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         }
 
         const updated = await response.json();
-        const index = state.groups.findIndex((group) => group.id === id);
+        const index = state.groups.findIndex((group) => String(group.id) === String(id));
         if (index !== -1) {
           state.groups[index] = updated;
         }
@@ -1753,12 +1753,12 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         }
 
         const row = cell.closest('tr');
-        const id = Number(row?.dataset.id);
+        const id = row?.dataset.id || null;
         if (!id) {
           return;
         }
 
-        const group = state.groups.find((item) => item.id === id);
+        const group = state.groups.find((item) => String(item.id) === String(id));
         if (!group) {
           return;
         }
@@ -1792,7 +1792,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           return;
         }
 
-        const id = Number(button.dataset.id);
+        const id = button.dataset.id;
         if (!id || !confirm('Удалить группу? Связанные услуги останутся без группы.')) {
           return;
         }
@@ -1803,9 +1803,9 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           return;
         }
 
-        state.groups = state.groups.filter((group) => group.id !== id);
+        state.groups = state.groups.filter((group) => String(group.id) !== String(id));
         state.services = state.services.map((service) =>
-          service.groupId === id ? { ...service, groupId: null } : service
+          String(service.groupId) === String(id) ? { ...service, groupId: null } : service
         );
 
         renderGroupOptions();
@@ -1842,7 +1842,7 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           return;
         }
 
-        const id = Number(button.dataset.id);
+        const id = button.dataset.id;
         if (!id) {
           return;
         }
@@ -1941,14 +1941,14 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       const masterGroupAddBtn  = document.getElementById('masterGroupAdd');
 
       function getChosenIds() {
-        return Array.from(masterServicesChosen.options).map(o => Number(o.value));
+        return Array.from(masterServicesChosen.options).map(o => o.value);
       }
 
       function updateMasterPickerOptions() {
         if (!masterServicesPicker || !masterServicesChosen) return;
-        const chosen = new Set(getChosenIds());
+        const chosen = new Set(getChosenIds().map(String));
         const options = state.services
-          .filter(s => !chosen.has(s.id))
+          .filter(s => !chosen.has(String(s.id)))
           .map(s => `<option value="${s.id}">${escapeHtml(s.name)} (${s.duration} мин)</option>`);
         masterServicesPicker.innerHTML = options.join('');
         masterServicesPicker.disabled = options.length === 0;
@@ -1960,10 +1960,10 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
       }
 
       function renderChosenServices(ids = getChosenIds()) {
-        const byId = new Map(state.services.map(s => [s.id, s]));
+        const byId = new Map(state.services.map(s => [String(s.id), s]));
         masterServicesChosen.innerHTML = ids
           .map(id => {
-            const svc = byId.get(id);
+            const svc = byId.get(String(id));
             if (!svc) return '';
             return `<option value="${svc.id}">${escapeHtml(svc.name)} (${svc.duration} мин)</option>`;
           })
@@ -1979,16 +1979,16 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
 
       masterServicesAddBtn?.addEventListener('click', () => {
         if (!masterServicesPicker) return;
-        const val = Number(masterServicesPicker.value);
-        if (!Number.isFinite(val)) { showBanner('Нет доступных услуг для добавления', 'error'); return; }
-        const ids = new Set(getChosenIds());
+        const val = masterServicesPicker.value;
+        if (!val) { showBanner('Нет доступных услуг для добавления', 'error'); return; }
+        const ids = new Set(getChosenIds().map(String));
         ids.add(val);
         renderChosenServices(Array.from(ids));
         updateMasterPickerOptions();
       });
 
       masterServicesRemoveBtn?.addEventListener('click', () => {
-        const selected = Array.from(masterServicesChosen.selectedOptions).map(o => Number(o.value));
+        const selected = Array.from(masterServicesChosen.selectedOptions).map(o => o.value);
         if (!selected.length) { showBanner('Выберите услуги для удаления', 'error'); return; }
         const ids = getChosenIds().filter(id => !selected.includes(id));
         renderChosenServices(ids);
@@ -1997,10 +1997,10 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
 
 
 masterGroupAddBtn?.addEventListener('click', () => {
-  const groupId = Number(masterGroupPicker.value);
-  if (!Number.isFinite(groupId)) return;
-  const servicesInGroup = state.services.filter(s => s.groupId === groupId).map(s => s.id);
-  const ids = new Set(getChosenIds());
+  const groupId = masterGroupPicker.value;
+  if (!groupId) return;
+  const servicesInGroup = state.services.filter(s => String(s.groupId) === String(groupId)).map(s => s.id);
+  const ids = new Set(getChosenIds().map(String));
   servicesInGroup.forEach(id => ids.add(id));
   renderChosenServices(Array.from(ids));
   updateMasterPickerOptions();
@@ -2063,7 +2063,7 @@ masterGroupAddBtn?.addEventListener('click', () => {
 
           const servicesCell = document.createElement('td');
           const names = (m.serviceIds || [])
-            .map(id => state.services.find(svc => svc.id === id)?.name)
+            .map(id => state.services.find(svc => String(svc.id) === String(id))?.name)
             .filter(Boolean);
           servicesCell.innerHTML = names.length ? names.map(n => `<div>${escapeHtml(n)}</div>`).join('') : '—';
 
@@ -2118,7 +2118,7 @@ masterGroupAddBtn?.addEventListener('click', () => {
           .map(s => s.trim())
           .filter(Boolean);
 
-        const serviceIds = Array.from(document.getElementById('masterServicesChosen').options).map(o => Number(o.value));
+        const serviceIds = Array.from(document.getElementById('masterServicesChosen').options).map(o => o.value);
 
         const payload = {
           name: fd.get('name'),
@@ -2177,7 +2177,7 @@ masterGroupAddBtn?.addEventListener('click', () => {
           return null;
         }
         const updated = await response.json();
-        const idx = state.masters.findIndex(m => m.id === id);
+        const idx = state.masters.findIndex(m => String(m.id) === String(id));
         if (idx !== -1) state.masters[idx] = updated;
         return updated;
       };
@@ -2185,8 +2185,9 @@ masterGroupAddBtn?.addEventListener('click', () => {
       mastersTableBody?.addEventListener('blur', async (e) => {
         const cell = e.target;
         if (!authState.isAuthorized || cell.tagName !== 'TD' || !cell.dataset.field) return;
-        const row = cell.closest('tr'); const id = Number(row?.dataset.id);
-        const master = state.masters.find(m => m.id === id); if (!id || !master) return;
+        const row = cell.closest('tr'); const id = row?.dataset.id || null;
+        if (!id) return;
+        const master = state.masters.find(m => String(m.id) === String(id)); if (!master) return;
 
         const field = cell.dataset.field;
         let value = cell.textContent.trim();
@@ -2231,8 +2232,8 @@ masterGroupAddBtn?.addEventListener('click', () => {
         if (btn.dataset.action === 'save-master') {
           if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
           const row = btn.closest('tr');
-          const id = Number(row?.dataset.id);
-          const master = state.masters.find(m => m.id === id);
+          const id = row?.dataset.id || null;
+          const master = state.masters.find(m => String(m.id) === String(id));
           if (!master) return;
 
           const name = row.querySelector('td[data-field="name"]').textContent.trim();
@@ -2259,11 +2260,11 @@ masterGroupAddBtn?.addEventListener('click', () => {
 
         if (btn.dataset.action === 'delete-master') {
           if (!authState.isAuthorized) { showBanner('Нет прав', 'error'); return; }
-          const id = Number(btn.dataset.id);
+          const id = btn.dataset.id;
           if (!id || !confirm('Удалить мастера?')) return;
           const response = await apiFetch(`/api/masters/${id}`, { method: 'DELETE' });
           if (!response.ok) { await handleError(response); return; }
-          state.masters = state.masters.filter(m => m.id !== id);
+          state.masters = state.masters.filter(m => String(m.id) !== String(id));
           renderMastersTable();
           showBanner('Мастер удалён');
           return;

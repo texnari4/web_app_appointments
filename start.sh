@@ -62,6 +62,7 @@ const adminsFile = join(DATA_DIR, 'admins.json');
 const mastersFile = join(DATA_DIR, 'masters.json');
 const contactsFile = join(DATA_DIR, 'contacts.json');
 const hostesFile = join(DATA_DIR, 'hostes.json');
+const schedulesFile = join(DATA_DIR, 'schedules.json');
 
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
@@ -137,6 +138,7 @@ const DEFAULT_SERVICES = [
 const DEFAULT_BOOKINGS = [];
 const DEFAULT_MASTERS = [];
 const DEFAULT_CONTACTS = [];
+const DEFAULT_SCHEDULES = [];
 
 const DEFAULT_ADMINS = [
   {
@@ -165,12 +167,241 @@ function ensureDataFile(file, fallback) {
   }
 }
 
+function sanitizeIdCandidate(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const normalized = trimmed.replace(/[^a-zA-Z0-9_-]/g, '');
+  return normalized || '';
+}
+
+function generateId(prefix) {
+  return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function ensureMappedId(map, rawValue, prefix) {
+  const existingKey = rawValue == null ? '' : String(rawValue);
+  if (existingKey && map.has(existingKey)) {
+    return { id: map.get(existingKey), changed: map.get(existingKey) !== rawValue };
+  }
+
+  const candidateSource = typeof rawValue === 'string' ? rawValue : existingKey;
+  const candidate = sanitizeIdCandidate(candidateSource);
+  if (candidate) {
+    map.set(candidate, candidate);
+    if (existingKey) map.set(existingKey, candidate);
+    return { id: candidate, changed: candidate !== rawValue };
+  }
+
+  const generated = generateId(prefix);
+  if (existingKey) map.set(existingKey, generated);
+  map.set(generated, generated);
+  return { id: generated, changed: generated !== rawValue };
+}
+
+function mapToKnownId(map, rawValue) {
+  if (rawValue == null || rawValue === '') return null;
+  const directKey = String(rawValue);
+  if (map.has(directKey)) return map.get(directKey);
+  const trimmed = typeof rawValue === 'string' ? rawValue.trim() : directKey;
+  if (trimmed && map.has(trimmed)) return map.get(trimmed);
+  return sanitizeIdCandidate(trimmed) || null;
+}
+
+function ensureScheduleHasId(schedule, scheduleMap) {
+  if (!schedule || typeof schedule !== 'object') return null;
+  const { id: ensuredId, changed } = ensureMappedId(scheduleMap, schedule.id ?? null, 'sch');
+  if (changed || schedule.id !== ensuredId) {
+    schedule.id = ensuredId;
+  }
+  scheduleMap.set(schedule.id, schedule.id);
+  return schedule;
+}
+
+function normalizeServiceIdList(list, validSet) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((value) => String(value).trim())
+    .filter((value) => value && (!validSet || validSet.has(value)));
+}
+
+function toIdOrGenerate(value, prefix) {
+  const candidate = sanitizeIdCandidate(String(value ?? '').trim());
+  return candidate || generateId(prefix);
+}
+
+function buildScheduleSnapshots(masters) {
+  const unique = new Map();
+  masters.forEach((master) => {
+    if (!master || typeof master !== 'object') return;
+    const schedule = master.schedule;
+    if (!schedule || typeof schedule !== 'object') return;
+    const sid = schedule.id;
+    if (!sid) return;
+    const owners = unique.get(sid)?.owners || [];
+    const nextOwners = owners.includes(master.id) ? owners : [...owners, master.id];
+    unique.set(sid, {
+      id: sid,
+      type: schedule.type || null,
+      owners: nextOwners,
+      payload: schedule
+    });
+  });
+  return Array.from(unique.values());
+}
+
+function syncSchedulesSnapshot(masters) {
+  try {
+    const snapshots = buildScheduleSnapshots(Array.isArray(masters) ? masters : []);
+    writeJSON(schedulesFile, snapshots);
+  } catch (error) {
+    console.error('Failed to sync schedules snapshot:', error);
+  }
+}
+
+function persistMasters(masters) {
+  writeJSON(mastersFile, masters);
+  syncSchedulesSnapshot(masters);
+}
+
+function normalizeIdentifiers() {
+  const groups = readJSON(groupsFile, []);
+  const services = readJSON(servicesFile, []);
+  const masters = readJSON(mastersFile, []);
+  const bookings = readJSON(bookingsFile, []);
+  const existingSchedules = readJSON(schedulesFile, []);
+
+  const groupMap = new Map();
+  let groupsChanged = false;
+  groups.forEach((group) => {
+    if (!group || typeof group !== 'object') return;
+    const { id, changed } = ensureMappedId(groupMap, group.id ?? null, 'grp');
+    if (changed || group.id !== id) {
+      group.id = id;
+      groupsChanged = true;
+    }
+  });
+  if (groupsChanged) {
+    writeJSON(groupsFile, groups);
+  }
+
+  const serviceMap = new Map();
+  let servicesChanged = false;
+  services.forEach((service) => {
+    if (!service || typeof service !== 'object') return;
+    const { id, changed } = ensureMappedId(serviceMap, service.id ?? null, 'srv');
+    if (changed || service.id !== id) {
+      service.id = id;
+      servicesChanged = true;
+    }
+
+    if (service.groupId != null && service.groupId !== '') {
+      const mapped = mapToKnownId(groupMap, service.groupId);
+      if (!mapped) {
+        service.groupId = null;
+        servicesChanged = true;
+      } else if (mapped !== service.groupId) {
+        service.groupId = mapped;
+        servicesChanged = true;
+      }
+    } else {
+      service.groupId = null;
+    }
+  });
+  if (servicesChanged) {
+    writeJSON(servicesFile, services);
+  }
+
+  const scheduleMap = new Map();
+  let schedulesChanged = false;
+  if (Array.isArray(existingSchedules)) {
+    existingSchedules.forEach((entry) => {
+      if (!entry || typeof entry !== 'object') return;
+      const { id, changed } = ensureMappedId(scheduleMap, entry.id ?? null, 'sch');
+      if (changed || entry.id !== id) {
+        entry.id = id;
+        schedulesChanged = true;
+      }
+      scheduleMap.set(entry.id, entry.id);
+    });
+  }
+
+  const masterMap = new Map();
+  let mastersChanged = false;
+  masters.forEach((master) => {
+    if (!master || typeof master !== 'object') return;
+    const { id, changed } = ensureMappedId(masterMap, master.id ?? null, 'mst');
+    if (changed || master.id !== id) {
+      master.id = id;
+      mastersChanged = true;
+    }
+
+    const incomingIds = Array.isArray(master.serviceIds) ? master.serviceIds : [];
+    const normalizedServiceIds = incomingIds
+      .map((sid) => mapToKnownId(serviceMap, sid))
+      .filter((sid) => typeof sid === 'string' && sid);
+    if (normalizedServiceIds.length !== incomingIds.length || normalizedServiceIds.some((sid, idx) => sid !== incomingIds[idx])) {
+      master.serviceIds = normalizedServiceIds;
+      mastersChanged = true;
+    }
+
+    if (master.schedule && typeof master.schedule === 'object') {
+      const ensured = ensureScheduleHasId(master.schedule, scheduleMap);
+      if (ensured && ensured !== master.schedule) {
+        master.schedule = ensured;
+      }
+      master.scheduleId = master.schedule?.id || null;
+    } else {
+      master.schedule = null;
+      master.scheduleId = null;
+    }
+  });
+  if (mastersChanged) {
+    persistMasters(masters);
+  } else if (schedulesChanged) {
+    // Even if masters unchanged, we may need to resync schedule snapshots if existing entries were updated
+    syncSchedulesSnapshot(masters);
+  }
+
+  const bookingMap = new Map();
+  let bookingsChanged = false;
+  bookings.forEach((booking) => {
+    if (!booking || typeof booking !== 'object') return;
+    const { id, changed } = ensureMappedId(bookingMap, booking.id ?? null, 'bkg');
+    if (changed || booking.id !== id) {
+      booking.id = id;
+      bookingsChanged = true;
+    }
+
+    const mappedService = mapToKnownId(serviceMap, booking.serviceId ?? null);
+    if (mappedService !== booking.serviceId) {
+      booking.serviceId = mappedService;
+      bookingsChanged = true;
+    }
+
+    const mappedMaster = mapToKnownId(masterMap, booking.masterId ?? null);
+    if (mappedMaster !== booking.masterId) {
+      booking.masterId = mappedMaster;
+      bookingsChanged = true;
+    }
+  });
+  if (bookingsChanged) {
+    writeJSON(bookingsFile, bookings);
+  }
+
+  if (!mastersChanged && !schedulesChanged) {
+    // Ensure snapshot reflects latest master data if nothing triggered before
+    syncSchedulesSnapshot(masters);
+  }
+}
+
 ensureDataFile(groupsFile, DEFAULT_GROUPS);
 ensureDataFile(servicesFile, DEFAULT_SERVICES);
 ensureDataFile(bookingsFile, DEFAULT_BOOKINGS);
 ensureDataFile(adminsFile, DEFAULT_ADMINS);
 ensureDataFile(mastersFile, DEFAULT_MASTERS);
 ensureDataFile(contactsFile, DEFAULT_CONTACTS);
+ensureDataFile(schedulesFile, DEFAULT_SCHEDULES);
 
 // --- Cold-deploy restoration helpers ---
 function restoreFromLocalBackupsIfMissing() {
@@ -214,15 +445,101 @@ async function restoreFromGoogleSheetsIfEmpty() {
           const obj = {}; headersExpected.forEach((h)=>{ obj[h] = r[idx[h]] ?? ''; }); return obj;
         });
       }
-      const groups = rowsToObjects(groupsResp, ['id','name']).map(r=>({ id: toNum(r.id)||Date.now(), name:String(r.name||'').trim() })).filter(g=>g.name);
+      const groups = rowsToObjects(groupsResp, ['id', 'name'])
+        .map((r) => ({
+          id: toIdOrGenerate(r.id, 'grp'),
+          name: String(r.name || '').trim()
+        }))
+        .filter((g) => g.name);
       if (groups.length) writeJSON(groupsFile, groups);
-      const servicesArr = rowsToObjects(servicesResp, ['id','name','description','price','duration','groupId']).map(r=>({ id: toNum(r.id)||Date.now(), name:String(r.name||'').trim(), description:String(r.description||'').trim(), price:Number(r.price)||0, duration:Number(r.duration)||30, groupId:r.groupId===''?null:toNum(r.groupId) }));
+
+      const servicesArr = rowsToObjects(servicesResp, ['id', 'name', 'description', 'price', 'duration', 'groupId'])
+        .map((r) => ({
+          id: toIdOrGenerate(r.id, 'srv'),
+          name: String(r.name || '').trim(),
+          description: String(r.description || '').trim(),
+          price: Number(r.price) || 0,
+          duration: Number(r.duration) || 30,
+          groupId: (() => {
+            const raw = String(r.groupId ?? '').trim();
+            return raw ? sanitizeIdCandidate(raw) || raw : null;
+          })()
+        }));
       if (servicesArr.length) writeJSON(servicesFile, servicesArr);
-      const adminsArr = rowsToObjects(adminsResp, ['id','username','displayName','role']).map(r=>({ id:Number(r.id)||0, username:String(r.username||'').replace(/^@/,''), displayName:r.displayName||'', role:r.role==='owner'?'owner':'admin' })).filter(a=>a.id>0 && a.username);
+
+      const adminsArr = rowsToObjects(adminsResp, ['id', 'username', 'displayName', 'role'])
+        .map((r) => ({
+          id: Number(r.id) || 0,
+          username: String(r.username || '').replace(/^@/, ''),
+          displayName: r.displayName || '',
+          role: r.role === 'owner' ? 'owner' : 'admin'
+        }))
+        .filter((a) => a.id > 0 && a.username);
       if (adminsArr.length) writeJSON(adminsFile, adminsArr);
-      const mastersArr = rowsToObjects(mastersResp, ['id','name','specialties','photoUrl','description','schedule_json','serviceIds']).map(r=>({ id: toNum(r.id)||Date.now(), name:String(r.name||'').trim(), specialties:String(r.specialties||'').split(',').map(s=>s.trim()).filter(Boolean), photoUrl:r.photoUrl||null, description:r.description||'', schedule:(()=>{ try { return r.schedule_json?JSON.parse(r.schedule_json):null; } catch { return null; } })(), serviceIds:String(r.serviceIds||'').split(',').map(x=>toNum(x)).filter(Number.isFinite) }));
-      if (mastersArr.length) writeJSON(mastersFile, mastersArr);
-      const bookingsArr = rowsToObjects(bookingsResp, ['id','createdAt','updatedAt','status','clientName','clientPhone','notes','serviceId','serviceName','serviceDuration','servicePrice','masterId','date','startTime','duration']).map(r=>({ id: toNum(r.id)||Date.now(), createdAt:r.createdAt||new Date().toISOString(), updatedAt:r.updatedAt||r.createdAt||new Date().toISOString(), status:r.status||'pending', clientName:r.clientName||'', clientPhone:r.clientPhone||'', notes:r.notes||'', serviceId:Number(r.serviceId)||0, serviceName:r.serviceName||'', serviceDuration:Number(r.serviceDuration)||null, servicePrice:Number(r.servicePrice)||null, masterId:r.masterId===''?null:String(r.masterId), date:r.date||'', startTime:r.startTime||'', duration:Number(r.duration)||null }));
+
+      const mastersArr = rowsToObjects(mastersResp, ['id', 'name', 'specialties', 'photoUrl', 'description', 'scheduleId', 'schedule_json', 'serviceIds'])
+        .map((r) => {
+          let schedule = null;
+          try {
+            schedule = r.schedule_json ? JSON.parse(r.schedule_json) : null;
+          } catch {
+            schedule = null;
+          }
+          const incomingScheduleId = sanitizeIdCandidate(String(r.scheduleId ?? '').trim());
+          if (schedule && typeof schedule === 'object') {
+            if (!schedule.id) {
+              schedule.id = incomingScheduleId || null;
+            }
+          } else if (incomingScheduleId) {
+            schedule = { id: incomingScheduleId, type: null };
+          }
+
+          return {
+            id: toIdOrGenerate(r.id, 'mst'),
+            name: String(r.name || '').trim(),
+            specialties: String(r.specialties || '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean),
+            photoUrl: r.photoUrl || null,
+            description: r.description || '',
+            schedule,
+            scheduleId: schedule?.id || null,
+            serviceIds: String(r.serviceIds || '')
+              .split(',')
+              .map((x) => {
+                const trimmed = x.trim();
+                return trimmed ? sanitizeIdCandidate(trimmed) || trimmed : null;
+              })
+              .filter(Boolean)
+          };
+        });
+      if (mastersArr.length) persistMasters(mastersArr);
+
+      const bookingsArr = rowsToObjects(bookingsResp, ['id', 'createdAt', 'updatedAt', 'status', 'clientName', 'clientPhone', 'notes', 'serviceId', 'serviceName', 'serviceDuration', 'servicePrice', 'masterId', 'date', 'startTime', 'duration'])
+        .map((r) => ({
+          id: toIdOrGenerate(r.id, 'bkg'),
+          createdAt: r.createdAt || new Date().toISOString(),
+          updatedAt: r.updatedAt || r.createdAt || new Date().toISOString(),
+          status: r.status || 'pending',
+          clientName: r.clientName || '',
+          clientPhone: r.clientPhone || '',
+          notes: r.notes || '',
+          serviceId: (() => {
+            const raw = String(r.serviceId ?? '').trim();
+            return raw ? sanitizeIdCandidate(raw) || raw : null;
+          })(),
+          serviceName: r.serviceName || '',
+          serviceDuration: Number(r.serviceDuration) || null,
+          servicePrice: Number(r.servicePrice) || null,
+          masterId: (() => {
+            const raw = String(r.masterId ?? '').trim();
+            return raw ? sanitizeIdCandidate(raw) || raw : null;
+          })(),
+          date: r.date || '',
+          startTime: r.startTime || '',
+          duration: Number(r.duration) || null
+        }));
       if (bookingsArr.length) writeJSON(bookingsFile, bookingsArr);
     }
   } catch (e) {
@@ -233,6 +550,7 @@ async function restoreFromGoogleSheetsIfEmpty() {
 // --- Run restoration on boot ---
 restoreFromLocalBackupsIfMissing();
 await (async()=>{ try { await restoreFromGoogleSheetsIfEmpty(); } catch {} })();
+normalizeIdentifiers();
 
 function readJSON(file, fallback = []) {
   try {
@@ -512,8 +830,12 @@ async function readBody(req) {
 }
 
 function parseId(pathname) {
-  const id = Number(pathname.split('/').pop());
-  return Number.isFinite(id) ? id : null;
+  if (!pathname) return null;
+  const parts = pathname.split('/');
+  const last = parts[parts.length - 1] || parts[parts.length - 2];
+  if (!last) return null;
+  const candidate = decodeURIComponent(last).trim();
+  return candidate ? candidate : null;
 }
 
 function validateServicePayload(payload, groups) {
@@ -525,7 +847,8 @@ function validateServicePayload(payload, groups) {
   const trimmedDescription = String(payload.description ?? '').trim();
   const price = Number(payload.price);
   const duration = Number(payload.duration);
-  const groupId = payload.groupId == null || payload.groupId === '' ? null : Number(payload.groupId);
+  const groupIdRaw = payload.groupId == null || payload.groupId === '' ? null : String(payload.groupId).trim();
+  const groupId = groupIdRaw ? groupIdRaw : null;
 
   if (!trimmedName) {
     return 'Название обязательно';
@@ -547,7 +870,7 @@ function validateServicePayload(payload, groups) {
     return `Длительность должна быть кратной ${SLOT_STEP_MIN} минутам`;
   }
 
-  if (groupId != null && !groups.some((g) => g.id === groupId)) {
+  if (groupId != null && !groups.some((g) => String(g.id) === groupId)) {
     return 'Указанная группа не найдена';
   }
 
@@ -685,12 +1008,12 @@ function validateBookingPayload(payload, services) {
   const clientPhone = String(payload.clientPhone ?? '').trim();
   const date = String(payload.date ?? '').trim();
   const startTime = String(payload.startTime ?? '').trim();
-  const serviceId = Number(payload.serviceId);
+  const serviceId = payload.serviceId == null || payload.serviceId === '' ? '' : String(payload.serviceId).trim();
   const masterId = payload.masterId == null || payload.masterId === '' ? null : String(payload.masterId).trim();
 
   if (!masterId) {
-  return 'Выберите мастера';
-}
+    return 'Выберите мастера';
+  }
 
   if (!clientName) {
     return 'Имя клиента обязательно';
@@ -708,11 +1031,11 @@ function validateBookingPayload(payload, services) {
     return 'Укажите время начала в формате ЧЧ:ММ';
   }
 
-  if (!Number.isFinite(serviceId)) {
+  if (!serviceId) {
     return 'Укажите корректный идентификатор услуги';
   }
 
-  const service = services.find((item) => item.id === serviceId);
+  const service = services.find((item) => String(item.id) === serviceId);
   if (!service) {
     return 'Услуга не найдена';
   }
@@ -733,6 +1056,10 @@ function validateBookingPayload(payload, services) {
   }
 
   payload.duration = normalizedDuration;
+  payload.serviceId = serviceId;
+  if (masterId) {
+    payload.masterId = masterId;
+  }
 
   return null;
 }
@@ -891,7 +1218,7 @@ if (pathname === '/api/logs' && req.method === 'GET') {
 
       const groups = readJSON(groupsFile, []);
       const newGroup = {
-        id: Date.now(),
+        id: generateId('grp'),
         name: String(payload.name).trim()
       };
       groups.push(newGroup);
@@ -962,9 +1289,9 @@ if (pathname === '/api/logs' && req.method === 'GET') {
 
     if (pathname === '/api/services' && req.method === 'GET') {
       const services = readJSON(servicesFile, []);
-      const groupIdFilter = query.groupId ? Number(query.groupId) : null;
+      const groupIdFilter = query.groupId ? String(query.groupId).trim() : null;
       const filtered = groupIdFilter
-        ? services.filter((service) => service.groupId === groupIdFilter)
+        ? services.filter((service) => String(service.groupId) === groupIdFilter)
         : services;
       sendJSON(res, 200, filtered);
       return;
@@ -984,13 +1311,14 @@ if (pathname === '/api/logs' && req.method === 'GET') {
       }
 
       const services = readJSON(servicesFile, []);
+      const groupId = payload.groupId == null || payload.groupId === '' ? null : String(payload.groupId).trim();
       const newService = {
-        id: Date.now(),
+        id: generateId('srv'),
         name: String(payload.name).trim(),
         description: String(payload.description).trim(),
         price: Number(payload.price),
         duration: Number(payload.duration),
-        groupId: payload.groupId == null || payload.groupId === '' ? null : Number(payload.groupId)
+        groupId: groupId || null
       };
       services.push(newService);
       writeJSON(servicesFile, services);
@@ -1019,6 +1347,13 @@ if (pathname === '/api/logs' && req.method === 'GET') {
         return;
       }
 
+      const nextGroupId =
+        payload.groupId !== undefined
+          ? payload.groupId === null || payload.groupId === ''
+            ? null
+            : String(payload.groupId).trim()
+          : services[idx].groupId;
+
       const draft = {
         ...services[idx],
         ...payload,
@@ -1029,12 +1364,7 @@ if (pathname === '/api/logs' && req.method === 'GET') {
             : services[idx].description,
         price: payload.price !== undefined ? Number(payload.price) : services[idx].price,
         duration: payload.duration !== undefined ? Number(payload.duration) : services[idx].duration,
-        groupId:
-          payload.groupId !== undefined
-            ? payload.groupId === null || payload.groupId === ''
-              ? null
-              : Number(payload.groupId)
-            : services[idx].groupId
+        groupId: nextGroupId || null
       };
 
       const error = validateServicePayload(draft, groups);
@@ -1079,12 +1409,12 @@ if (pathname === '/api/logs' && req.method === 'GET') {
       }
 
       const services = readJSON(servicesFile, []);
-      const serviceId = query.serviceId ? Number(query.serviceId) : null;
+      const serviceId = query.serviceId ? String(query.serviceId).trim() : null;
       let duration = query.duration ? Number(query.duration) : null;
       let service = null;
 
-      if (serviceId != null && !Number.isNaN(serviceId)) {
-        service = services.find((item) => item.id === serviceId);
+      if (serviceId) {
+        service = services.find((item) => String(item.id) === serviceId);
         if (!service) {
           sendJSON(res, 404, { error: 'Услуга не найдена' });
           return;
@@ -1185,7 +1515,8 @@ if (pathname.startsWith('/api/')) {
         return;
       }
 
-      const service = services.find((item) => item.id === Number(payload.serviceId));
+      const serviceId = String(payload.serviceId).trim();
+      const service = services.find((item) => String(item.id) === serviceId);
       const bookings = readJSON(bookingsFile, []);
 
       const startMinutes = timeToMinutes(payload.startTime);
@@ -1218,14 +1549,14 @@ if (pathname.startsWith('/api/')) {
 
       const nowIso = new Date().toISOString();
       const newBooking = {
-        id: Date.now(),
+        id: generateId('bkg'),
         createdAt: nowIso,
         updatedAt: nowIso,
         status: 'pending',
         clientName: String(payload.clientName).trim(),
         clientPhone: String(payload.clientPhone).trim(),
         notes: String(payload.notes ?? '').trim(),
-        serviceId: Number(payload.serviceId),
+        serviceId,
         serviceName: service.name,
         serviceDuration: service.duration,
         servicePrice: service.price,
@@ -1335,7 +1666,7 @@ if (pathname.startsWith('/api/')) {
 
       if (payload.startTime || payload.duration) {
         const servicesData = readJSON(servicesFile, []);
-        const service = servicesData.find((item) => item.id === draft.serviceId);
+        const service = servicesData.find((item) => String(item.id) === String(draft.serviceId));
         const nextStart = payload.startTime ? timeToMinutes(payload.startTime) : timeToMinutes(draft.startTime);
         const nextDuration = alignDurationMinutes(
           Number(payload.duration ?? draft.duration ?? service?.duration ?? SLOT_STEP_MIN)
@@ -1657,18 +1988,37 @@ if (pathname.startsWith('/api/')) {
       }
 
       const masters = readJSON(mastersFile, []);
+      const services = readJSON(servicesFile, []);
+      const existingSchedulesSnapshot = readJSON(schedulesFile, []);
+      const scheduleMap = new Map();
+      existingSchedulesSnapshot.forEach((entry) => {
+        if (entry && entry.id) {
+          const key = String(entry.id);
+          scheduleMap.set(key, key);
+        }
+      });
+
+      const serviceIdSet = new Set(services.map((svc) => String(svc.id)));
+      const scheduleInput = payload.schedule && typeof payload.schedule === 'object'
+        ? JSON.parse(JSON.stringify(payload.schedule))
+        : null;
+      const schedule = scheduleInput ? ensureScheduleHasId(scheduleInput, scheduleMap) : null;
+
+      const serviceIds = normalizeServiceIdList(payload.serviceIds, serviceIdSet);
+
       const newMaster = {
-        id: Date.now(),
+        id: generateId('mst'),
         name,
-        specialties: Array.isArray(payload.specialties) ? payload.specialties.map(s => String(s)) : [],
+        specialties: Array.isArray(payload.specialties) ? payload.specialties.map((s) => String(s).trim()).filter(Boolean) : [],
         photoUrl: payload.photoUrl ? String(payload.photoUrl) : null,
         description: String(payload.description ?? ''),
-        schedule: payload.schedule ?? null,
-        serviceIds: Array.isArray(payload.serviceIds) ? payload.serviceIds.map(n => Number(n)).filter(Number.isFinite) : []
+        schedule,
+        scheduleId: schedule?.id || null,
+        serviceIds
       };
 
       masters.push(newMaster);
-      writeJSON(mastersFile, masters);
+      persistMasters(masters);
       sendJSON(res, 201, newMaster);
       return;
     }
@@ -1693,16 +2043,69 @@ if (pathname.startsWith('/api/')) {
       }
 
       const current = masters[idx];
-      const next = {
-        ...current,
-        ...patch,
-        name: patch.name !== undefined ? String(patch.name).trim() : current.name,
-        specialties: patch.specialties !== undefined ? (Array.isArray(patch.specialties) ? patch.specialties.map(String) : current.specialties) : current.specialties,
-        photoUrl: patch.photoUrl !== undefined ? (patch.photoUrl ? String(patch.photoUrl) : null) : current.photoUrl,
-        description: patch.description !== undefined ? String(patch.description) : current.description,
-        schedule: patch.schedule !== undefined ? patch.schedule : current.schedule,
-        serviceIds: patch.serviceIds !== undefined ? (Array.isArray(patch.serviceIds) ? patch.serviceIds.map(n => Number(n)).filter(Number.isFinite) : current.serviceIds) : current.serviceIds
-      };
+      const servicesData = readJSON(servicesFile, []);
+      const existingSchedulesSnapshot = readJSON(schedulesFile, []);
+      const scheduleMap = new Map();
+      existingSchedulesSnapshot.forEach((entry) => {
+        if (entry && entry.id) {
+          const key = String(entry.id);
+          scheduleMap.set(key, key);
+        }
+      });
+      const serviceIdSet = new Set(servicesData.map((svc) => String(svc.id)));
+
+      let nextName = current.name;
+      if (patch.name !== undefined) {
+        nextName = String(patch.name).trim();
+      }
+
+      let nextSpecialties = Array.isArray(current.specialties)
+        ? current.specialties.map((s) => String(s).trim()).filter(Boolean)
+        : [];
+      if (patch.specialties !== undefined) {
+        nextSpecialties = Array.isArray(patch.specialties)
+          ? patch.specialties.map((s) => String(s).trim()).filter(Boolean)
+          : nextSpecialties;
+      }
+
+      let nextPhoto = current.photoUrl ?? null;
+      if (patch.photoUrl !== undefined) {
+        nextPhoto = patch.photoUrl ? String(patch.photoUrl) : null;
+      }
+
+      let nextDescription = current.description ?? '';
+      if (patch.description !== undefined) {
+        nextDescription = String(patch.description);
+      }
+
+      let nextSchedule = current.schedule ? JSON.parse(JSON.stringify(current.schedule)) : null;
+      if (patch.schedule !== undefined) {
+        if (patch.schedule && typeof patch.schedule === 'object') {
+          nextSchedule = JSON.parse(JSON.stringify(patch.schedule));
+        } else {
+          nextSchedule = null;
+        }
+      }
+      if (nextSchedule) {
+        ensureScheduleHasId(nextSchedule, scheduleMap);
+      }
+      const nextScheduleId = nextSchedule?.id || null;
+
+      let nextServiceIds = Array.isArray(current.serviceIds)
+        ? normalizeServiceIdList(current.serviceIds, serviceIdSet)
+        : [];
+      if (patch.serviceIds !== undefined) {
+        nextServiceIds = normalizeServiceIdList(patch.serviceIds, serviceIdSet);
+      }
+
+      const next = { ...current, ...patch };
+      next.name = nextName;
+      next.specialties = nextSpecialties;
+      next.photoUrl = nextPhoto;
+      next.description = nextDescription;
+      next.schedule = nextSchedule;
+      next.scheduleId = nextScheduleId;
+      next.serviceIds = nextServiceIds;
 
       if (!next.name) {
         sendJSON(res, 400, { error: 'Имя мастера обязательно' });
@@ -1710,7 +2113,7 @@ if (pathname.startsWith('/api/')) {
       }
 
       masters[idx] = next;
-      writeJSON(mastersFile, masters);
+      persistMasters(masters);
       sendJSON(res, 200, next);
       return;
     }
@@ -1732,7 +2135,7 @@ if (pathname.startsWith('/api/')) {
         return;
       }
 
-      writeJSON(mastersFile, nextMasters);
+      persistMasters(nextMasters);
       sendJSON(res, 200, { success: true });
       return;
     }
@@ -1783,8 +2186,33 @@ if (pathname.startsWith('/api/')) {
         const groupsValues = [['id','name'], ...groups.map(g => [g.id, g.name])];
         const servicesValues = [['id','name','description','price','duration','groupId'], ...services.map(s => [s.id, s.name, s.description, s.price, s.duration, s.groupId ?? ''])];
         const adminsValues = [['id','username','displayName','role'], ...admins.map(a => [a.id, a.username, a.displayName||'', a.role])];
-        const mastersValues = [['id','name','specialties','photoUrl','description','schedule_json','serviceIds'], ...masters.map(m => [m.id, m.name, toCsvList(m.specialties||[]), m.photoUrl||'', m.description||'', JSON.stringify(m.schedule||null), toCsvList(m.serviceIds||[])])];
-        const bookingsValues = [['id','createdAt','updatedAt','status','clientName','clientPhone','notes','serviceId','serviceName','serviceDuration','servicePrice','masterId','date','startTime','duration'], ...bookings.map(b => [b.id,b.createdAt,b.updatedAt,b.status,b.clientName,b.clientPhone||'',b.notes||'',b.serviceId,b.serviceName||'',b.serviceDuration||'',b.servicePrice||'',b.masterId??'',b.date,b.startTime,b.duration])];
+        const mastersValues = [['id','name','specialties','photoUrl','description','scheduleId','schedule_json','serviceIds'], ...masters.map(m => [
+          m.id,
+          m.name,
+          toCsvList(m.specialties || []),
+          m.photoUrl || '',
+          m.description || '',
+          m.schedule?.id || m.scheduleId || '',
+          JSON.stringify(m.schedule || null),
+          toCsvList(m.serviceIds || [])
+        ])];
+        const bookingsValues = [['id','createdAt','updatedAt','status','clientName','clientPhone','notes','serviceId','serviceName','serviceDuration','servicePrice','masterId','date','startTime','duration'], ...bookings.map(b => [
+          b.id,
+          b.createdAt,
+          b.updatedAt,
+          b.status,
+          b.clientName,
+          b.clientPhone || '',
+          b.notes || '',
+          b.serviceId || '',
+          b.serviceName || '',
+          b.serviceDuration || '',
+          b.servicePrice || '',
+          b.masterId ?? '',
+          b.date,
+          b.startTime,
+          b.duration
+        ])];
 
         await sheetsValuesClear(GOOGLE_SHEET_ID, 'Groups!A:Z');
         await sheetsValuesUpdate(GOOGLE_SHEET_ID, 'Groups!A1', groupsValues);
@@ -1836,18 +2264,25 @@ if (pathname.startsWith('/api/')) {
           const toInt = (v, d=null) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
           const toStr = (v, d='') => (v==null ? d : String(v));
           const toArr = (v) => Array.isArray(v) ? v : [];
+          const toId = (value, prefix) => toIdOrGenerate(value, prefix);
+          const toMaybeId = (value) => {
+            const trimmed = String(value ?? '').trim();
+            return trimmed ? sanitizeIdCandidate(trimmed) || trimmed : null;
+          };
 
           function normGroup(g){
-            return { id: toInt(g.id, Date.now()), name: toStr(g.name).trim() };
+            const name = toStr(g.name).trim();
+            if (!name) return null;
+            return { id: toId(g.id, 'grp'), name };
           }
           function normService(s){
             return {
-              id: toInt(s.id, Date.now()),
+              id: toId(s.id, 'srv'),
               name: toStr(s.name).trim(),
               description: toStr(s.description,''),
               price: toInt(s.price, 0),
               duration: toInt(s.duration, 30),
-              groupId: s.groupId===''||s.groupId==null ? null : toInt(s.groupId, null)
+              groupId: toMaybeId(s.groupId)
             };
           }
           function normAdmin(a){
@@ -1857,20 +2292,31 @@ if (pathname.startsWith('/api/')) {
             return id>0 && username ? { id, username, displayName: toStr(a.displayName||a.name||username), role } : null;
           }
           function normMaster(m){
-            const id = toInt(m.id, Date.now());
+            const id = toId(m.id, 'mst');
             const name = toStr(m.name).trim();
             const specialties = toStr(m.specialties,'').split(',').map(x=>x.trim()).filter(Boolean);
-            const serviceIds = toStr(m.serviceIds,'').split(',').map(x=>toInt(x)).filter(Number.isFinite);
+            const serviceIds = toStr(m.serviceIds,'').split(',')
+              .map((x)=>{
+                const trimmed = x.trim();
+                return trimmed ? sanitizeIdCandidate(trimmed) || trimmed : null;
+              })
+              .filter(Boolean);
             let schedule = null; try { schedule = m.schedule || (m.schedule_json ? JSON.parse(m.schedule_json) : null); } catch {}
-            return { id, name, specialties, photoUrl: m.photoUrl||null, description: toStr(m.description,''), schedule, serviceIds };
+            const scheduleId = toMaybeId(m.scheduleId);
+            if (schedule && typeof schedule === 'object') {
+              if (!schedule.id) schedule.id = scheduleId || null;
+            } else if (scheduleId) {
+              schedule = { id: scheduleId, type: null };
+            }
+            return { id, name, specialties, photoUrl: m.photoUrl||null, description: toStr(m.description,''), schedule, scheduleId: schedule?.id || null, serviceIds };
           }
           function normBooking(b){
             // Require minimal fields: date, startTime, serviceId
             const date = toStr(b.date).trim();
             const startTime = toStr(b.startTime).trim();
-            const serviceId = toInt(b.serviceId, null);
-            if (!date || !startTime || !Number.isFinite(serviceId)) return null;
-            const id = toInt(b.id, Date.now());
+            const serviceId = toMaybeId(b.serviceId);
+            if (!date || !startTime || !serviceId) return null;
+            const id = toId(b.id, 'bkg');
             const status = toStr(b.status||'pending');
             const clientName = toStr(b.clientName||'');
             const clientPhone = toStr(b.clientPhone||'');
@@ -1878,7 +2324,7 @@ if (pathname.startsWith('/api/')) {
             const serviceName = toStr(b.serviceName||'');
             const serviceDuration = toInt(b.serviceDuration, null);
             const servicePrice = toInt(b.servicePrice, null);
-            const masterId = (b.masterId===''||b.masterId==null) ? null : toStr(b.masterId);
+            const masterId = toMaybeId(b.masterId);
             const duration = toInt(b.duration, serviceDuration); // keep if provided
             const createdAt = toStr(b.createdAt||new Date().toISOString());
             const updatedAt = toStr(b.updatedAt||createdAt);
@@ -1912,7 +2358,7 @@ if (pathname.startsWith('/api/')) {
           if (hasAnyKey('groups','Groups'))         writeJSON(groupsFile,   groups);
           if (hasAnyKey('services','Services'))     writeJSON(servicesFile, services);
           if (hasAnyKey('admins','Admins'))         writeJSON(adminsFile,   admins);
-          if (hasAnyKey('masters','Masters','staffMasters','StaffMasters')) writeJSON(mastersFile,  masters);
+          if (hasAnyKey('masters','Masters','staffMasters','StaffMasters')) persistMasters(masters);
           if (hasAnyKey('bookings','Bookings'))     writeJSON(bookingsFile, bookings);
           if (hasAnyKey('contacts','Contacts'))     writeJSON(contactsFile, contacts);
           if (hasAnyKey('hostes','Hostes'))         writeJSON(hostesFile,   hostes);
@@ -1959,19 +2405,101 @@ if (pathname.startsWith('/api/')) {
           });
         }
 
-        const groups = rowsToObjects(groupsResp, ['id','name']).map(r=>({ id: toNum(r.id) || Date.now(), name: String(r.name||'').trim() })).filter(g=>g.name);
+        const groups = rowsToObjects(groupsResp, ['id', 'name'])
+          .map((r) => ({
+            id: toIdOrGenerate(r.id, 'grp'),
+            name: String(r.name || '').trim()
+          }))
+          .filter((g) => g.name);
         writeJSON(groupsFile, groups);
 
-        const services = rowsToObjects(servicesResp, ['id','name','description','price','duration','groupId']).map(r=>({ id: toNum(r.id) || Date.now(), name: String(r.name||'').trim(), description: String(r.description||'').trim(), price: Number(r.price)||0, duration: Number(r.duration)||30, groupId: r.groupId===''?null:toNum(r.groupId) }));
+        const services = rowsToObjects(servicesResp, ['id', 'name', 'description', 'price', 'duration', 'groupId'])
+          .map((r) => ({
+            id: toIdOrGenerate(r.id, 'srv'),
+            name: String(r.name || '').trim(),
+            description: String(r.description || '').trim(),
+            price: Number(r.price) || 0,
+            duration: Number(r.duration) || 30,
+            groupId: (() => {
+              const raw = String(r.groupId ?? '').trim();
+              return raw ? sanitizeIdCandidate(raw) || raw : null;
+            })()
+          }));
         writeJSON(servicesFile, services);
 
-        const admins = rowsToObjects(adminsResp, ['id','username','displayName','role']).map(r=>({ id: Number(r.id)||0, username: String(r.username||'').replace(/^@/,''), displayName: r.displayName||'', role: r.role==='owner'?'owner':'admin' })).filter(a=>a.id>0 && a.username);
-        writeJSON(adminsFile, admins.length?admins:readJSON(adminsFile, []));
+        const admins = rowsToObjects(adminsResp, ['id', 'username', 'displayName', 'role'])
+          .map((r) => ({
+            id: Number(r.id) || 0,
+            username: String(r.username || '').replace(/^@/, ''),
+            displayName: r.displayName || '',
+            role: r.role === 'owner' ? 'owner' : 'admin'
+          }))
+          .filter((a) => a.id > 0 && a.username);
+        writeJSON(adminsFile, admins.length ? admins : readJSON(adminsFile, []));
 
-        const masters = rowsToObjects(mastersResp, ['id','name','specialties','photoUrl','description','schedule_json','serviceIds']).map(r=>({ id: toNum(r.id)||Date.now(), name: String(r.name||'').trim(), specialties: String(r.specialties||'').split(',').map(s=>s.trim()).filter(Boolean), photoUrl: r.photoUrl||null, description: r.description||'', schedule: (()=>{ try { return r.schedule_json?JSON.parse(r.schedule_json):null; } catch { return null; } })(), serviceIds: String(r.serviceIds||'').split(',').map(s=>toNum(s)).filter(Number.isFinite) }));
-        writeJSON(mastersFile, masters);
+        const masters = rowsToObjects(mastersResp, ['id', 'name', 'specialties', 'photoUrl', 'description', 'scheduleId', 'schedule_json', 'serviceIds'])
+          .map((r) => {
+            let schedule = null;
+            try {
+              schedule = r.schedule_json ? JSON.parse(r.schedule_json) : null;
+            } catch {
+              schedule = null;
+            }
+            const incomingScheduleId = sanitizeIdCandidate(String(r.scheduleId ?? '').trim());
+            if (schedule && typeof schedule === 'object') {
+              if (!schedule.id) {
+                schedule.id = incomingScheduleId || null;
+              }
+            } else if (incomingScheduleId) {
+              schedule = { id: incomingScheduleId, type: null };
+            }
 
-        const bookings = rowsToObjects(bookingsResp, ['id','createdAt','updatedAt','status','clientName','clientPhone','notes','serviceId','serviceName','serviceDuration','servicePrice','masterId','date','startTime','duration']).map(r=>({ id: toNum(r.id)||Date.now(), createdAt: r.createdAt||new Date().toISOString(), updatedAt: r.updatedAt||r.createdAt||new Date().toISOString(), status: r.status||'pending', clientName: r.clientName||'', clientPhone: r.clientPhone||'', notes: r.notes||'', serviceId: Number(r.serviceId)||0, serviceName: r.serviceName||'', serviceDuration: Number(r.serviceDuration)||null, servicePrice: Number(r.servicePrice)||null, masterId: r.masterId===''?null:String(r.masterId), date: r.date||'', startTime: r.startTime||'', duration: Number(r.duration)||null }));
+            return {
+              id: toIdOrGenerate(r.id, 'mst'),
+              name: String(r.name || '').trim(),
+              specialties: String(r.specialties || '')
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
+              photoUrl: r.photoUrl || null,
+              description: r.description || '',
+              schedule,
+              scheduleId: schedule?.id || null,
+              serviceIds: String(r.serviceIds || '')
+                .split(',')
+                .map((x) => {
+                  const trimmed = x.trim();
+                  return trimmed ? sanitizeIdCandidate(trimmed) || trimmed : null;
+                })
+                .filter(Boolean)
+            };
+          });
+        persistMasters(masters);
+
+        const bookings = rowsToObjects(bookingsResp, ['id', 'createdAt', 'updatedAt', 'status', 'clientName', 'clientPhone', 'notes', 'serviceId', 'serviceName', 'serviceDuration', 'servicePrice', 'masterId', 'date', 'startTime', 'duration'])
+          .map((r) => ({
+            id: toIdOrGenerate(r.id, 'bkg'),
+            createdAt: r.createdAt || new Date().toISOString(),
+            updatedAt: r.updatedAt || r.createdAt || new Date().toISOString(),
+            status: r.status || 'pending',
+            clientName: r.clientName || '',
+            clientPhone: r.clientPhone || '',
+            notes: r.notes || '',
+            serviceId: (() => {
+              const raw = String(r.serviceId ?? '').trim();
+              return raw ? sanitizeIdCandidate(raw) || raw : null;
+            })(),
+            serviceName: r.serviceName || '',
+            serviceDuration: Number(r.serviceDuration) || null,
+            servicePrice: Number(r.servicePrice) || null,
+            masterId: (() => {
+              const raw = String(r.masterId ?? '').trim();
+              return raw ? sanitizeIdCandidate(raw) || raw : null;
+            })(),
+            date: r.date || '',
+            startTime: r.startTime || '',
+            duration: Number(r.duration) || null
+          }));
         writeJSON(bookingsFile, bookings);
 
         sendJSON(res, 200, { status: 'ok', mode: 'sheets', imported: { groups: groups.length, services: services.length, admins: admins.length, masters: masters.length, bookings: bookings.length } });
@@ -2070,7 +2598,7 @@ if (pathname.startsWith('/api/')) {
         if (groups) writeJSON(groupsFile, groups);
         if (services) writeJSON(servicesFile, services);
         if (admins) writeJSON(adminsFile, admins);
-        if (masters) writeJSON(mastersFile, masters);
+        if (masters) persistMasters(masters);
         if (bookings) writeJSON(bookingsFile, bookings);
         if (contacts) writeJSON(contactsFile, contacts);
         const imported = {
