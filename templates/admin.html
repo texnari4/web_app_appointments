@@ -795,8 +795,11 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
         }
         const text = String(value).trim();
         if (!text) return '';
-        if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(text)) {
-          return text.slice(0, 5);
+        const match = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+        if (match) {
+          const hours = String(Number(match[1]) % 24).padStart(2, '0');
+          const minutes = String(Number(match[2]) % 60).padStart(2, '0');
+          return `${hours}:${minutes}`;
         }
         const numeric = Number(text);
         if (!Number.isNaN(numeric) && text !== '') {
@@ -2008,7 +2011,10 @@ const bookingStatusFilter = document.getElementById('bookingStatusFilter');
           renderMastersTable();
           return;
         }
-        state.masters = await response.json();
+        state.masters = (await response.json()).map((m) => ({
+          ...m,
+          serviceIds: Array.isArray(m.serviceIds) ? m.serviceIds.map((id) => String(id)) : []
+        }));
         renderMastersTable();
         renderMasterServiceOptions();
       };
@@ -2136,10 +2142,14 @@ masterGroupAddBtn?.addEventListener('click', () => {
           if (s.type === 'weekly') {
             const w = s.weekly || {};
             const daysLabel = (w.days || []).map(d => ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d]).join(', ');
-            sched.innerHTML = `Недели: <div class="muted">${daysLabel || '—'}</div><div class="muted">${w.start||'—'}–${w.end||'—'}</div>`;
+            const startTime = normalizeTimeString(w.start) || '—';
+            const endTime = normalizeTimeString(w.end) || '—';
+            sched.innerHTML = `Недели: <div class="muted">${daysLabel || '—'}</div><div class="muted">${startTime}–${endTime}</div>`;
           } else if (s.type === 'shift') {
             const sh = s.shift || {};
-            sched.innerHTML = `Смены: <div class="muted">${sh.workDays||'?'} раб / ${sh.restDays||'?'} вых</div><div class="muted">${sh.start||'—'}–${sh.end||'—'}</div>`;
+            const startTime = normalizeTimeString(sh.start) || '—';
+            const endTime = normalizeTimeString(sh.end) || '—';
+            sched.innerHTML = `Смены: <div class="muted">${sh.workDays||'?'} раб / ${sh.restDays||'?'} вых</div><div class="muted">${startTime}–${endTime}</div>`;
           } else {
             sched.textContent = '—';
           }

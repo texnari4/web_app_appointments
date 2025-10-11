@@ -218,11 +218,43 @@ function ensureScheduleHasId(schedule, scheduleMap) {
   return schedule;
 }
 
-function normalizeServiceIdList(list, validSet) {
+function normalizeServiceIdList(list, validSet, groupResolver = null) {
   if (!Array.isArray(list)) return [];
-  return list
-    .map((value) => String(value).trim())
-    .filter((value) => value && (!validSet || validSet.has(value)));
+  const seen = new Set();
+  const out = [];
+  const add = (id) => {
+    const str = String(id || '').trim();
+    if (!str || seen.has(str)) return;
+    seen.add(str);
+    out.push(str);
+  };
+
+  list.forEach((value) => {
+    const raw = String(value ?? '').trim();
+    if (!raw) return;
+    if (!validSet) {
+      add(raw);
+      return;
+    }
+
+    const direct = validSet.has(raw) ? raw : null;
+    const sanitized = sanitizeIdCandidate(raw);
+    const fallback = sanitized && validSet.has(sanitized) ? sanitized : null;
+    const chosen = direct || fallback;
+    if (chosen) {
+      add(chosen);
+      return;
+    }
+
+    if (typeof groupResolver === 'function') {
+      const expanded = groupResolver(raw);
+      if (Array.isArray(expanded) && expanded.length) {
+        expanded.forEach(add);
+      }
+    }
+  });
+
+  return out;
 }
 
 function toIdOrGenerate(value, prefix) {
@@ -234,9 +266,10 @@ const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30);
 
 function excelSerialToDate(serial) {
   if (!Number.isFinite(serial)) return null;
-  const wholeDays = Math.floor(serial);
-  const fractional = serial - wholeDays;
-  const ms = Math.round(serial * 86400000);
+  const adjusted = serial > 59 ? serial - 1 : serial; // Excel 1900 leap year bug
+  const wholeDays = Math.floor(adjusted);
+  const fractional = adjusted - wholeDays;
+  const ms = Math.round(adjusted * 86400000);
   const date = new Date(EXCEL_EPOCH_MS + ms);
   if (!Number.isFinite(date.getTime())) return null;
   return date;
@@ -282,8 +315,11 @@ function normalizeSheetTime(value, fallback = '') {
   if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) return fallback;
-    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
-      return trimmed.slice(0, 5);
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (match) {
+      const hours = String(Number(match[1]) % 24).padStart(2, '0');
+      const minutes = String(Number(match[2]) % 60).padStart(2, '0');
+      return `${hours}:${minutes}`;
     }
     const numeric = Number(trimmed);
     if (!Number.isNaN(numeric) && trimmed !== '') {
@@ -304,8 +340,17 @@ function normalizeScheduleTimes(schedule) {
   if (!schedule || typeof schedule !== 'object') return schedule;
   const clone = { ...schedule };
 
+  if (!clone.type) {
+    if (clone.weekly) clone.type = 'weekly';
+    else if (clone.shift) clone.type = 'shift';
+    else if (clone.custom) clone.type = 'custom';
+  }
+
   if (clone.type === 'weekly' && clone.weekly && typeof clone.weekly === 'object') {
     clone.weekly = { ...clone.weekly };
+    if (!Array.isArray(clone.weekly.days) && typeof clone.weekly.days === 'string') {
+      clone.weekly.days = clone.weekly.days.split(',').map((v) => Number(v.trim())).filter((n) => Number.isInteger(n));
+    }
     clone.weekly.start = normalizeSheetTime(clone.weekly.start, clone.weekly.start || '09:00');
     clone.weekly.end = normalizeSheetTime(clone.weekly.end, clone.weekly.end || '21:00');
     clone.weekly.days = Array.isArray(clone.weekly.days)
@@ -389,6 +434,14 @@ function persistMasters(masters) {
         } else {
           next.scheduleId = next.scheduleId ?? null;
         }
+        if (Array.isArray(next.serviceIds)) {
+          const seen = new Set();
+          next.serviceIds = next.serviceIds
+            .map((sid) => String(sid || '').trim())
+            .filter((sid) => sid && !seen.has(sid) && (seen.add(sid) || true));
+        } else {
+          next.serviceIds = [];
+        }
         return next;
       })
     : [];
@@ -460,6 +513,14 @@ function normalizeIdentifiers() {
 
   const masterMap = new Map();
   let mastersChanged = false;
+  const servicesByGroup = new Map();
+  services.forEach((service) => {
+    const gid = service.groupId == null || service.groupId === '' ? null : String(service.groupId);
+    if (!gid) return;
+    const list = servicesByGroup.get(gid) || [];
+    list.push(String(service.id));
+    servicesByGroup.set(gid, list);
+  });
   masters.forEach((master) => {
     if (!master || typeof master !== 'object') return;
     const { id, changed } = ensureMappedId(masterMap, master.id ?? null, 'mst');
@@ -469,12 +530,41 @@ function normalizeIdentifiers() {
     }
 
     const incomingIds = Array.isArray(master.serviceIds) ? master.serviceIds : [];
-    const normalizedServiceIds = incomingIds
-      .map((sid) => mapToKnownId(serviceMap, sid))
-      .filter((sid) => typeof sid === 'string' && sid);
-    if (normalizedServiceIds.length !== incomingIds.length || normalizedServiceIds.some((sid, idx) => sid !== incomingIds[idx])) {
-      master.serviceIds = normalizedServiceIds;
+    const expandedServiceIds = [];
+    const seenServiceIds = new Set();
+    const addServiceId = (sid) => {
+      if (!sid) return;
+      const str = String(sid);
+      if (seenServiceIds.has(str)) return;
+      seenServiceIds.add(str);
+      expandedServiceIds.push(str);
+    };
+
+    incomingIds.forEach((rawToken) => {
+      const token = String(rawToken ?? '').trim();
+      if (!token) return;
+      const mappedService = mapToKnownId(serviceMap, token) || mapToKnownId(serviceMap, sanitizeIdCandidate(token));
+      if (mappedService) {
+        addServiceId(mappedService);
+        return;
+      }
+      const normalizedGroupToken = token.replace(/^group[:=]/i, '');
+      const groupCandidate = mapToKnownId(groupMap, normalizedGroupToken) || mapToKnownId(groupMap, sanitizeIdCandidate(normalizedGroupToken));
+      if (groupCandidate) {
+        const related = servicesByGroup.get(groupCandidate) || [];
+        if (related.length) {
+          related.forEach(addServiceId);
+          mastersChanged = true;
+        }
+        return;
+      }
+    });
+
+    if (expandedServiceIds.length !== incomingIds.length || expandedServiceIds.some((sid, idx) => sid !== incomingIds[idx])) {
+      master.serviceIds = expandedServiceIds;
       mastersChanged = true;
+    } else {
+      master.serviceIds = expandedServiceIds;
     }
 
     if (master.schedule && typeof master.schedule === 'object') {
@@ -2149,13 +2239,25 @@ if (pathname.startsWith('/api/')) {
       });
 
       const serviceIdSet = new Set(services.map((svc) => String(svc.id)));
+      const servicesByGroup = new Map();
+      services.forEach((svc) => {
+        const gid = svc.groupId == null || svc.groupId === '' ? null : String(svc.groupId);
+        if (!gid) return;
+        const list = servicesByGroup.get(gid) || [];
+        list.push(String(svc.id));
+        servicesByGroup.set(gid, list);
+      });
       const scheduleInput = payload.schedule && typeof payload.schedule === 'object'
         ? JSON.parse(JSON.stringify(payload.schedule))
         : null;
       const schedule = scheduleInput ? ensureScheduleHasId(scheduleInput, scheduleMap) : null;
       const normalizedSchedule = schedule ? normalizeScheduleTimes(schedule) : null;
 
-      const serviceIds = normalizeServiceIdList(payload.serviceIds, serviceIdSet);
+      const serviceIds = normalizeServiceIdList(payload.serviceIds, serviceIdSet, (token) => {
+        const normalized = sanitizeIdCandidate(String(token).replace(/^group[:=]/i, ''));
+        if (!normalized) return null;
+        return servicesByGroup.get(normalized) || null;
+      });
 
       const newMaster = {
         id: generateId('mst'),
@@ -2204,6 +2306,19 @@ if (pathname.startsWith('/api/')) {
         }
       });
       const serviceIdSet = new Set(servicesData.map((svc) => String(svc.id)));
+      const servicesByGroup = new Map();
+      servicesData.forEach((svc) => {
+        const gid = svc.groupId == null || svc.groupId === '' ? null : String(svc.groupId);
+        if (!gid) return;
+        const list = servicesByGroup.get(gid) || [];
+        list.push(String(svc.id));
+        servicesByGroup.set(gid, list);
+      });
+      const resolveGroupTokens = (token) => {
+        const normalized = sanitizeIdCandidate(String(token).replace(/^group[:=]/i, ''));
+        if (!normalized) return null;
+        return servicesByGroup.get(normalized) || null;
+      };
 
       let nextName = current.name;
       if (patch.name !== undefined) {
@@ -2244,10 +2359,10 @@ if (pathname.startsWith('/api/')) {
       const nextScheduleId = nextSchedule?.id || null;
 
       let nextServiceIds = Array.isArray(current.serviceIds)
-        ? normalizeServiceIdList(current.serviceIds, serviceIdSet)
+        ? normalizeServiceIdList(current.serviceIds, serviceIdSet, resolveGroupTokens)
         : [];
       if (patch.serviceIds !== undefined) {
-        nextServiceIds = normalizeServiceIdList(patch.serviceIds, serviceIdSet);
+        nextServiceIds = normalizeServiceIdList(patch.serviceIds, serviceIdSet, resolveGroupTokens);
       }
 
       const next = { ...current, ...patch };
@@ -3215,6 +3330,8 @@ cat <<'EOF' > public/client.html
     const slotsContainer = document.getElementById('slotsContainer');
     const slotsEmpty = document.getElementById('slotsEmpty');
 
+    bookingMasterSelect.disabled = true;
+
     bookingMasterSelect.addEventListener('change', ()=>{
   const id = bookingMasterSelect.value;
   selectedMaster = mastersCache.find(m=>String(m.id)===String(id)) || null;
@@ -3222,10 +3339,21 @@ cat <<'EOF' > public/client.html
   if(dateInput.value) fetchAvailability();
 });
 
+    serviceSelect.addEventListener('change', () => {
+      updateMasterSelect();
+      if (!bookingMasterSelect.value) {
+        selectedMaster = null;
+      }
+      if (bookingMasterSelect.value && dateInput.value) {
+        fetchAvailability();
+      }
+    });
+
     // Calendar state
 let calMonth = new Date(); // текущий показанный месяц
 calMonth.setDate(1);
 let mastersCache = [];
+let servicesCache = [];
 let selectedMaster = null;
 
 function ymd(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
@@ -3291,6 +3419,54 @@ function renderCalendar(){
 document.getElementById('calPrev').addEventListener('click', ()=>{ calMonth.setMonth(calMonth.getMonth()-1); renderCalendar(); });
 document.getElementById('calNext').addEventListener('click', ()=>{ calMonth.setMonth(calMonth.getMonth()+1); renderCalendar(); });
 
+function masterSupportsService(master, serviceId) {
+  if (!serviceId) return false;
+  const list = Array.isArray(master?.serviceIds) ? master.serviceIds : [];
+  if (!list.length) return false;
+  return list.map((id) => String(id)).includes(String(serviceId));
+}
+
+function updateMasterSelect() {
+  const serviceId = serviceSelect.value || '';
+  const previous = bookingMasterSelect.value;
+  const eligibleMasters = serviceId
+    ? mastersCache.filter((m) => masterSupportsService(m, serviceId))
+    : [];
+
+  const escape = (text) => String(text ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[ch] || ch);
+
+  const options = ['<option value="" disabled selected>Выберите мастера…</option>']
+    .concat(eligibleMasters.map((m) => `<option value="${m.id}">${escape(m.name)}</option>`));
+
+  bookingMasterSelect.innerHTML = options.join('');
+  bookingMasterSelect.disabled = !serviceId || eligibleMasters.length === 0;
+
+  if (!serviceId) {
+    clearSlots();
+    availabilityHint.textContent = 'Выберите услугу, мастера и дату.';
+  } else if (!eligibleMasters.length) {
+    clearSlots();
+    availabilityHint.textContent = 'Для выбранной услуги пока нет доступных мастеров';
+  }
+
+  const keepSelected = eligibleMasters.some((m) => String(m.id) === String(previous));
+  bookingMasterSelect.value = keepSelected ? previous : '';
+  selectedMaster = keepSelected
+    ? mastersCache.find((m) => String(m.id) === String(previous)) || null
+    : null;
+  if (serviceId && eligibleMasters.length && !keepSelected) {
+    clearSlots();
+    availabilityHint.textContent = 'Выберите мастера и дату.';
+  }
+  renderCalendar();
+}
+
 
     function showBanner(msg, type) {
       banner.textContent = msg;
@@ -3329,18 +3505,21 @@ document.getElementById('calNext').addEventListener('click', ()=>{ calMonth.setM
     async function loadServices(){
       const r = await fetch('/api/services');
       const list = r.ok ? await r.json() : [];
+      servicesCache = list;
       serviceSelect.innerHTML = '<option value="" disabled selected>Выберите услугу…</option>' +
         list.map(s=>`<option value="${s.id}" data-duration="${s.duration}" data-price="${s.price}">${s.name}</option>`).join('');
+      updateMasterSelect();
       return list;
     }
 
 async function loadMasters(){
   const r = await fetch('/api/masters');
   mastersCache = r.ok ? await r.json() : [];
-  bookingMasterSelect.innerHTML = '<option value="" disabled selected>Выберите мастера…</option>' +
-   
-   
-    mastersCache.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  mastersCache = mastersCache.map((m) => ({
+    ...m,
+    serviceIds: Array.isArray(m.serviceIds) ? m.serviceIds.map((id) => String(id)) : []
+  }));
+  updateMasterSelect();
   return mastersCache;
 }
 
@@ -3385,6 +3564,8 @@ slots.forEach(s=>{
     back2.addEventListener('click', () => setStep(1));
     next2.addEventListener('click', () => {
       if(!serviceSelect.value){ showBanner('Выберите услугу', 'error'); return; }
+      const eligibleMasters = mastersCache.filter((m) => masterSupportsService(m, serviceSelect.value));
+      if(!eligibleMasters.length){ showBanner('Для выбранной услуги пока нет доступных мастеров', 'error'); return; }
       const opt = serviceSelect.selectedOptions[0];
       const price = opt?.dataset?.price; const duration = opt?.dataset?.duration;
       serviceSummary.hidden = false; serviceSummary.innerHTML = `<b>${opt.textContent}</b><span class="muted">Длительность: ${duration} мин · Цена: ${price}₽</span>`;
@@ -3400,7 +3581,7 @@ slots.forEach(s=>{
       const name = clientNameInput.value.trim();
       const phone = clientPhoneInput.value.trim();
       if(!name || !phone || !isValidPhone(phone)){ setStep(1); showBanner('Проверьте контакты', 'error'); return; }
-      const serviceId = Number(serviceSelect.value);
+      const serviceId = serviceSelect.value;
       const masterId = bookingMasterSelect.value; const date = dateInput.value;
       const slotBtn = document.querySelector('.slot-button.selected'); const startTime = slotBtn && slotBtn.dataset.value;
       if(!serviceId){ setStep(2); showBanner('Выберите услугу', 'error'); return; }
@@ -3598,6 +3779,7 @@ cat <<'EOF' > templates/managel.html
   const bDate=document.getElementById('bDate');
   const bTime=document.getElementById('bTime');
   const bNotes=document.getElementById('bNotes');
+  let modalMastersCache=[];
   function openModal(){modal.classList.add('show');bDate.value=ymd(cursor);loadRefs().then(loadSlots);} 
   function closeModal(){modal.classList.remove('show');}
   document.getElementById('bCancel').addEventListener('click',closeModal);
@@ -3607,21 +3789,44 @@ cat <<'EOF' > templates/managel.html
     if(!bService.options.length){
       const rs=await fetch('/api/services'); const sj=rs.ok?await rs.json():[]; bService.innerHTML='<option value=\"\" disabled selected>Выберите услугу…</option>'+sj.map(s=>`<option value=\"${s.id}\">${s.name} • ${s.duration} мин</option>`).join('');
     }
-    if(bMaster.options.length<=1){
-      const rm=await fetch('/api/masters'); const mj=rm.ok?await rm.json():[]; bMaster.innerHTML='<option value=\"\">Все мастера</option>'+mj.map(m=>`<option value=\"${m.id}\">${m.name}</option>`).join('');
+    if(!modalMastersCache.length){
+      const rm=await fetch('/api/masters'); const mj=rm.ok?await rm.json():[];
+      modalMastersCache = mj.map(m => ({
+        ...m,
+        serviceIds: Array.isArray(m.serviceIds) ? m.serviceIds.map(id => String(id)) : []
+      }));
     }
+    updateModalMasters();
+  }
+  function modalMasterSupportsService(master, serviceId){
+    if(!serviceId) return false;
+    const ids = Array.isArray(master?.serviceIds) ? master.serviceIds : [];
+    if(!ids.length) return false;
+    return ids.includes(String(serviceId));
+  }
+  function updateModalMasters(){
+    const serviceId = bService.value || '';
+    const eligible = serviceId ? modalMastersCache.filter(m => modalMasterSupportsService(m, serviceId)) : [];
+    const escape = (txt) => String(txt ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch));
+    const options = ['<option value=\"\" disabled selected>Выберите мастера…</option>']
+      .concat(eligible.map(m => `<option value=\"${m.id}\">${escape(m.name)}</option>`));
+    bMaster.innerHTML = options.join('');
+    bMaster.disabled = !serviceId || !eligible.length;
   }
   async function loadSlots(){
-    const date=bDate.value; const serviceId=bService.value; const masterId=bMaster.value||''; if(!date||!serviceId){bTime.innerHTML='<option disabled selected>Выберите услугу и дату</option>';return}
+    const date=bDate.value; const serviceId=bService.value; const masterId=bMaster.value||'';
+    if(!serviceId){bTime.innerHTML='<option disabled selected>Выберите услугу</option>';return}
+    if(!masterId){bTime.innerHTML='<option disabled selected>Выберите мастера</option>';return}
+    if(!date){bTime.innerHTML='<option disabled selected>Выберите дату</option>';return}
     const url=new URL('/api/availability',location.origin); url.searchParams.set('date',date); url.searchParams.set('serviceId',serviceId); if(masterId) url.searchParams.set('masterId',masterId);
     const r=await fetch(url); const j=r.ok?await r.json():{slots:[]}; const slots=(j.slots||[]).filter(s=>s.available);
     bTime.innerHTML=slots.length?('<option disabled selected>Выберите время…</option>'+slots.map(s=>`<option value=\"${s.startTime}\">${s.startTime}</option>`).join('')):'<option disabled selected>Нет доступных слотов</option>';
   }
-  bService.addEventListener('change',loadSlots); bMaster.addEventListener('change',loadSlots); bDate.addEventListener('change',loadSlots);
+  bService.addEventListener('change',()=>{updateModalMasters();loadSlots();}); bMaster.addEventListener('change',loadSlots); bDate.addEventListener('change',loadSlots);
 
   document.getElementById('bSave').addEventListener('click', async ()=>{
-    const payload={clientName:bName.value.trim(),clientPhone:bPhone.value.trim(),serviceId:Number(bService.value),masterId:bMaster.value||null,date:bDate.value,startTime:bTime.value,notes:bNotes.value.trim()};
-    if(!payload.clientName||!payload.clientPhone||!payload.serviceId||!payload.date||!payload.startTime){alert('Заполните обязательные поля');return}
+    const payload={clientName:bName.value.trim(),clientPhone:bPhone.value.trim(),serviceId:bService.value,masterId:bMaster.value||null,date:bDate.value,startTime:bTime.value,notes:bNotes.value.trim()};
+    if(!payload.clientName||!payload.clientPhone||!payload.serviceId||!payload.masterId||!payload.date||!payload.startTime){alert('Заполните обязательные поля');return}
     const res=await fetch('/api/bookings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     if(!res.ok){const err=await res.json().catch(()=>({}));alert(err.error||'Не удалось создать запись');return}
     closeModal(); loadDay();
